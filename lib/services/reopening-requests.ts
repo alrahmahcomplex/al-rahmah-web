@@ -344,7 +344,7 @@ export async function listPendingReopeningRequests(
   }
 }
 
-// How many requests are Pending, for the count beside the navigation entry.
+// How many requests are Pending, for the staff bell (app/staff/nav-counts.ts).
 // Needs reopenings.approve and leads.view, as the list does.
 export async function countPendingReopeningRequests(supabase: SupabaseClient): Promise<Result<number, QueueError>> {
   const { data, error } = await supabase.rpc("pending_reopening_request_count")

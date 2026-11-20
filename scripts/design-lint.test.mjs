@@ -170,14 +170,16 @@ test("CountPill is found by name, not in comments", () => {
   assert.deepEqual(lines(countPills(`const C = kit["CountPill" as const];\nexport * as "CountPill" from "./pill";`)), [1, 2])
 })
 
-test("route-looks entries marked new are read in any quote style, comments aside", () => {
-  const source = `export const looks = {\n  "/staff": "legacy",\n  "/staff/reopenings": /* converted */ "new",\n  '/staff/kit': 'new', // the kit\n  // "/staff/fees": "new",\n}`
+test("route-looks entries are read in any quote style, comments aside", () => {
+  const source = `export const looks = {\n  "/staff/reopenings": /* converted */ "new",\n  '/staff/kit': 'new', // the kit\n  // "/staff/fees": "new",\n}`
   assert.deepEqual(newRoutes(source), ["/staff/reopenings", "/staff/kit"])
   assert.deepEqual(readRouteLooks(source).errors, [])
 })
 
 test("route-looks entries the lint cannot read are reported, never skipped", () => {
-  assert.match(readRouteLooks(`export const looks = { "/staff/fees": LOOK }`).errors[0].message, /must map to "new" or "legacy", not LOOK/)
+  assert.match(readRouteLooks(`export const looks = { "/staff/fees": LOOK }`).errors[0].message, /must map to "new", not LOOK/)
+  // The old shell is gone (#332): no route can be "legacy" any more.
+  assert.match(readRouteLooks(`export const looks = { "/staff": "new", "/staff/fees": "legacy" }`).errors[0].message, /"\/staff\/fees" must map to "new", not "legacy"/)
   assert.match(readRouteLooks(`export const looks = new Map()`).errors[0].message, /no "\/staff…"/)
   withTree({ "app/staff/route-looks.ts": `export const looks = { "/staff": NEW }`, "app/staff/page.tsx": "" }, (root) => {
     assert.deepEqual(lint(root).map((p) => `${p.file}:${p.line}`), ["app/staff/route-looks.ts:1"])
@@ -208,10 +210,10 @@ test("lint passes a clean tree and reports file and line", () => {
   )
 })
 
-test("a converted route may hold no hex and no CountPill; its nested routes are their own", () => {
+test("a staff route may hold no hex and no CountPill; its nested routes are their own", () => {
   withTree(
     {
-      "app/staff/route-looks.ts": `export const looks = { "/staff/reopenings": "new", "/staff/reopenings/[id]": "legacy" }`,
+      "app/staff/route-looks.ts": `export const looks = { "/staff/reopenings": "new" }`,
       "app/staff/reopenings/page.tsx": `<CountPill count={1} />`,
       "app/staff/reopenings/_parts/row.tsx": `const c = "#fff"`,
       "app/staff/reopenings/[id]/page.tsx": `const c = "#fff"; <CountPill />`,
@@ -225,10 +227,10 @@ test("a converted route may hold no hex and no CountPill; its nested routes are 
   )
 })
 
-test("the staff home, marked new, owns only its page, its loading and _home, not the shared staff files", () => {
+test("the staff home owns only its page, its loading and _home, not the shared staff files", () => {
   withTree(
     {
-      "app/staff/route-looks.ts": `export const looks = { "/staff": "new", "/staff/fees": "legacy" }`,
+      "app/staff/route-looks.ts": `export const looks = { "/staff": "new" }`,
       "app/staff/page.tsx": `<CountPill />`,
       "app/staff/loading.tsx": `const c = "#fff"`,
       "app/staff/_home/stats.ts": `const c = "#fff"`,
@@ -247,7 +249,7 @@ test("the staff home, marked new, owns only its page, its loading and _home, not
   )
 })
 
-test("a route marked new whose folder is gone is reported", () => {
+test("a listed route whose folder is gone is reported", () => {
   withTree({ "app/staff/route-looks.ts": `export const looks = { "/staff/gone": "new" }` }, (root) => {
     assert.match(lint(root)[0].message, /app\/staff\/gone does not exist/)
   })

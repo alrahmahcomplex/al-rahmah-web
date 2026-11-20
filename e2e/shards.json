@@ -76,7 +76,6 @@
     "staff-invites.spec.ts": 47.2,
     "staff-password-reset.spec.ts": 15,
     "staff-roles.spec.ts": 42.1,
-    "staff-shell.spec.ts": 12.1,
     "staff-test.spec.ts": 0.8,
     "student-export.spec.ts": 7.4,
     "student-import.spec.ts": 7.9,

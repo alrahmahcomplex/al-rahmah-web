@@ -172,8 +172,7 @@ function SignOutButton() {
 
 /**
  * The signed-in person's pill: initials, then the name over the role (only
- * the initials on a phone). It opens the account menu with Sign out, which
- * submits to the same server action as the old shell's.
+ * the initials on a phone). It opens the account menu with Sign out.
  */
 export function PersonMenu({ person }: { person: ShellPerson }) {
   return (

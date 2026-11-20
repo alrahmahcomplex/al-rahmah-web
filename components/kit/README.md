@@ -14,7 +14,7 @@ Import from `@/components/kit`. Every piece, in every state, is on the kit page,
 
 ## Use this, not that
 
-A converted staff screen uses only the kit. The old parts stay for screens that have not converted yet.
+A staff screen uses only the kit. The old parts are left only for the public pages that still use them.
 
 | Use | Not |
 |---|---|
@@ -54,7 +54,7 @@ A converted staff screen uses only the kit. The old parts stay for screens that 
 | `toast` and `Toaster` from the kit | `toast` from `sonner`, `ui/sonner` |
 | `rainConfetti` | the Admission form's `Confetti` (that burst stays on the Admission form until it moves to v38) |
 
-The new shell (#322) draws a route marked `"new"` in `app/staff/route-looks.ts`; ESLint then refuses the old parts in that route's folder.
+The shell (#322) draws every staff route; ESLint refuses the old parts in every file under `app/staff/` (#332).
 
 ## Buttons
 
@@ -287,4 +287,4 @@ toast("The batch stopped early. Its report shows how far it got.", { tone: "bad"
 rainConfetti(markRef.current)
 ```
 
-`toast` shows one sentence at the bottom centre for 2.6s, at most half the window wide, so on a phone it wraps; a new one replaces it. `tone` is the note's: `info` (the default) for news, `good` for a save, `wait` for a warning, `bad` for a failure, which is read out as an alert. Each is a faint tint with a thin line and its icon. It goes to the kit's `Toaster`, which the new shell mounts once; the old shell's toasts keep their look. `rainConfetti(mark)` waits for the finish mark's tick, then bursts from its centre: 60 pieces under 600px, 85 wider, mixed shapes in orange, indigo and green only. Without a mark it finds the last one on the screen. Both, and every sheet, honour reduced motion: sheets fade in place, the toast does not rise, the mark is drawn at once and there is no confetti.
+`toast` shows one sentence at the bottom centre for 2.6s, at most half the window wide, so on a phone it wraps; a new one replaces it. `tone` is the note's: `info` (the default) for news, `good` for a save, `wait` for a warning, `bad` for a failure, which is read out as an alert. Each is a faint tint with a thin line and its icon. It goes to the kit's `Toaster`, which the shell mounts once; the public pages' toasts keep their look. `rainConfetti(mark)` waits for the finish mark's tick, then bursts from its centre: 60 pieces under 600px, 85 wider, mixed shapes in orange, indigo and green only. Without a mark it finds the last one on the screen. Both, and every sheet, honour reduced motion: sheets fade in place, the toast does not rise, the mark is drawn at once and there is no confetti.

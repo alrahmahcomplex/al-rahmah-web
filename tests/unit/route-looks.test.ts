@@ -3,7 +3,7 @@ import { join, relative, sep } from "node:path"
 
 import { describe, expect, it } from "vitest"
 
-import { lookFor, ROUTE_LOOKS, routeFor } from "@/app/staff/route-looks"
+import { ROUTE_LOOKS } from "@/app/staff/route-looks"
 
 const STAFF = join(process.cwd(), "app", "staff")
 
@@ -25,7 +25,7 @@ function pagePatterns(dir = STAFF): string[] {
 }
 
 describe("the staff route map", () => {
-  it("classifies every staff page.tsx, so a new page cannot land in a shell by accident", () => {
+  it("classifies every staff page.tsx, so design-lint finds every staff route's files", () => {
     const pages = pagePatterns()
     expect(pages.length).toBeGreaterThan(20)
     expect(pages.filter((pattern) => !(pattern in ROUTE_LOOKS))).toEqual([])
@@ -43,79 +43,7 @@ describe("the staff route map", () => {
     expect(Object.keys(ROUTE_LOOKS).filter((pattern) => !pages.has(pattern))).toEqual([])
   })
 
-  it("puts only the converted routes in the new shell (#322, #323, #324, #325, #326, #327, #328, #329, #330, #331, #308, #309)", () => {
-    expect(Object.entries(ROUTE_LOOKS).filter(([, look]) => look === "new").map(([pattern]) => pattern)).toEqual([
-      "/staff",
-      "/staff/agents",
-      "/staff/agents/import",
-      "/staff/applicants",
-      "/staff/applicants/[id]",
-      "/staff/applicants/[id]/history",
-      "/staff/applicants/[id]/reopen",
-      "/staff/audit",
-      "/staff/check-in/[id]",
-      "/staff/check-in/new",
-      "/staff/discounts",
-      "/staff/fees",
-      "/staff/fees/[year]",
-      "/staff/follow-ups",
-      "/staff/group-links",
-      "/staff/interviews",
-      "/staff/kit",
-      "/staff/promo-codes",
-      "/staff/re-applications",
-      "/staff/re-applications/[id]",
-      "/staff/reopenings",
-      "/staff/reports",
-      "/staff/roles",
-      "/staff/seats",
-    ])
-  })
-})
-
-describe("routeFor and lookFor", () => {
-  it("matches exactly: /staff is only the home", () => {
-    expect(routeFor("/staff")).toBe("/staff")
-    expect(lookFor("/staff")).toBe("new")
-    expect(lookFor("/staff/unknown")).toBe("legacy")
-    expect(lookFor("/staff/kit")).toBe("new")
-    expect(lookFor("/staff/reopenings")).toBe("new")
-    expect(lookFor("/staff/applicants/1ead0000-0000-4000-8000-000000000080")).toBe("new")
-    expect(lookFor("/staff/applicants/abc/history")).toBe("new")
-    expect(lookFor("/staff/applicants/abc/reopen")).toBe("new")
-    expect(lookFor("/staff/applicants")).toBe("new")
-    expect(lookFor("/staff/fees")).toBe("new")
-    expect(lookFor("/staff/fees/2027")).toBe("new")
-    expect(lookFor("/staff/seats")).toBe("new")
-  })
-
-  it("keeps a page and the page beneath it apart", () => {
-    expect(routeFor("/staff/check-in")).toBe("/staff/check-in")
-    expect(routeFor("/staff/check-in/new")).toBe("/staff/check-in/new")
-    // Check-in of an Admission form family (#309): any other name is a lead.
-    expect(routeFor("/staff/check-in/1ead0000-0000-4000-8000-000000000080")).toBe("/staff/check-in/[id]")
-    expect(lookFor("/staff/check-in/1ead0000-0000-4000-8000-000000000080")).toBe("new")
-  })
-
-  it("fills a dynamic segment, and prefers a fixed name to it", () => {
-    expect(routeFor("/staff/applicants/1ead0000-0000-4000-8000-000000000080")).toBe("/staff/applicants/[id]")
-    expect(routeFor("/staff/applicants/abc/history")).toBe("/staff/applicants/[id]/history")
-    expect(routeFor("/staff/fees/2027")).toBe("/staff/fees/[year]")
-  })
-
-  it("sends anything else under /staff to the catch-all, in the old shell", () => {
-    expect(routeFor("/staff/reopenings/extra")).toBe("/staff/[...rest]")
-    expect(routeFor("/staff/nowhere/at/all")).toBe("/staff/[...rest]")
-    expect(lookFor("/staff/reopenings/extra")).toBe("legacy")
-  })
-
-  it("draws the old shell for a path outside the map", () => {
-    expect(routeFor("/login")).toBeUndefined()
-    expect(lookFor("/login")).toBe("legacy")
-    expect(lookFor("")).toBe("legacy")
-  })
-
-  it("ignores a trailing slash", () => {
-    expect(lookFor("/staff/kit/")).toBe("new")
+  it("draws every route in the new shell: the old one is gone (#332)", () => {
+    expect(Object.entries(ROUTE_LOOKS).filter(([, look]) => look !== "new")).toEqual([])
   })
 })

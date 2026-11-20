@@ -85,11 +85,6 @@ function feeDetail(page: Page, term: string) {
     .locator("xpath=following-sibling::dd[1]")
 }
 
-// The staff 404 (the catch-all route), the only page the old shell still
-// draws, shows the counts beside the entries; the new shell shows none
-// (#323, #328, #331).
-const UNKNOWN = "/staff/no-such-page"
-
 test("Admissions Staff request a Staff child discount, and the Manager grants it from Discount requests", async ({ page }) => {
   const lead = await passedLead()
 
@@ -112,11 +107,7 @@ test("Admissions Staff request a Staff child discount, and the Manager grants it
   await expect(panel.getByRole("button", { name: "Request discount" })).toHaveCount(0)
 
   await signIn(page, MANAGER)
-  await page.goto(UNKNOWN)
-  await expect(page.getByRole("heading", { level: 1, name: "This page does not exist" })).toBeVisible()
-  const nav = page.getByRole("navigation", { name: "Staff" }).getByRole("link", { name: /Discount requests/ })
-  await expect(nav).toContainText(/\d+/)
-  await nav.click()
+  await page.getByRole("navigation", { name: "Staff" }).getByRole("link", { name: "Discount requests" }).click()
   await expect(page.getByRole("heading", { name: "Discount requests" })).toBeVisible()
   const row = page.getByRole("listitem", { name: new RegExp(lead.admissionNumber) })
   await expect(row).toContainText("Staff child (25% off)")

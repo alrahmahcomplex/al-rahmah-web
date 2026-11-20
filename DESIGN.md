@@ -252,13 +252,9 @@ The approved staff prototype is the visual reference for every staff screen it s
 - White cards with a thin indigo outline and a soft indigo shadow. Only the card that holds the task is lifted.
 - A clean desk: whitespace, one idea per block, subtle motion, no count badges (The One Pip Rule).
 
-### Conversion status
-
-The staff screens move to this language ticket by ticket (the "staff app redesign" epic). A screen converts whole: it never mixes old shadcn-neutral parts and new parts. Until its ticket ships, a staff screen keeps its old look. Every new staff screen is built in this language from the start.
-
 ## Colors
 
-The tokens live in `app/tokens.css` as `--gf-*` custom properties, which the root layout loads on every page. `app/globals.css` maps them to Tailwind utilities (`bg-gf-whisper`, `text-gf-indigo`, `shadow-gf-card`, `bg-gf-wash`) and also keeps Tailwind's `blue-*` and `orange-*` scales (Rahmah Indigo is `blue-600`, Sunrise Orange is `orange-500`). Use a token, never a new hex value: `scripts/design-lint.mjs` fails CI on a hex value in `components/kit/`, `components/icons/` or a converted staff route, and on upright Exo anywhere.
+The tokens live in `app/tokens.css` as `--gf-*` custom properties, which the root layout loads on every page. `app/globals.css` maps them to Tailwind utilities (`bg-gf-whisper`, `text-gf-indigo`, `shadow-gf-card`, `bg-gf-wash`) and also keeps Tailwind's `blue-*` and `orange-*` scales (Rahmah Indigo is `blue-600`, Sunrise Orange is `orange-500`). Use a token, never a new hex value: `scripts/design-lint.mjs` fails CI on a hex value in `components/kit/`, `components/icons/` or a staff route, and on upright Exo anywhere.
 
 ### Primary
 - **Rahmah Indigo** (`--gf-indigo`, `#0900bb`): titles, links, the current sidebar item, selected choices, outlines of round buttons, line icons when active.
@@ -383,7 +379,7 @@ All of these are built once and shared. Parent pages and staff pages import the 
 - **Ghost:** white pill with a thin Line Strong outline and an indigo label; Lavender Whisper on hover. The other way forward ("Review", "Yes, add a student").
 - **Bad:** white pill with a thin Alert Red outline and a red label; Red Tint on hover. A step that removes, declines or clears ("Decline application", "Yes, clear the form").
 - **Warn:** white pill with a thin Sunrise Deep (`#b35500`) outline and label; Orange Tint on hover. A step back that can be undone ("Withdraw request").
-- **Only Go is filled.** No button is ever filled red; the old shell's `destructive` variant is outlined too.
+- **Only Go is filled.** No button is ever filled red; the `destructive` variant of `components/ui/button.tsx` is outlined too.
 - **Small:** 36px tall, 16px padding, 14px label, for actions inside a card or a page header.
 - **Wide:** full width, at least 52px, 18px label, at the foot of a task card or sheet. A wide ghost that adds something is 64px with 24px corners.
 - **Round:** a 44px outlined circle in a guided form (Back, Start over, the brand menu); a 40px outlined circle in the staff top bar (the bell, the Menu button); a 36px borderless circle to close a sheet. Lavender Whisper on hover, scale 0.92 on press.
@@ -471,7 +467,7 @@ Public form pages (the Admission form and the Discount code pages) open with `Br
 The price box sets the full fee on an orange-tint half against the saving on a green-tint half. The limited-time note has a clock icon on the orange tint; an outlined Sunrise Deep pill and ⓘ buttons open a bottom sheet. Every urgency line must be true. No countdowns.
 
 ### Icons
-One library, set 1 ("Two lines", since prototype v38), drawn for this app. It replaces lucide on every screen as that screen converts.
+One library, set 1 ("Two lines", since prototype v38), drawn for this app. Every staff screen uses it; lucide is left only on the public pages.
 - **Grid:** 24 × 24 viewBox, 2px stroke, round caps and joins, no fill on lines. Shown at 20px (16px small; 16px in the sidebar; 18px in a row disc; 19px in the sidebar toggle; 24px on its own).
 - **Two lines:** each icon is a main outline and a second detail (for example the calendar and its days). Utility glyphs (back, right, check, plus, x, up) and phone, down and upload are a single line.
 - **At rest:** both lines take the text colour.
@@ -489,7 +485,7 @@ Line drawings in style C, "Soft circle" (prototype v38), for the moments between
 ## States
 
 ### Loading
-- **Opening a staff page:** the page's `loading.tsx` draws its own outline in still Lavender Whisper blocks at the real sizes and corners (`components/staff/page-skeleton.tsx`), and `LogoLoader` (`components/brand/logo-loader.tsx`) shows after 300ms where the page title starts. Blocks do not pulse or shimmer.
+- **Opening a staff page:** the page's `loading.tsx` draws its own outline in still Lavender Whisper blocks at the real sizes and corners (`SkeletonBlock` from `components/kit`), and `LogoLoader` (`components/brand/logo-loader.tsx`) shows after 300ms where the page title starts. Blocks do not pulse or shimmer.
 - **Waiting inside a task** (such as finding a family by Admission Number): the `finding` illustration at 170px (`sending` for longer work) over one Slate Soft 600 line ("Finding the family…"), centred with 90px above and below, `role="status"`.
 - **A pressed button** changes its label in the same frame and is disabled until the action answers. A button never turns into a spinner alone.
 
@@ -544,9 +540,9 @@ The site installs as an app from `app/manifest.ts`. Every icon is the full Al-Ra
 - **Don't** show a count badge in the sidebar, a tab or a page title. The bell's pip is the only unread marker.
 - **Don't** show a scrollbar in the sidebar, or cut off one of its entries.
 - **Don't** lift more than one card on a page, or use grey shadows.
-- **Don't** use lucide or any other icon set on a converted screen, or draw an icon inline in a page.
+- **Don't** use lucide or any other icon set on a staff screen, or draw an icon inline in a page.
 - **Don't** put an illustration on a working screen, beside a field, or in a card header.
-- **Don't** mix old shadcn-neutral parts and converted parts on one staff screen.
+- **Don't** use old shadcn-neutral parts on a staff screen.
 - **Don't** set typed text below 16px on a phone.
 - **Don't** add a colour outside the palette, or style a lead's status outside the status chip.
 - **Don't** invent a screen, layout or line of copy the approved prototype does not show; ask for a prototype first (AGENTS.md).

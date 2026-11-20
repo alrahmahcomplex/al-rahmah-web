@@ -186,8 +186,8 @@
 /* Inside the new staff shell (DESIGN.md, Components), shadcn parts used
    through a kit wrapper take the brand: indigo for the checked box, the
    chosen day and the focus ring, Indigo Line outlines and 16px corners
-   (rounded-xl then gives the 22px menu). The old shell and the public pages
-   never carry data-shell="new", so they keep the values above. */
+   (rounded-xl then gives the 22px menu). The public pages never carry
+   data-shell="new", so their shadcn parts keep the values above. */
 [data-shell="new"] {
     --primary: var(--gf-indigo);
     --ring: var(--gf-indigo);
@@ -206,17 +206,7 @@
     @apply font-sans;
     }
 }
-/* Staff typography (DESIGN.md, Staff headings). Exo italic stays on public
-   pages and the sign-in doorway; staff pages speak in Geist. */
-@utility staff-heading {
-  @apply font-sans text-[1.375rem]/7 font-semibold tracking-tight text-neutral-900;
-}
-
 /* The lavender wash (DESIGN.md, The page wash) as a class: bg-gf-wash. */
 @utility bg-gf-wash {
   background-image: var(--gf-wash);
-}
-
-@utility staff-section-heading {
-  @apply font-sans text-[0.9375rem]/5 font-semibold tracking-tight text-neutral-900;
 }

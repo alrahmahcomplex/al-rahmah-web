@@ -96,9 +96,8 @@ export async function confirmStudentImportRows(input: StudentImportConfirmation)
   const client = await importerClient()
   if (!client.ok) return { status: "refused", message: importErrorMessage({ kind: client.error }) }
   const result = await confirmStudentImport(client.supabase, confirmation)
-  // An import adds leads with no follow-up, re-application or request, so no
-  // count in the navigation moves (nav-counts.ts). Only the applicant pages
-  // change.
+  // An import adds leads with no request, so the bell's count does not move
+  // (nav-counts.ts). Only the applicant pages change.
   if (!result.ok) {
     if (result.error.kind === "uncertain") revalidatePath("/staff/applicants", "layout")
     return { status: "refused", message: importErrorMessage(result.error) }

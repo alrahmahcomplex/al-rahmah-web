@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest"
 
+import { ICONS } from "@/components/icons"
+
 import {
   currentNavHref,
   groupNav,
@@ -12,8 +14,8 @@ import {
 } from "@/app/staff/navigation"
 
 const ENTRIES: StaffNavEntry[] = [
-  { href: "/staff/roles", label: "Staff and roles", group: "Admin", icon: STAFF_HOME.icon, iconName: "today", permission: "academic_years.manage" },
-  { href: "/staff/applicants", label: "Applicants", group: "Admissions", icon: STAFF_HOME.icon, iconName: "today", permission: "leads.view" },
+  { href: "/staff/roles", label: "Staff and roles", group: "Admin", iconName: "today", permission: "academic_years.manage" },
+  { href: "/staff/applicants", label: "Applicants", group: "Admissions", iconName: "today", permission: "leads.view" },
 ]
 
 // The seeded roles' permissions, from the roles migration.
@@ -55,7 +57,6 @@ describe("navFor", () => {
       href: "/staff/either",
       label: "Either",
       group: "Money",
-      icon: STAFF_HOME.icon,
       iconName: "today",
       permission: ["payments.view", "leads.view"],
     }
@@ -78,7 +79,7 @@ describe("the staff navigation", () => {
   it("puts every entry in a group with an icon", () => {
     for (const entry of STAFF_NAV) {
       expect(NAV_GROUPS).toContain(entry.group)
-      expect(entry.icon).toBeTypeOf("object")
+      expect(ICONS).toHaveProperty(entry.iconName)
     }
     // Home heads the group with no title (#323).
     expect(STAFF_HOME).toMatchObject({ href: "/staff", label: "Home", group: "" })

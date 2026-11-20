@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils"
 
 import "./kit.css"
 
-/** The id of the actions slot at the right of the page header. It replaces the old shell's HEADER_ACTIONS_ID. */
+/** The id of the actions slot at the right of the page header. */
 export const PAGE_ACTIONS_ID = "kit-page-actions"
 
 /**

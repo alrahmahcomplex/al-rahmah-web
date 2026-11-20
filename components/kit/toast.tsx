@@ -10,7 +10,7 @@ import "./kit.css"
 
 // The new look's toast is the app's one toast library, sonner, drawn as a
 // tinted note at the bottom centre. Its toasts carry this id, so the root
-// layout's Toaster (the old shell's) never shows them and keeps its own look.
+// layout's Toaster (the public pages') never shows them and keeps its own look.
 const TOASTER_ID = "kit"
 const DURATION = 2600
 

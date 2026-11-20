@@ -197,20 +197,6 @@ export async function listReApplications(
   }
 }
 
-// How many re-applications wait for review. Zero for staff without
-// leads.view, who can't read them.
-export async function countUnreviewedReApplications(supabase: SupabaseClient): Promise<Result<number, "unavailable">> {
-  const { count, error } = await supabase
-    .from("re_applications")
-    .select("id", { count: "exact", head: true })
-    .is("reviewed_at", null)
-  if (error) {
-    console.error("Could not count the unreviewed re-applications", error)
-    return { ok: false, error: "unavailable" }
-  }
-  return { ok: true, data: count ?? 0 }
-}
-
 // Every re-application on a lead, newest first, reviewed or not.
 export async function getLeadReApplications(
   supabase: SupabaseClient,

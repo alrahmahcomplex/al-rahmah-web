@@ -1,16 +1,12 @@
-import { render, screen } from "@testing-library/react"
-import { InboxIcon } from "lucide-react"
+import { render } from "@testing-library/react"
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
 import { describe, expect, it } from "vitest"
 
 import { LogoLoader } from "@/components/brand/logo-loader"
 import { LogoMark } from "@/components/brand/logo-mark"
-import { EmptyState } from "@/components/staff/empty-state"
-import { SuccessMark } from "@/components/staff/success-mark"
 
-// The shared state components: empty lists, a finished save, and the emblem
-// at rest and loading. Motion itself can't be watched in jsdom, so the
+// The emblem at rest and loading. Motion itself can't be watched in jsdom, so the
 // reduced-motion tests read the CSS module the classes come from.
 
 const css = (file: string) => readFileSync(join(process.cwd(), file), "utf8")
@@ -21,52 +17,6 @@ function reducedMotionRules(source: string): string {
   expect(start, "the module has a reduced-motion block").toBeGreaterThan(-1)
   return source.slice(start)
 }
-
-describe("EmptyState", () => {
-  it("shows the title, the line under it and the one action", () => {
-    render(
-      <EmptyState
-        icon={InboxIcon}
-        title="No leads to show with these filters."
-        body="Clear a filter to see more."
-        action={<button type="button">Show every lead</button>}
-      />,
-    )
-    expect(screen.getByText("No leads to show with these filters.")).toBeVisible()
-    expect(screen.getByText("Clear a filter to see more.")).toBeVisible()
-    expect(screen.getByRole("button", { name: "Show every lead" })).toBeVisible()
-  })
-
-  it("leaves out what it isn't given, and hides the icon from screen readers", () => {
-    const { container } = render(<EmptyState icon={InboxIcon} title="Nothing matches." role="status" />)
-    const root = screen.getByRole("status")
-    expect(root).toHaveTextContent(/^Nothing matches\.$/)
-    expect(container.querySelectorAll("p")).toHaveLength(1)
-    expect(screen.queryByRole("button")).toBeNull()
-    expect(container.querySelector("svg")?.closest("[aria-hidden='true']")).not.toBeNull()
-  })
-})
-
-describe("SuccessMark", () => {
-  it("announces the title and its one line as a status", () => {
-    render(<SuccessMark title="4 students created, 1 joined a family, 2 skipped." body="Each new lead has an Admission Number." />)
-    const status = screen.getByRole("status")
-    expect(status).toBeVisible()
-    expect(status).toHaveTextContent("4 students created, 1 joined a family, 2 skipped.")
-    expect(status).toHaveTextContent("Each new lead has an Admission Number.")
-  })
-
-  it("draws the check from a module class that reduced motion switches off", () => {
-    const { container } = render(<SuccessMark title="Saved" />)
-    expect(screen.getByRole("status").getAttribute("class")).toMatch(/mark/)
-    const check = container.querySelector("svg path")
-    expect(check?.closest("[aria-hidden='true']")).not.toBeNull()
-    expect(check?.getAttribute("class")).toMatch(/check/)
-    const source = css("components/staff/success-mark.module.css")
-    expect(source).toMatch(/\.check\s*\{[^}]*animation:\s*draw 420ms/)
-    expect(reducedMotionRules(source)).toMatch(/\.mark,\s*\.check\s*\{\s*animation:\s*none/)
-  })
-})
 
 describe("LogoMark", () => {
   it("draws the emblem without the lettering, hidden from screen readers", () => {

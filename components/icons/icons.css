@@ -2,7 +2,7 @@
    them. At rest both lines take the text colour. Active, the main line turns
    indigo and the detail orange; on indigo the main line turns white and the
    detail light orange. The active look is scoped to the new staff shell and
-   the kit page, so the old shell and the public pages never see it. */
+   the kit page, so the public pages never see it. */
 
 .gf-ic { flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .gf-ic-line { stroke: var(--icon-line, currentColor); transition: stroke var(--gf-t-med) var(--gf-ease-out); }

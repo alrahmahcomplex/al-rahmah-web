@@ -28,6 +28,7 @@ export type PickerWords = {
   messageCopied: string
   copyLink: string
   linkCopied: string
+  copyFailed: string
 }
 
 type MessageKind = "parent" | "group" | "short"
@@ -48,7 +49,7 @@ async function copyOrSelect(text: string, box: HTMLElement | null): Promise<bool
 // it. Copy link stays for someone who writes their own.
 export function MessagePicker({ messages, link, words }: { messages: Record<MessageKind, string>; link: string; words: PickerWords }) {
   const [kind, setKind] = useState<MessageKind>("parent")
-  const [linkCopied, setLinkCopied] = useState(false)
+  const [linkCopied, setLinkCopied] = useState<"yes" | "failed" | null>(null)
   const box = useRef<HTMLParagraphElement>(null)
   const text = messages[kind]
   const href = discountCodeShareLink(text)
@@ -94,15 +95,22 @@ export function MessagePicker({ messages, link, words }: { messages: Record<Mess
         onClick={async () => {
           try {
             await navigator.clipboard.writeText(link)
-            setLinkCopied(true)
+            setLinkCopied("yes")
           } catch {
-            setLinkCopied(false)
+            setLinkCopied("failed")
           }
         }}
       >
-        {linkCopied ? <Check className="size-5" aria-hidden /> : <Copy className="size-5" aria-hidden />}
-        {linkCopied ? words.linkCopied : words.copyLink}
+        {linkCopied === "yes" ? <Check className="size-5" aria-hidden /> : <Copy className="size-5" aria-hidden />}
+        {linkCopied === "yes" ? words.linkCopied : words.copyLink}
       </button>
+      {/* The browser refused: the link to copy by hand, and why it shows. */}
+      {linkCopied === "failed" && (
+        <p className="m-0 rounded-2xl bg-[#f8f7fd] px-4 py-3 font-mono text-sm break-all text-slate-800 ring-1 ring-blue-600/15 select-all">{link}</p>
+      )}
+      <p aria-live="polite" className={cn("text-sm text-red-600", linkCopied !== "failed" && "sr-only")}>
+        {linkCopied === "failed" ? words.copyFailed : linkCopied === "yes" ? words.linkCopied : ""}
+      </p>
     </div>
   )
 }

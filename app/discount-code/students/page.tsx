@@ -1,6 +1,6 @@
 import { ChevronRight, Phone } from "lucide-react"
 import type { Metadata } from "next"
-import { headers } from "next/headers"
+import { cookies, headers } from "next/headers"
 import Link from "next/link"
 import { redirect } from "next/navigation"
 
@@ -22,7 +22,9 @@ import { AccountOffCard } from "../account-off"
 import { AccountShell } from "../account-shell"
 import { COPY as DISCOUNT_COPY, discountWords } from "../copy"
 import { cardLines, firstName, MAX_SHOWN, PAGE_SIZE, shownFrom, stepFrom, STUDENTS_COPY } from "./copy"
+import { continueToStudents } from "./actions"
 import { MessagePicker, Reminders, ShareCodeButton, type PickerWords } from "./dashboard"
+import { WELCOME_COOKIE } from "./welcome"
 
 export async function generateMetadata(): Promise<Metadata> {
   const copy = ACCOUNT_COPY[await getLanguage()]
@@ -38,8 +40,9 @@ type SearchParams = Promise<{ [key: string]: string | string[] | undefined }>
 // their code (#195), newest first, filtered by step or searched by name.
 // With no students yet, the ready-made share messages take the list's place.
 //
-// Right after the password is set (?welcome=1) it greets the agent once, with
-// a button on to the list (state 4). A switched-off or retired agent, or
+// Right after the password is set it greets the agent once, with a button on
+// to the list (state 4): set-password leaves a short-lived cookie naming the
+// agent's code (./welcome.ts), and the button clears it. A switched-off or retired agent, or
 // anyone while agent access is off, sees only that reason's card (state 6),
 // read fresh on every visit. Without a session the agent signs in, under a
 // note saying why (state 5).
@@ -71,7 +74,7 @@ export default async function AgentStudentsPage({ searchParams }: { searchParams
 
   const copy = STUDENTS_COPY[language]
   const params = await searchParams
-  if (params.welcome === "1") return <Welcome language={language} />
+  if ((await cookies()).get(WELCOME_COOKIE)?.value === agent.data.code) return <Welcome language={language} />
 
   const search = typeof params.q === "string" ? params.q.slice(0, 100) : ""
   const step = stepFrom(params.step)
@@ -112,6 +115,7 @@ export default async function AgentStudentsPage({ searchParams }: { searchParams
           messageCopied: copy.messageCopied,
           copyLink: share.copy,
           linkCopied: share.copied,
+          copyFailed: share.copyFailed,
         } satisfies PickerWords,
       }
     : null
@@ -256,14 +260,15 @@ function Welcome({ language }: { language: Language }) {
         <FinishMark />
         <h2 className="font-exo text-[26px] leading-[1.18] font-extrabold tracking-[-0.01em] text-balance text-blue-600 italic">{copy.approved}</h2>
         <p className="text-[15px] text-slate-700">{copy.signedInNote}</p>
-        <Link
-          href="/discount-code/students"
-          replace
+        <form action={continueToStudents} className="w-full">
+        <button
+          type="submit"
           className={cn(buttonVariants({ variant: "orange" }), "h-auto min-h-13 w-full justify-between gap-3 rounded-full py-2.5 pr-4 pl-6 text-left font-exo text-lg whitespace-normal italic shadow-md shadow-orange-500/20")}
         >
           {share.seeStudents}
           <ChevronRight className="size-5" aria-hidden />
-        </Link>
+        </button>
+        </form>
         <div className="flex flex-col items-center">
           <p className="text-sm text-slate-600">{share.call}</p>
           <a

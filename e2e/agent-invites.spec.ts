@@ -134,10 +134,15 @@ test("the Manager sends the invite; the agent sets a password from the email and
   await setPassword(agentPage)
 
   // Once, right after the password: approved, signed in, and the button on (#497 state 4).
-  await expect(agentPage).toHaveURL(/\/discount-code\/students\?welcome=1$/)
-  await expect(agentPage.getByRole("heading", { name: "Umeidhinishwa!" })).toBeVisible()
-  await agentPage.getByRole("link", { name: "Ona Wanafunzi Niliowaleta" }).click()
   await expect(agentPage).toHaveURL(/\/discount-code\/students$/)
+  await expect(agentPage.getByRole("heading", { name: "Umeidhinishwa!" })).toBeVisible()
+  await agentPage.getByRole("button", { name: "Ona Wanafunzi Niliowaleta" }).click()
+  await expect(agentPage.getByText(`Code yako ${agent.code}`)).toBeVisible()
+  await expect(agentPage.getByRole("heading", { name: "Umeidhinishwa!" })).toHaveCount(0)
+  // Spent: neither the page nor the old address with a flag brings it back.
+  await agentPage.reload()
+  await expect(agentPage.getByText(`Code yako ${agent.code}`)).toBeVisible()
+  await agentPage.goto("/discount-code/students?welcome=1")
   await expect(agentPage.getByText(`Code yako ${agent.code}`)).toBeVisible()
   await expect(agentPage.getByRole("heading", { name: "Umeidhinishwa!" })).toHaveCount(0)
 
@@ -177,7 +182,7 @@ test("a browser signed in as staff refuses the agent's link until staff sign out
   await page.getByRole("button", { name: "Toka" }).click()
   await expect(page.getByRole("heading", { name: "Weka nenosiri lako" })).toBeVisible()
   await setPassword(page)
-  await expect(page).toHaveURL(/\/discount-code\/students\?welcome=1$/)
+  await expect(page).toHaveURL(/\/discount-code\/students$/)
 })
 
 test("a signed-in browser opening sign-in goes to its own side, and an agent never reaches the staff side", async ({

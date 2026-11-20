@@ -255,6 +255,23 @@ describe("the agent dashboard's answer", () => {
     ])
   })
 
+  test("a reminder looks at the latest interview only, and counts days in Tanzanian dates", async () => {
+    const agent = await agentWithLogin()
+    const code = agent.code
+    // An older interview was Passed and Paid, but the latest (a retake) is unpaid: no reminder.
+    const retake = await studentLead({ name: "Retake Latest", code, status: "Interviewed", createdAt: at(40), visitDate: tanzaniaDaysAgo(35) })
+    await studentInterview(retake, { result: "Passed", score: 80, paid: true, registeredAt: at(30), interviewDate: tanzaniaDaysAgo(30) })
+    await studentInterview(retake, { result: "Failed", score: 30, paid: false, registeredAt: at(10), interviewDate: tanzaniaDaysAgo(10) })
+    // Applied 13 Tanzanian days ago at 01:00, which is the day before in UTC: 13 days, no reminder.
+    await studentLead({ name: "Applied Early Morning", code, createdAt: `${tanzaniaDaysAgo(13)} 01:00+03` })
+    // And 14 days ago at 23:30 Tanzanian time: 14 days, a reminder.
+    await studentLead({ name: "Applied Late Night", code, createdAt: `${tanzaniaDaysAgo(14)} 23:30+03` })
+
+    const result = await getAgentStudents(await signedIn(agent), { search: "", limit: 20, offset: 0 })
+    if (!result.ok || result.data.kind !== "active") throw new Error(JSON.stringify(result))
+    expect(result.data.reminders).toEqual([{ name: "Applied Late Night", className: "STD 3", step: "Applied", days: 14 }])
+  })
+
   test("the raw reminders carry only the name, the class, the step and the days", async () => {
     const agent = await agentWithLogin()
     await studentLead({ name: "Raw Reminder", code: agent.code, createdAt: at(20) })
@@ -267,18 +284,20 @@ describe("the agent dashboard's answer", () => {
 
   test("a step lists only its students, with the search; the counts stay whole", async () => {
     const agent = await agentWithLogin()
-    await studentLead({ name: "Step Applied", code: agent.code })
+    await studentLead({ name: "Step Applied Two", code: agent.code })
     await studentLead({ name: "Step Visited One", code: agent.code, status: "Visited" })
     await studentLead({ name: "Step Visited Two", code: agent.code, status: "Visited" })
     const client = await signedIn(agent)
 
     const visited = await getAgentStudents(client, { search: "", limit: 20, offset: 0, step: "Visited" })
     expect(visited).toMatchObject({ ok: true, data: { total: 3, matched: 2, steps: { Applied: 1, Visited: 2 } } })
+    // "two" matches an Applied student too; the step keeps it out.
     if (!visited.ok || visited.data.kind !== "active") throw new Error("not active")
     expect(visited.data.students.map((st) => st.name).sort()).toEqual(["Step Visited One", "Step Visited Two"])
 
     const searched = await getAgentStudents(client, { search: "two", limit: 20, offset: 0, step: "Visited" })
     expect(searched).toMatchObject({ ok: true, data: { matched: 1, students: [{ name: "Step Visited Two" }] } })
+    expect(await getAgentStudents(client, { search: "two", limit: 20, offset: 0 })).toMatchObject({ ok: true, data: { matched: 2 } })
 
     const wrong = await client.rpc("agent_students", { search: null, page_limit: 20, page_offset: 0, step: "visited" })
     expect(wrong.error?.message).toBe("invalid")

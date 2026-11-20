@@ -6,6 +6,8 @@ import { redirect } from "next/navigation"
 import { acceptAgentInvite, type AcceptAgentInviteError } from "@/lib/services/agent-auth"
 import { createClient } from "@/utils/supabase/server"
 
+import { WELCOME_COOKIE, WELCOME_MAX_AGE, WELCOME_PATH } from "../students/welcome"
+
 const PATH = "/discount-code/set-password"
 const VERIFIED_COOKIE = "agent-invite-verified"
 
@@ -41,6 +43,14 @@ export async function setAgentPassword(_previous: SetAgentPasswordState, formDat
 
   if (retrying) jar.delete({ name: VERIFIED_COOKIE, path: PATH })
   // The students page greets a password set just now once, with a button on
-  // to the list (#497 state 4, owner's pick A).
-  redirect("/discount-code/students?welcome=1")
+  // to the list (#497 state 4, owner's pick A). The cookie names this agent's
+  // code, so it greets no other account.
+  jar.set(WELCOME_COOKIE, result.data.code, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    path: WELCOME_PATH,
+    maxAge: WELCOME_MAX_AGE,
+  })
+  redirect(WELCOME_PATH)
 }

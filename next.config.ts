@@ -1,6 +1,7 @@
 import type { NextConfig } from "next";
 
 import { LANGUAGE_STATE_PREFIX, languageStateRewrites } from "./lib/language-state";
+import { crossHostRedirects, portalRootRedirect } from "./lib/site-hosts";
 
 const nextConfig: NextConfig = {
   experimental: {
@@ -16,6 +17,10 @@ const nextConfig: NextConfig = {
   },
   async redirects() {
     return [
+      // The portal's pages move to its own host, and a Referral link opened
+      // there goes to the public site (#497, lib/site-hosts.ts). Production
+      // hosts only; first, so the rules below then run on the right host.
+      ...crossHostRedirects(),
       // The per-language copies are reached only through the rewrites below
       // (#286). Opened directly, they send the visitor to the public address,
       // where the cookie picks the copy.
@@ -56,6 +61,8 @@ const nextConfig: NextConfig = {
         destination: "/login/reset-password",
         permanent: false,
       },
+      // After the two above: the portal's root opens sign-in.
+      portalRootRedirect(),
     ];
   },
   async rewrites() {

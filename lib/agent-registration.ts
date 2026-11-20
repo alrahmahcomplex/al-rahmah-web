@@ -1,5 +1,6 @@
 import { cleanName } from "@/components/guided-form/typing"
 import type { Result } from "@/lib/services/result"
+import { publicSiteOrigin } from "@/lib/site-hosts"
 
 // The Discount code page's own rules: reading what someone typed, and the
 // Referral link the confirmation hands them. Shared by the page and its Server
@@ -131,7 +132,9 @@ export function requestOrigin(headers: Headers): string | null {
   return `${protocol}://${host}`
 }
 
-// The Referral link: the Admission form with the code filled in.
+// The Referral link: the Admission form with the code filled in. On
+// production it always names the public site, even when the agent is on the
+// portal (#497).
 export function referralLink(origin: string, code: string): string {
-  return `${origin}/apply?ref=${encodeURIComponent(code)}`
+  return `${publicSiteOrigin(origin)}/apply?ref=${encodeURIComponent(code)}`
 }

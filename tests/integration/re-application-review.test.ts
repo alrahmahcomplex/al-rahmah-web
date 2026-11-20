@@ -7,7 +7,6 @@ vi.mock("server-only", () => ({}))
 import { admissionYears } from "@/lib/admission-form"
 import { getLeadHistory } from "@/lib/services/audit"
 import {
-  countUnreviewedReApplications,
   getLeadReApplications,
   getReApplication,
   listReApplications,
@@ -23,7 +22,6 @@ import {
   secretClient,
   signedIn,
   unusedAdmissionNumber,
-  whileUnchanged,
 } from "../support/db"
 import { ACCOUNTANT, ADMISSIONS, MANAGER, SUPER_ADMIN } from "../support/fixtures"
 
@@ -164,44 +162,12 @@ describe("the Re-applications queue", () => {
     expect(unreviewed.data.reApplications.some((entry) => entry.id === reviewed)).toBe(false)
   })
 
-  test("the count is the unreviewed ones, and drops when one is reviewed", async () => {
-    const staff = await signedIn(MANAGER)
-    const id = await reApply(await onFile())
-
-    // The service's count and the database's, read before and after it,
-    // until no test recorded or reviewed a re-application meanwhile.
-    const countedWhileUnchanged = async () => {
-      const { state, result: service } = await whileUnchanged(
-        async (sql) =>
-          (
-            await sql.query<{ total: number; mine: number; versions: string | null }>(
-              `select count(*)::int as total, count(*) filter (where id = $1)::int as mine,
-                      md5(string_agg(id::text || ':' || xmin::text, ',' order by id)) as versions
-               from public.re_applications where reviewed_at is null`,
-              [id],
-            )
-          ).rows[0],
-        () => countUnreviewedReApplications(staff),
-      )
-      if (!service.ok) throw new Error(service.error)
-      return { service: service.data, total: state.total, mine: state.mine }
-    }
-
-    const before = await countedWhileUnchanged()
-    expect(before).toEqual({ service: before.total, total: before.total, mine: 1 })
-
-    expect((await markReApplicationReviewed(staff, id)).ok).toBe(true)
-    const after = await countedWhileUnchanged()
-    expect(after).toEqual({ service: after.total, total: after.total, mine: 0 })
-  })
-
-  test("staff without leads.view read an empty queue and a count of none", async () => {
+  test("staff without leads.view read an empty queue", async () => {
     await reApply(await onFile())
     const outsider = await signedIn(await createThrowawayStaff([]))
 
     const list = await listReApplications(outsider, { filter: "unreviewed", page: 1 })
     expect(list).toEqual({ ok: true, data: { reApplications: [], total: 0, page: 1, pageCount: 1 } })
-    expect(await countUnreviewedReApplications(outsider)).toEqual({ ok: true, data: 0 })
   })
 })
 

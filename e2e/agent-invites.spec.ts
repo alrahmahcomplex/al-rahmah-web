@@ -120,7 +120,7 @@ test("the Manager sends the invite; the agent sets a password from the email and
   expect(email.link).toMatch(/^http:\/\/localhost:3100\/discount-code\/set-password\?token_hash=[^&]+&type=invite$/)
   // The Discount code wording: Swahili first, the sign-in address and the expiry.
   expect(email.html).toContain("Weka nenosiri")
-  expect(email.html).toContain("/discount-code/sign-in")
+  expect(email.html).toMatch(/href="[^"]*\/auth"/)
   expect(email.html).toContain("saa 24")
   expect(email.html).not.toMatch(/Admissions Manager to send a new invite/)
 

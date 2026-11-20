@@ -1,22 +1,3 @@
-import {
-  ArmchairIcon,
-  BadgePercentIcon,
-  ChartColumnIcon,
-  ClipboardCheckIcon,
-  HouseIcon,
-  MegaphoneIcon,
-  MessageCircleIcon,
-  PhoneIcon,
-  RepeatIcon,
-  RotateCcwIcon,
-  ScrollTextIcon,
-  ShieldCheckIcon,
-  TicketPercentIcon,
-  UsersIcon,
-  WalletIcon,
-  type LucideIcon,
-} from "lucide-react"
-
 import type { IconName } from "@/components/icons"
 import type { Permission } from "@/lib/permissions"
 
@@ -34,8 +15,7 @@ export type StaffNavEntry = {
   href: string
   label: string
   group: StaffNavGroup
-  // The old shell's lucide icon, and the new shell's set 2 icon (#322).
-  icon: LucideIcon
+  // The sidebar's icon (#322).
   iconName: IconName
   alsoNeeds?: Permission
 } & ({ permission: Permission | readonly Permission[]; managesStaff?: never } | { managesStaff: true; permission?: never })
@@ -47,45 +27,45 @@ export const STAFF_HOME = {
   href: "/staff",
   label: "Home",
   group: "",
-  icon: HouseIcon,
+ 
   iconName: "house",
 } as const satisfies Omit<StaffNavEntry, "permission">
 
 // Every area of the staff side, each shown only to holders of the permission
 // it needs. Later slices add their entries here.
 export const STAFF_NAV: readonly StaffNavEntry[] = [
-  { href: "/staff/applicants", label: "Applicants", group: "Admissions", icon: UsersIcon, iconName: "applicants", permission: "leads.view" },
-  { href: "/staff/interviews", label: "Interviews", group: "Admissions", icon: ClipboardCheckIcon, iconName: "interviews", permission: "leads.view" },
-  { href: "/staff/follow-ups", label: "Follow-ups", group: "Admissions", icon: PhoneIcon, iconName: "followups", permission: "leads.view" },
-  { href: "/staff/re-applications", label: "Re-applications", group: "Admissions", icon: RepeatIcon, iconName: "reapps", permission: "leads.view" },
-  { href: "/staff/agents", label: "Marketing Agents", group: "Referrals", icon: MegaphoneIcon, iconName: "agents", permission: "leads.view" },
-  { href: "/staff/promo-codes", label: "Promo codes", group: "Referrals", icon: TicketPercentIcon, iconName: "promo", permission: "leads.view" },
-  { href: "/staff/group-links", label: "WhatsApp groups", group: "Referrals", icon: MessageCircleIcon, iconName: "groups", permission: "leads.view" },
+  { href: "/staff/applicants", label: "Applicants", group: "Admissions", iconName: "applicants", permission: "leads.view" },
+  { href: "/staff/interviews", label: "Interviews", group: "Admissions", iconName: "interviews", permission: "leads.view" },
+  { href: "/staff/follow-ups", label: "Follow-ups", group: "Admissions", iconName: "followups", permission: "leads.view" },
+  { href: "/staff/re-applications", label: "Re-applications", group: "Admissions", iconName: "reapps", permission: "leads.view" },
+  { href: "/staff/agents", label: "Marketing Agents", group: "Referrals", iconName: "agents", permission: "leads.view" },
+  { href: "/staff/promo-codes", label: "Promo codes", group: "Referrals", iconName: "promo", permission: "leads.view" },
+  { href: "/staff/group-links", label: "WhatsApp groups", group: "Referrals", iconName: "groups", permission: "leads.view" },
   {
     href: "/staff/fees",
     label: "Fee schedule",
     group: "Money",
-    icon: WalletIcon,
+   
     iconName: "fees",
     permission: ["payments.view", "academic_years.manage"],
   },
   // Seats are counted in streams (#449): everyone who may view payments opens
   // the screen; only staff who manage academic years change streams there.
-  { href: "/staff/seats", label: "Seats", group: "Money", icon: ArmchairIcon, iconName: "seats", permission: "payments.view" },
-  { href: "/staff/discounts", label: "Discount requests", group: "Admin", icon: BadgePercentIcon, iconName: "discounts", permission: "discounts.approve" },
+  { href: "/staff/seats", label: "Seats", group: "Money", iconName: "seats", permission: "payments.view" },
+  { href: "/staff/discounts", label: "Discount requests", group: "Admin", iconName: "discounts", permission: "discounts.approve" },
   {
     href: "/staff/reopenings",
     label: "Reopening requests",
     group: "Admin",
-    icon: RotateCcwIcon,
+   
     iconName: "reopen",
     permission: "reopenings.approve",
     alsoNeeds: "leads.view",
   },
-  { href: "/staff/reports", label: "Reports", group: "Admin", icon: ChartColumnIcon, iconName: "reports", permission: "reports.view" },
-  { href: "/staff/roles", label: "Staff and roles", group: "Admin", icon: ShieldCheckIcon, iconName: "roles", managesStaff: true },
+  { href: "/staff/reports", label: "Reports", group: "Admin", iconName: "reports", permission: "reports.view" },
+  { href: "/staff/roles", label: "Staff and roles", group: "Admin", iconName: "roles", managesStaff: true },
   // The Super Admin's alone: no role can hold audit.view (#237).
-  { href: "/staff/audit", label: "Audit", group: "Admin", icon: ScrollTextIcon, iconName: "audit", permission: "audit.view" },
+  { href: "/staff/audit", label: "Audit", group: "Admin", iconName: "audit", permission: "audit.view" },
 ]
 
 export function navFor(

@@ -23,6 +23,7 @@ const CASES: { what: string; who: FixtureStaff; path: string; heading: string }[
   { what: "the history of an application that is not there", who: SUPER_ADMIN, path: `/staff/applicants/${NO_SUCH_ID}/history`, heading: NOT_FOUND },
   { what: "a re-application that is not there", who: MANAGER, path: `/staff/re-applications/${NO_SUCH_ID}`, heading: NOT_FOUND },
   { what: "a Fee schedule year that is not a year", who: MANAGER, path: "/staff/fees/abc", heading: NOT_FOUND },
+  { what: "an address no staff page answers", who: MANAGER, path: "/staff/no-such-page", heading: NOT_FOUND },
 ]
 
 for (const { what, who, path, heading } of CASES) {
@@ -30,9 +31,7 @@ for (const { what, who, path, heading } of CASES) {
     await signInOnce(page, who.email, who.password)
     await page.goto(path)
     await expect(page.getByRole("heading", { level: 1, name: heading })).toBeVisible()
-    // The old shell's way back is a link drawn as a button; the new shell's is a link.
-    const back = page.getByRole("link", { name: "Back to the staff area" }).or(page.getByRole("button", { name: "Back to the staff area" }))
-    await back.click()
+    await page.getByRole("link", { name: "Back to the staff area" }).click()
     await expect(page).toHaveURL(/\/staff$/)
     await expect(page.getByRole("heading", { level: 1, name: heading })).toHaveCount(0)
   })

@@ -1,18 +1,34 @@
 "use client"
 
-import dynamic from "next/dynamic"
-import { usePathname } from "next/navigation"
-import type { ReactNode } from "react"
+// The error, forbidden and not-found pages of the staff side.
 
-import { lookFor } from "../route-looks"
+import { Button, ButtonLink } from "@/components/kit/button"
+import { PageHeader } from "@/components/kit/page-header"
 
-// The error, forbidden and not-found pages load with every staff page, the
-// old shell's too, so their new look is a chunk of its own, fetched only on
-// a route the new shell holds.
-const NewLookNotice = dynamic(() => import("./page-states-new").then((m) => m.NewLookNotice))
-export const NewLookError = dynamic(() => import("./page-states-new").then((m) => m.NewLookError))
+/** A staff page that has nothing to show (forbidden or missing): what happened, and the way back. */
+export function PageNotice({ title, text }: { title: string; text: string }) {
+  return (
+    <>
+      <PageHeader title={title} subtitle={text} />
+      <div className="ns-state-act">
+        <ButtonLink href="/staff">Back to the staff area</ButtonLink>
+      </div>
+    </>
+  )
+}
 
-/** A staff page with nothing to show, in the look of the shell around it: the new look on a route the new shell holds, `legacy` elsewhere. */
-export function NoticeByLook({ title, text, legacy }: { title: string; text: string; legacy: ReactNode }) {
-  return lookFor(usePathname()) === "new" ? <NewLookNotice title={title} text={text} /> : legacy
+/** A staff page that failed to render. The error's own message is never shown. */
+export function PageError({ title, text, digest, retry }: { title: string; text: string; digest?: string; retry: () => void }) {
+  return (
+    <>
+      <PageHeader title={title} subtitle={text} />
+      <div className="ns-state-act">
+        <Button onClick={() => retry()}>Try again</Button>
+        <ButtonLink variant="ghost" href="/staff">
+          Back to the staff area
+        </ButtonLink>
+      </div>
+      {digest && <p className="ns-state-ref">Reference: {digest}</p>}
+    </>
+  )
 }

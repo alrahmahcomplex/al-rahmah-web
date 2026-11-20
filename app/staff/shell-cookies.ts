@@ -3,9 +3,9 @@
 // the sidebar is folded or resized; app/staff/layout.tsx reads them (never
 // the root layout, ADR 0006) through parseSidebarCookies.
 
-// Whether the sidebar is folded to its icons, "1" or "0". Both shells read it.
+// Whether the sidebar is folded to its icons, "1" or "0".
 export const SIDEBAR_RAIL_COOKIE = "staff-sidebar-rail"
-// The open width the new shell's sidebar was dragged to, in whole pixels.
+// The open width the sidebar was dragged to, in whole pixels.
 // No cookie means the narrowest width, which the browser measures.
 export const SIDEBAR_WIDTH_COOKIE = "staff-sidebar-width"
 export const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 365

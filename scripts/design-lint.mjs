@@ -3,14 +3,14 @@
 // staff app redesign (#316) cannot drift screen by screen:
 //
 // 1. Exo is always italic (The Lean Forward Rule), in app/ and components/.
-// 2. No hex colour in the kit, the icons, the new staff shell or a converted
-//    staff route: those use the tokens of app/tokens.css, the one file where
-//    a hex may be written.
-// 3. No CountPill in a converted staff route: the bell is the only count
-//    (#316, lead's answer 2).
+// 2. No hex colour in the kit, the icons, the staff shell or a staff route:
+//    those use the tokens of app/tokens.css, the one file where a hex may be
+//    written.
+// 3. No CountPill in a staff route: the bell is the only count (#316, lead's
+//    answer 2).
 //
-// A converted route is one app/staff/route-looks.ts marks "new". Without
-// that file, rules 2 and 3 cover only HEX_ROOTS. Scripts are read with the TypeScript parser, so
+// The staff routes are the ones app/staff/route-looks.ts lists. Without that
+// file, rules 2 and 3 cover only HEX_ROOTS. Scripts are read with the TypeScript parser, so
 // comments, regex literals and JSX text are never taken for strings.
 //
 // Run: node scripts/design-lint.mjs, after `npm ci` (it needs typescript).
@@ -373,7 +373,7 @@ export function countPills(text, file = "x.tsx") {
   const problems = []
   visit(source, (node) => {
     if ((ts.isIdentifier(node) && node.text === "CountPill") || namesCountPill(node)) {
-      problems.push({ line: lineAt(source, node.getStart(source)), message: "CountPill in a converted route: the bell is the only count (#316)" })
+      problems.push({ line: lineAt(source, node.getStart(source)), message: "CountPill in a staff route: the bell is the only count (#316)" })
     }
   })
   return problems
@@ -387,9 +387,9 @@ function keyText(name) {
 
 /**
  * Reads route-looks.ts: every "/staff…" key of an object must map straight
- * to "new" or "legacy", comments aside. Anything else, a syntax error
- * included, is reported instead of being skipped, so the lint never quietly
- * stops covering a converted route.
+ * to "new", comments aside. Anything else, a syntax error or the old
+ * "legacy" included, is reported instead of being skipped, so the lint never
+ * quietly stops covering a staff route.
  */
 export function readRouteLooks(text) {
   const source = parse(text, ROUTE_LOOKS)
@@ -400,19 +400,17 @@ export function readRouteLooks(text) {
     const pattern = keyText(node.name)
     if (!pattern?.startsWith("/staff")) return
     const value = node.initializer
-    const look = ts.isStringLiteralLike(value) && /^(new|legacy)$/.test(value.text) ? value.text : undefined
+    const look = ts.isStringLiteralLike(value) && value.text === "new" ? value.text : undefined
     if (look) routes.push({ pattern, look })
-    else errors.push({ line: lineAt(source, node.name.getStart(source)), message: `"${pattern}" must map to "new" or "legacy", not ${value.getText(source)}` })
+    else errors.push({ line: lineAt(source, node.name.getStart(source)), message: `"${pattern}" must map to "new", not ${value.getText(source)}` })
   })
-  if (!routes.length && !errors.length) errors.push({ line: 1, message: 'no "/staff…": "new" | "legacy" entries found, so design-lint cannot tell which routes are converted' })
+  if (!routes.length && !errors.length) errors.push({ line: 1, message: 'no "/staff…": "new" entries found, so design-lint cannot tell which routes are the staff routes' })
   return { routes, errors }
 }
 
-/** The route patterns route-looks.ts marks "new", such as "/staff/reopenings". */
+/** The route patterns route-looks.ts lists, such as "/staff/reopenings". */
 export function newRoutes(source) {
-  return readRouteLooks(source)
-    .routes.filter((r) => r.look === "new")
-    .map((r) => r.pattern)
+  return readRouteLooks(source).routes.map((r) => r.pattern)
 }
 
 function walk(root, dir, { into = () => true } = {}) {
@@ -430,7 +428,7 @@ function walk(root, dir, { into = () => true } = {}) {
 }
 
 /**
- * The files of a converted route: its own folder, and folders inside it that
+ * The files of a staff route: its own folder, and folders inside it that
  * are not routes themselves (no page.tsx). A nested route has its own entry
  * in route-looks.ts.
  */
@@ -451,7 +449,7 @@ export function routeFiles(root, pattern) {
 
 /**
  * Routes whose folder also holds what every staff route shares: app/staff/
- * keeps the layout, the error and not-found pages and both shells beside
+ * keeps the layout, the error and not-found pages and the shell beside
  * Home. Only the names listed here are the route's own.
  */
 export const OWN_FILES = {
@@ -489,9 +487,9 @@ export function lint(root) {
   if (existsSync(join(root, ROUTE_LOOKS))) {
     const looks = readRouteLooks(read(ROUTE_LOOKS))
     add(ROUTE_LOOKS, looks.errors)
-    for (const { pattern } of looks.routes.filter((r) => r.look === "new")) {
+    for (const { pattern } of looks.routes) {
       const { missing, files } = routeFiles(root, pattern)
-      if (missing) add(ROUTE_LOOKS, [{ line: 1, message: `"${pattern}" is marked new but ${missing} does not exist` }])
+      if (missing) add(ROUTE_LOOKS, [{ line: 1, message: `"${pattern}" is listed but ${missing} does not exist` }])
       for (const file of files) {
         scoped.add(file)
         converted.add(file)

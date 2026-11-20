@@ -8,7 +8,7 @@ import { RoundButton, Toaster } from "@/components/kit"
 
 import { currentNavHref } from "../navigation"
 import { SIDEBAR_RAIL_COOKIE, SIDEBAR_WIDTH_COOKIE, clearedSidebarCookie, sidebarCookie } from "../shell-cookies"
-import type { ShellViewProps } from "../shell-types"
+import type { ShellProps } from "../shell-types"
 import "./new-shell.css"
 import { rememberScroll, savedScroll } from "./scroll-memory"
 import { SidebarBoundary, SidebarContent } from "./sidebar"
@@ -167,20 +167,18 @@ function OutsideScrollbar({ scrollRef, pageRef }: { scrollRef: RefObject<HTMLDiv
  * sidebar folds to its icons and can be dragged wider; up to 860px it is a
  * drawer opened from the Menu button.
  */
-export function NewShell({
-  items,
-  person,
-  bell,
-  folded,
-  onFoldedChange,
-  sidebarWidth: chosen,
-  onSidebarWidthChange,
-  navigated,
-  canSearch,
-  children,
-}: ShellViewProps) {
+export function NewShell({ items, person, bell, folded: foldedAtLoad, sidebarWidth: widthAtLoad, canSearch, children }: ShellProps) {
   const pathname = usePathname()
   const current = currentNavHref(pathname, items.map((item) => item.href))
+
+  // The layout keeps the shell mounted across staff pages, so the sidebar
+  // preferences live here, and so does whether the person has moved from
+  // the page the document loaded on.
+  const [folded, setFolded] = useState(foldedAtLoad)
+  const [chosen, setChosen] = useState(widthAtLoad)
+  const [firstPath] = useState(pathname)
+  const [navigated, setNavigated] = useState(false)
+  if (!navigated && pathname !== firstPath) setNavigated(true)
 
   const [drawer, setDrawer] = useState(false)
   // `chosen` is the open width the person set (null keeps the narrowest,
@@ -213,13 +211,13 @@ export function NewShell({
     setWidth(value)
     setTitle(titleSize(value, found.titleLeft, found.titleWidth))
     if (remember === "keep") {
-      onSidebarWidthChange(value)
+      setChosen(value)
       document.cookie = sidebarCookie(SIDEBAR_WIDTH_COOKIE, String(value))
     } else if (remember === "clear") {
-      onSidebarWidthChange(null)
+      setChosen(null)
       document.cookie = clearedSidebarCookie(SIDEBAR_WIDTH_COOKIE)
     }
-  }, [onSidebarWidthChange])
+  }, [])
 
   // The limits depend on the labels (the current one is wider), the fonts and
   // the window, so they are measured again whenever one of those changes.
@@ -257,10 +255,9 @@ export function NewShell({
 
   // Each history entry keeps its own scroll position: a new page starts at
   // the top, Back returns to where it was. After a navigation the stage takes
-  // focus, so the keyboard scrolls the new page, also when a link from the
-  // old shell led here; not on the page the document loaded on. Runs in the
-  // layout phase, before any scroll event of the new page can be saved under
-  // its entry.
+  // focus, so the keyboard scrolls the new page; not on the page the document
+  // loaded on. Runs in the layout phase, before any scroll event of the new
+  // page can be saved under its entry.
   useLayoutEffect(() => {
     const scroll = scrollRef.current
     if (!scroll) return
@@ -299,7 +296,7 @@ export function NewShell({
 
   function toggle() {
     const next = !folded
-    onFoldedChange(next)
+    setFolded(next)
     document.cookie = sidebarCookie(SIDEBAR_RAIL_COOKIE, next ? "1" : "0")
   }
 

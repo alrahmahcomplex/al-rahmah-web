@@ -96,7 +96,10 @@ export async function getAgentStudents(
       search: page.search.trim() || null,
       page_limit: page.limit,
       page_offset: page.offset,
-      step: page.step ?? null,
+      // Sent only when asked for: PostgREST picks a function by its argument
+      // names, so the list still reads through the older three-argument
+      // function if this app is live before its migration (#497).
+      ...(page.step ? { step: page.step } : {}),
     }),
   )
   if (error) {

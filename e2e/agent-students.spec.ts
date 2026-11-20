@@ -1,7 +1,9 @@
+import { randomUUID } from "node:crypto"
+
 import { expect, test, type Page } from "@playwright/test"
 
 import { agentWithLogin, studentInterview, studentLead, type StudentsAgent } from "../tests/support/agent-students"
-import { signedIn } from "../tests/support/db"
+import { asSystem, signedIn } from "../tests/support/db"
 import { MANAGER } from "../tests/support/fixtures"
 import { chooseLanguage } from "./discount-code"
 import { logIn } from "./log-in"
@@ -185,6 +187,32 @@ test("a switched-off agent still signed in sees only the paused card, with no re
   // Signed out for real: the students page now asks to sign in.
   await page.goto("/discount-code/students")
   await expect(page).toHaveURL(/\/auth\?from=students$/)
+})
+
+// The one-time greeting after set-password follows the login it was left
+// for, never a code or a cookie alone (#497 review).
+test("the welcome greets only the login whose password was just set", async ({ page, context }) => {
+  const agent = await agentWithLogin()
+  await signInAgent(page, agent)
+  const userId = await asSystem(async (sql) => (await sql.query<{ id: string }>("select id from auth.users where email = $1", [agent.email])).rows[0]?.id)
+  if (!userId) throw new Error("no login for the fixture agent")
+  // As set-password sets it: this host, this path.
+  const welcome = (value: string) => ({ name: "agent-welcome", value, domain: new URL(page.url()).hostname, path: "/discount-code/students", httpOnly: true })
+
+  // A greeting left for another login doesn't greet this one.
+  await context.addCookies([welcome(randomUUID())])
+  await page.reload()
+  await expect(page.getByText(`Code yako ${agent.code}`)).toBeVisible()
+  await expect(page.getByRole("heading", { name: "Umeidhinishwa!" })).toHaveCount(0)
+
+  // Its own greets once; the button spends it.
+  await context.addCookies([welcome(userId)])
+  await page.reload()
+  await expect(page.getByRole("heading", { name: "Umeidhinishwa!" })).toBeVisible()
+  await page.getByRole("button", { name: "Ona Wanafunzi Niliowaleta" }).click()
+  await expect(page.getByText(`Code yako ${agent.code}`)).toBeVisible()
+  await page.reload()
+  await expect(page.getByRole("heading", { name: "Umeidhinishwa!" })).toHaveCount(0)
 })
 
 test("without a session, the students page sends the agent to sign in under a note saying why", async ({ page }) => {

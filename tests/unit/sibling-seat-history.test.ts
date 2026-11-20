@@ -113,10 +113,10 @@ describe("a sibling group entry", () => {
     })
 
     it("of a Legacy member answered Not a sibling reads as leaving the group", () => {
-      expect(read([leaveLegacy, answer, fromForm(true)])[0]).toEqual({
-        summary: "took the applicant out of their sibling group",
-        lines: ["Because: Check-in completed the Admission form details"],
-      })
+      expect(read([leaveLegacy, answer, fromForm(true)])).toEqual([
+        { summary: "took the applicant out of their sibling group", lines: ["Because: Check-in completed the Admission form details"] },
+        { summary: "added the applicant to a sibling group", lines: ["Because: Sibling groups began"] },
+      ])
     })
 
     it("of a Legacy member that chose a sibling reads as one move", () => {
@@ -327,6 +327,15 @@ describe("a move between streams, saved as a release and a placement", () => {
 
   it("reads as one move, saying why the child left the old stream", () => {
     expect(read([placement([]), release])).toEqual([{ summary: "moved the applicant from KG 2 A (Boys) to KG 2 A (Girls)", lines: ["Because: Boy or girl was corrected"] }])
+  })
+
+  // The row's cause was already `gender`, so the release records no cause
+  // change, and the only one in the save is the placement's.
+  it("says why the child left when the release kept the cause the row already had", () => {
+    const kept = entry("seat_placements", "update", [change("stream_id", BOYS, null), change("changed_at", AT, "2026-11-20T08:15:02.010Z")], 1, "seat")
+    expect(read([placement([change("cause", "gender", "stream_opened")]), kept])).toEqual([
+      { summary: "moved the applicant from KG 2 A (Boys) to KG 2 A (Girls)", lines: ["Because: Boy or girl was corrected"] },
+    ])
   })
 
   it("stays two entries when the placement came in a later save, however soon", () => {

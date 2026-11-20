@@ -14,7 +14,9 @@ export function rowSequences(entries: readonly LeadHistoryEntry[], record: strin
 // The audit log keeps no transaction id, but every write to these rows sets
 // its time column (`stamp`) to now(), which is the same all through one
 // transaction. So a later write in the same save leaves the time unchanged,
-// and its entry has no `stamp` change; a write in any later save changes it.
+// and its entry has no `stamp` change; a write in a later save changes it.
+// Two saves whose transactions start in the same microsecond would share a
+// time and read as one save, which is too unlikely to guard against.
 function sameSave(later: LeadHistoryEntry, stamp: string): boolean {
   return later.action === "update" && !later.changes.some((c) => c.field === stamp)
 }
@@ -23,8 +25,8 @@ const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
 
 // One save that wrote a row several times, as one entry of what it changed
 // overall: each field from its value before the save to its value after it.
-// The cause is the first one written (why the save touched the row) or the
-// last (where it left it), as the table reads best.
+// The cause is the row's after the save's first write (why the save touched
+// the row) or after its last (where it left it), as the table reads best.
 function netChange(run: readonly LeadHistoryEntry[], cause: "first" | "last"): LeadHistoryEntry {
   const last = run[run.length - 1]
   const fields = new Map<string, LeadHistoryChange>()
@@ -35,8 +37,15 @@ function netChange(run: readonly LeadHistoryEntry[], cause: "first" | "last"): L
     }
   }
   const causes = run.flatMap((e) => e.changes.filter((c) => c.field === "cause"))
-  const why = cause === "first" ? causes[0] : causes[causes.length - 1]
-  if (why) fields.set("cause", { field: "cause", from: causes[0].from, to: why.to })
+  // A save that never changed the cause adds none here: the entry then says
+  // the cause the row already had, as any update that kept its cause does.
+  if (causes.length > 0) {
+    // An entry lists only what changed, so a first write with no cause change
+    // kept the cause the row had before the save: the earliest change's `from`.
+    const firstWrote = run[0].changes.some((c) => c.field === "cause")
+    const first = firstWrote ? causes[0].to : causes[0].from
+    fields.set("cause", { field: "cause", from: causes[0].from, to: cause === "first" ? first : causes[causes.length - 1].to })
+  }
   const insert = run[0].action === "insert"
   return {
     ...last,

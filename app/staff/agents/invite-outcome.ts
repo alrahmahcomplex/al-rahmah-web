@@ -10,11 +10,11 @@ import type {
 import { emailTakenMessage } from "@/lib/email-in-use"
 import type { Result } from "@/lib/services/result"
 
-import { ACCESS_OFF_CODE } from "./access-banner"
 
 // The Agents screen's words for invites, account states and email edits
 // (#191). An invite is "sent" once Auth accepts it; whether it reached the
-// inbox is never known, so nothing here says "delivered".
+// inbox is never known, so nothing here says "delivered". No sentence prints
+// a reason or error code (#497); the codes stay in the invite records.
 
 const WHEN = new Intl.DateTimeFormat("en-GB", {
   dateStyle: "medium",
@@ -42,12 +42,12 @@ const SEND_REASONS: Record<string, string> = {
   rate_limited: "the hourly email limit is reached",
   smtp_error: "the email service refused it",
   rejected_address: "the address was refused",
-  access_off: `agent access is off (${ACCESS_OFF_CODE})`,
+  access_off: "agent access is off",
+  other_error: "the email service gave an error",
 }
 
-function sendReason(result: string, errorCode: string | null): string {
-  if (result === "other_error") return `email error ${errorCode ?? "unknown"}`
-  return SEND_REASONS[result] ?? `email error ${result}`
+function sendReason(result: string): string {
+  return SEND_REASONS[result] ?? SEND_REASONS.other_error
 }
 
 // The line under the badge: when the invite to the current email was sent,
@@ -55,7 +55,7 @@ function sendReason(result: string, errorCode: string | null): string {
 export function inviteLine(note: AgentInviteNote): string | null {
   const last = note.lastAttempt
   if (last && last.result !== "sent") {
-    return `Not sent ${WHEN.format(new Date(last.at))}: ${sendReason(last.result, last.errorCode)}`
+    return `Not sent ${WHEN.format(new Date(last.at))}: ${sendReason(last.result)}`
   }
   // A joined agent's email may since have changed in Auth, so the line
   // doesn't name it as the invite's recipient.
@@ -96,7 +96,7 @@ function failureReason(error: AgentInviteError | { kind: "signed-out" }): string
     case "rejected-address":
       return `${SEND_REASONS.rejected_address}. ${NEXT_STEP["rejected-address"]}`
     case "other-error":
-      return `email error ${error.code}. ${NEXT_STEP["other-error"]}`
+      return `${SEND_REASONS.other_error}. ${NEXT_STEP["other-error"]}`
     case "access-off":
       return `${SEND_REASONS.access_off}. ${NEXT_STEP["access-off"]}`
     default:

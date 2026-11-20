@@ -120,12 +120,14 @@ export default async function HomePage({ params }: Props) {
         </section>
       </div>
 
-      <Link
+      {/* A plain link: on production /login is on the portal (#497), and a
+          Next.js prefetch of another host's page fails on the redirect. */}
+      <a
         href="/login"
         className="inline-flex min-h-11 items-center px-3 text-sm text-slate-600 underline-offset-4 hover:text-blue-600 hover:underline"
       >
         Staff sign-in
-      </Link>
+      </a>
     </main>
   )
 }

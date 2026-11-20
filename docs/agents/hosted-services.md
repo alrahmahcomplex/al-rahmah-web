@@ -52,7 +52,12 @@ Supabase's CAPTCHA protection (#268) asks for a Turnstile token on password sign
 The order for moving the Admissions Portal to `portal.alrahmahcomplex.or.tz` (#497):
 
 1. **Before the merge.** Add `portal.alrahmahcomplex.or.tz` to the Vercel project (Settings → Domains, Production) and send the owner the DNS record Vercel asks for: on 2026-11-20 a `CNAME` named `portal` with the value `e55b2e68f1617674.vercel-dns-017.com.` Once the owner has added it, Vercel shows the domain as valid with a certificate, and `https://portal.alrahmahcomplex.or.tz/login` serves the current app's sign-in page. Add the three portal Redirect URLs above, and the portal host to the Turnstile widget's hostname list. Until the merge the portal serves every page, like any other host.
-2. **The merge.** After the production deploy, `https://alrahmahcomplex.or.tz/staff` answers 307 to the portal, and `/` and `/apply` on the public host still answer `X-Vercel-Cache: HIT`.
+2. **The merge.** After the production deploy, check with `curl -sI`:
+   - `https://alrahmahcomplex.or.tz/staff` answers 307 to the portal.
+   - `https://alrahmahcomplex.or.tz/auth/confirm?token_hash=x&type=invite` answers 307 to the same address on the portal, query intact.
+   - `https://portal.alrahmahcomplex.or.tz/` answers 307 to `/login`, and `https://portal.alrahmahcomplex.or.tz/apply?ref=X` answers 307 to `https://alrahmahcomplex.or.tz/apply?ref=X`.
+   - `/` and `/apply` on the public host, and `/login/forgot-password` on the portal, still answer `X-Vercel-Cache: HIT`.
+   - The public `/` shows no failed request or console error in the browser.
 3. **A real sign-in** on the portal in the signed-in in-app browser has to succeed. Then check that "Umesahau nenosiri?" sends from the portal and that the Discount code sign-up's Turnstile check passes there.
 4. **Rollback.** Vercel Instant Rollback to the previous production deployment, or revert the PR. The previous app serves every page on both hosts, so links already sent to the portal keep working. Leave the domain, DNS record, Redirect URLs and Turnstile hostname in place.
 

@@ -38,12 +38,13 @@ export default function NotFound() {
           </Link>
         </section>
       </div>
-      <Link
+      {/* A plain link: on production /login is on the portal (#497). */}
+      <a
         href="/login"
         className="inline-flex min-h-11 items-center px-3 text-sm text-slate-600 underline-offset-4 hover:text-blue-600 hover:underline"
       >
         Staff sign-in
-      </Link>
+      </a>
     </main>
   )
 }

@@ -56,7 +56,7 @@ The order for moving the Admissions Portal to `portal.alrahmahcomplex.or.tz` (#4
    - `https://alrahmahcomplex.or.tz/staff` answers 307 to the portal.
    - `https://alrahmahcomplex.or.tz/auth/confirm?token_hash=x&type=invite` answers 307 to the same address on the portal, query intact.
    - `https://portal.alrahmahcomplex.or.tz/` answers 307 to `/login`, and `https://portal.alrahmahcomplex.or.tz/apply?ref=X` answers 307 to `https://alrahmahcomplex.or.tz/apply?ref=X`.
-   - `/` and `/apply` on the public host, and `/login/forgot-password` on the portal, still answer `X-Vercel-Cache: HIT`.
+   - `/` and `/apply` on the public host, and `/login/forgot-password` on the portal, still answer `X-Vercel-Cache: HIT` from the second request on (the first after a deploy can be `PRERENDER` or `MISS`).
    - The public `/` shows no failed request or console error in the browser.
 3. **A real sign-in** on the portal in the signed-in in-app browser has to succeed. Then check that "Umesahau nenosiri?" sends from the portal and that the Discount code sign-up's Turnstile check passes there.
 4. **Rollback.** Vercel Instant Rollback to the previous production deployment, or revert the PR. The previous app serves every page on both hosts, so links already sent to the portal keep working. Leave the domain, DNS record, Redirect URLs and Turnstile hostname in place.

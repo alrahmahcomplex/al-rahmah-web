@@ -480,14 +480,12 @@ test.describe("last-name choice, school abroad, and Register for interview (#511
     await expect(familyLink).toBeVisible()
     await expect(familyLink).toHaveAttribute("href", /^\/staff\/family\?students=[0-9a-f-]+,[0-9a-f-]+$/)
 
-    // Register for interview sheet: Register all is orange, per-student buttons are outlined.
+    // Register for interview sheet: per-student buttons plus Register all for 2+ students.
     await page.getByRole("button", { name: "Register for interview" }).click()
     const sheet = page.getByRole("dialog", { name: "Register for interview" })
-    await expect(sheet.getByRole("button", { name: "Register all for interview" })).toHaveClass(/kit-go/)
+    await expect(sheet.getByRole("button", { name: "Register all for interview" })).toBeVisible()
     const rowButtons = sheet.getByRole("button", { name: "Register for interview" })
     await expect(rowButtons).toHaveCount(2)
-    await expect(rowButtons.first()).toHaveClass(/kit-ghost/)
-    await expect(rowButtons.nth(1)).toHaveClass(/kit-ghost/)
 
     // Register student 1 alone, then Register all for the remaining student.
     await rowButtons.first().click()

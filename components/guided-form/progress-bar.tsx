@@ -43,6 +43,12 @@ export type ProgressBarProps = {
    * shows after the section chip (#511, prototype v50). Needs `canReset`.
    */
   endReset?: boolean
+  /**
+   * While Start over shows after the section chip, the chip moves centred
+   * above the progress bar (#513, prototype v55): the parents' Admission form.
+   * Needs `endReset`.
+   */
+  chipUp?: boolean
   labels: ProgressBarLabels
   /** The screen-reader progress line, e.g. "Msimamizi: hatua 2 kati ya 3". Read politely when it changes. */
   status: string
@@ -150,10 +156,11 @@ function Group({ group, index, active, who, cheerDelay }: { group: ProgressGroup
 /**
  * The sticky row above the guided form: Back (or Start over on the first
  * question), the grouped step chips, the outlined section chip and, with
- * `endReset`, Start over after it from the second question on.
+ * `endReset`, Start over after it from the second question on; with `chipUp`
+ * the section chip then sits centred above the bar.
  * Maps to `.bar-row`, `.navslot`, `.prog`, `.pg`, `.gn`, `.secname` in c2.html.
  */
-export function ProgressBar({ groups, activeGroup, whoLabel, canBack, onBack, canReset = false, onReset, endReset = false, labels, status, kitIcons = false, cheerDelay = 820, className }: ProgressBarProps) {
+export function ProgressBar({ groups, activeGroup, whoLabel, canBack, onBack, canReset = false, onReset, endReset = false, chipUp = false, labels, status, kitIcons = false, cheerDelay = 820, className }: ProgressBarProps) {
   const [spin, setSpin] = useState(0)
   const host = kitIcons ? "" : undefined
   const glyph = (name: "back" | "reset") => (kitIcons ? <KitIcon name={name} /> : <Icon name={name} />)
@@ -168,7 +175,7 @@ export function ProgressBar({ groups, activeGroup, whoLabel, canBack, onBack, ca
   }, [spin])
 
   return (
-    <div className={cn("gf-bar-row", className)}>
+    <div className={cn("gf-bar-row", chipUp && showEnd && "gf-chip-up", className)}>
       <div className="gf-navslot">
         <button
           type="button"

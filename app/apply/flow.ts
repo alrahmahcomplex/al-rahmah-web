@@ -7,9 +7,10 @@ import type { ChildDraft, ParentDraft } from "./draft"
 // The order of the Admission form's questions, one open at a time, and which
 // answers each question owns. Pure, so the form and its tests share it.
 //
-// Per student: name, boy or girl, class (with the year), Day or Boarding. Then "another
-// student?", unless the form already has MAX_CHILDREN. Then the custodian's
-// name, relationship and phone, the Discount code, the interview fee, and
+// Per student: name (with the last-name choice), boy or girl, class (with the year), Day or Boarding. Then "another
+// student?", unless the form already has MAX_CHILDREN. Then who the custodian
+// is (The father, or Someone else and their name), the relationship (skipped
+// for The father) and phone, the Discount code, the interview fee, and
 // the send step. Student questions carry the card number, which stays with
 // the card when another card is removed.
 
@@ -35,7 +36,7 @@ export function order(children: readonly ChildDraft[]): StepKey[] {
   return keys
 }
 
-// The father whose names the switch "The father is the custodian" takes:
+// The father whose names "The father" as custodian takes:
 // the first student's, also when the form has several (lead, 2026-11-17).
 export function switchFather(children: readonly ChildDraft[]): PersonNameParts {
   const first = children[0]
@@ -46,14 +47,20 @@ function studentParts(draft: ChildDraft): StudentNameParts {
   return { firstName: draft.firstName, fatherFirst: draft.fatherFirst, fatherMiddle: draft.fatherMiddle, fatherLast: draft.fatherLast }
 }
 
-/** The student's full name as the database builds it: own name, father's first and last. */
+/** The student's full name as the database builds it: own name, father's first, then his last name or the middle one the family picked. */
 export function studentName(draft: ChildDraft): string {
-  return [draft.firstName, draft.fatherFirst, draft.fatherLast].map(namePart).filter(Boolean).join(" ")
+  const last = draft.lastNameFrom === "father_middle" ? draft.fatherMiddle : draft.fatherLast
+  return [draft.firstName, draft.fatherFirst, last].map(namePart).filter(Boolean).join(" ")
 }
 
-/** The custodian's three names: the first student's father with the switch on. */
+/** Whether the custodian is the first student's father. */
+export function fatherIsCustodian(parent: ParentDraft): boolean {
+  return parent.custodian === "father"
+}
+
+/** The custodian's three names: the first student's father when he was picked. */
 export function custodianParts(parent: ParentDraft, children: readonly ChildDraft[]): PersonNameParts {
-  return parent.fatherCustodian ? switchFather(children) : { firstName: parent.firstName, middleName: parent.middleName, lastName: parent.lastName }
+  return fatherIsCustodian(parent) ? switchFather(children) : { firstName: parent.firstName, middleName: parent.middleName, lastName: parent.lastName }
 }
 
 export function custodianName(parent: ParentDraft, children: readonly ChildDraft[]): string {
@@ -61,7 +68,7 @@ export function custodianName(parent: ParentDraft, children: readonly ChildDraft
   return [firstName, middleName, lastName].map(namePart).filter(Boolean).join(" ")
 }
 
-/** The father's three names, as the switch shows them. */
+/** The father's three names, as "The father" shows them. */
 export function fatherName(children: readonly ChildDraft[]): string {
   const { firstName, middleName, lastName } = switchFather(children)
   return [firstName, middleName, lastName].map(namePart).filter(Boolean).join(" ")
@@ -69,12 +76,12 @@ export function fatherName(children: readonly ChildDraft[]): string {
 
 /** The relationship question is skipped while the father is the custodian: it is Father. */
 export function skipped(key: StepKey, parent: ParentDraft): boolean {
-  return key === "rel" && parent.fatherCustodian
+  return key === "rel" && fatherIsCustodian(parent)
 }
 
 export function asParent(draft: ParentDraft, children: readonly ChildDraft[]): AdmissionParent {
   const nameParts = custodianParts(draft, children)
-  const relationship = draft.fatherCustodian ? "Father" : draft.relationship
+  const relationship = fatherIsCustodian(draft) ? "Father" : draft.relationship
   return {
     fullName: personFullName(nameParts),
     nameParts,
@@ -87,8 +94,9 @@ export function asParent(draft: ParentDraft, children: readonly ChildDraft[]): A
 
 export function asChild(draft: ChildDraft): AdmissionChild {
   return {
-    fullName: studentFullName(studentParts(draft)),
+    fullName: studentFullName(studentParts(draft), draft.lastNameFrom),
     nameParts: studentParts(draft),
+    lastNameFrom: draft.lastNameFrom,
     ...(draft.gender ? { gender: draft.gender as AdmissionChild["gender"] } : {}),
     className: draft.className as AdmissionChild["className"],
     enrollmentYear: draft.enrollmentYear ?? 0,
@@ -104,8 +112,8 @@ export function wireParent(draft: ParentDraft, children: readonly ChildDraft[]) 
 }
 
 export function wireChild(draft: ChildDraft) {
-  const { nameParts, gender, className, enrollmentYear, dayOrBoarding } = asChild(draft)
-  return { ...nameParts, gender, className, enrollmentYear, dayOrBoarding }
+  const { nameParts, lastNameFrom, gender, className, enrollmentYear, dayOrBoarding } = asChild(draft)
+  return { ...nameParts, lastNameFrom, gender, className, enrollmentYear, dayOrBoarding }
 }
 
 const STEP_FIELDS: Record<string, readonly FormField[]> = {
@@ -153,6 +161,8 @@ export function stepProblems(key: StepKey, { parent, children, discountCode }: E
       (problem) => problem.child === index && fields.includes(problem.field) && (kind !== "class" || problem.field === "class_name" || children[index].enrollmentYear !== null),
     )
   }
+  // Who the custodian is comes first (#513): nobody picked is the custodian question's own problem, on no box.
+  if (kind === "pname" && parent.custodian === "") return [{ field: "contact_name", child: null }]
   return parentProblems(asParent(parent, children)).filter((problem) => STEP_FIELDS[kind].includes(problem.field))
 }
 

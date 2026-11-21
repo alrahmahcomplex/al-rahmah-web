@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test"
 
 import { admissionYears } from "../lib/admission-form"
-import { expectQuestion, family, fillStudent, nameBox, openQuestion, tile, PHONE_WIDTH, send, toSend, setLanguageCookie, WORDS } from "./admission-form"
+import { expectQuestion, family, fillStudent, nameBox, openQuestion, pickSomeoneElse, tile, PHONE_WIDTH, send, toSend, setLanguageCookie, WORDS } from "./admission-form"
 
 // Several students on one Admission form (#75), on a phone, in Swahili,
 // against local Supabase with Turnstile's always-pass test keys.
@@ -76,6 +76,7 @@ test("two students on one form are sent together, and the confirmation lists eac
   await openQuestion(page).getByRole("button", { name: t.noMore }).click()
   await expectQuestion(page, t.parentName)
   await expect(openQuestion(page).getByText("Mtu anayewalea wanafunzi na kulipa ada ya shule.")).toBeVisible()
+  await pickSomeoneElse(page, "sw")
   await nameBox(page, "sw", "first").fill(who.parent)
   await openQuestion(page).getByRole("button", { name: t.continue }).click()
   await expectQuestion(page, /ni nani kwa wanafunzi hawa\?$/)

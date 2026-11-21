@@ -16,6 +16,7 @@ import {
   GuidedStep,
   Hint,
   InfoButton,
+  LastNameChoice,
   NoticeBox,
   OfferNote,
   OfferPill,
@@ -25,7 +26,6 @@ import {
   Reveal,
   StudentNameBoxes,
   SummaryRow,
-  SwitchRow,
 } from "@/components/guided-form"
 import { TurnstileWidget, type TurnstileWidgetHandle } from "@/components/turnstile-widget"
 import { MAX_NAME_PART, type FormField, type NamePart } from "@/lib/admission-form"
@@ -36,8 +36,8 @@ import { namePart } from "@/lib/names"
 import { DAY_OR_BOARDING, RELATIONSHIPS, STUDENT_GENDERS, type DayOrBoarding, type Relationship, type StudentGender } from "@/lib/services/leads"
 
 import type { ChangeWord, FormCopy } from "./copy"
-import type { ChildDraft, ParentDraft } from "./draft"
-import { custodianName, fatherName, firstName, parseKey, skipped, STUDENT_KINDS, studentKey, studentName, switchFather, yearOf, type StepKey } from "./flow"
+import type { ChildDraft, Custodian, ParentDraft } from "./draft"
+import { custodianName, fatherIsCustodian, fatherName, firstName, parseKey, skipped, STUDENT_KINDS, studentKey, studentName, switchFather, yearOf, type StepKey } from "./flow"
 import type { DiscountCodeCheck } from "./outcome"
 
 // The Admission form's stack: group titles, one question open at a time, and
@@ -90,8 +90,10 @@ export type QuestionsProps = {
     change: (key: StepKey) => void
     child: (card: number, change: Partial<Omit<ChildDraft, "card">>, commitAfter?: boolean) => void
     parent: (change: Partial<ParentDraft>) => void
-    // "The father is the custodian" turned on or off.
-    fatherSwitch: (on: boolean) => void
+    // The father or Someone else picked as the custodian (#513).
+    custodian: (who: Exclude<Custodian, "">) => void
+    // A tap, Enter or Space on the custodian buttons: The father again answers the question.
+    custodianAgain: (event: React.MouseEvent | React.KeyboardEvent) => void
     // A tap on a choice answers the question, even on the one already picked.
     tapChoice: (key: StepKey, event: React.MouseEvent) => void
     code: (value: string) => void
@@ -233,7 +235,7 @@ function summary(p: QuestionsProps, key: StepKey): ReactNode {
         <SummaryRow
           label={copy.parentName}
           value={
-            parent.fatherCustodian ? (
+            fatherIsCustodian(parent) ? (
               <>
                 {fatherName(p.children)} <span className="font-normal text-slate-500">· {copy.relationships.Father}</span>
               </>
@@ -332,6 +334,13 @@ function body(p: QuestionsProps, key: StepKey): ReactNode {
               value={{ firstName: child.firstName, fatherFirst: child.fatherFirst, fatherMiddle: child.fatherMiddle, fatherLast: child.fatherLast }}
               invalid={boxesInvalid(p.namesInvalid("student_name", index), STUDENT_BOXES)}
               onChange={(name) => p.on.child(child.card, name)}
+            />
+            <LastNameChoice
+              name={`last-name-${child.card}`}
+              father={child}
+              value={child.lastNameFrom}
+              onChange={(lastNameFrom) => p.on.child(child.card, { lastNameFrom })}
+              labels={copy.lastName}
             />
             <Hint className="gf-full-line text-center" aria-live="polite">
               {full ? (
@@ -466,21 +475,37 @@ function body(p: QuestionsProps, key: StepKey): ReactNode {
     case "pname": {
       const error = p.message("contact_name")
       const one = children.length === 1 ? firstName(children[0]) : null
+      const other = parent.custodian === "other"
+      const father = fatherName(children)
       return (
         <>
-          <QuestionTitle id={titleId}>{copy.custodianQ}</QuestionTitle>
-          <div className="flex flex-col gap-3.5">
-            <Hint id="h-parent-name" className="-mt-2 text-center">
-              {copy.custodianHint(one)}
-            </Hint>
-            <SwitchRow
-              id="father-custodian"
-              label={copy.fatherIsCustodian}
-              detail={fatherName(children)}
-              checked={parent.fatherCustodian}
-              onCheckedChange={p.on.fatherSwitch}
-            />
-            <Reveal open={!parent.fatherCustodian} id="custodian-names">
+          {/* Two buttons first (#513, prototype v55). The father moves on to the
+              phone; Someone else opens the three name boxes and Continue. */}
+          <div onClick={p.on.custodianAgain} onKeyDown={p.on.custodianAgain}>
+            <ChoiceTiles
+              name="custodian"
+              layout="pair"
+              legend={
+                <>
+                  <QuestionTitle id={titleId}>{copy.custodianQ}</QuestionTitle>
+                  <Hint id="h-parent-name" className="-mt-2 mb-4 text-center">
+                    {copy.custodianHint(one)}
+                  </Hint>
+                </>
+              }
+              options={[
+                { value: "father", label: copy.custodianFather, description: father || copy.custodianFatherUnnamed },
+                { value: "other", label: copy.custodianOther, description: copy.custodianOtherLine },
+              ]}
+              value={parent.custodian || null}
+              describedBy="e-custodian"
+              onChange={(value) => p.on.custodian(value as Exclude<Custodian, "">)}
+            >
+              <FieldError id="e-custodian" message={other ? null : error} />
+            </ChoiceTiles>
+          </div>
+          <Reveal open={other} id="custodian-names">
+            <div className="flex flex-col gap-3.5 pt-1">
               <PersonNameBoxes
                 id="parent-name"
                 aria-labelledby={titleId}
@@ -491,10 +516,10 @@ function body(p: QuestionsProps, key: StepKey): ReactNode {
                 invalid={boxesInvalid(p.namesInvalid("contact_name", null), PERSON_BOXES)}
                 onChange={(name) => p.on.parent(name)}
               />
-            </Reveal>
-            <FieldError id="e-parent-name" message={error} />
-          </div>
-          {next()}
+              <FieldError id="e-parent-name" message={other ? error : null} />
+              {next()}
+            </div>
+          </Reveal>
         </>
       )
     }
@@ -545,11 +570,11 @@ function body(p: QuestionsProps, key: StepKey): ReactNode {
       return (
         <>
           <QuestionTitle id={titleId} htmlFor="phone">
-            {copy.phoneQ(parent.fatherCustodian ? namePart(switchFather(children).firstName) || null : null)}
+            {copy.phoneQ(fatherIsCustodian(parent) ? namePart(switchFather(children).firstName) || null : null)}
           </QuestionTitle>
           <div className="flex flex-col gap-2">
             <Hint id="h-phone">{copy.phoneHint}</Hint>
-            {parent.fatherCustodian && <FatherNote copy={copy} father={fatherName(children)} />}
+            {fatherIsCustodian(parent) && <FatherNote copy={copy} father={fatherName(children)} />}
             <FieldInput
               id="phone"
               data-field="phone"

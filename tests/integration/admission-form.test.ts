@@ -377,3 +377,41 @@ describe("several children on one form", () => {
     expect(leads.map((l) => l.returningFamily)).toEqual([false, false, false])
   })
 })
+
+// The last-name choice (#513): sent with the name parts, the database builds
+// the student's name from it and keeps it on the lead.
+describe("the last-name choice on the Admission form", () => {
+  // Letters only: a name part holds no digits.
+  const letters = () => Array.from(randomUUID().replace(/-/g, "").slice(0, 6), (c) => String.fromCharCode(65 + (parseInt(c, 16) % 26))).join("")
+
+  async function stored(admissionNumber: string) {
+    return inRolledBackTransaction(async (sql) =>
+      (await sql.query("select student_name, last_name_from::text from public.leads where admission_number = $1", [admissionNumber])).rows[0],
+    )
+  }
+
+  test.each([
+    ["father_middle", "middle"],
+    ["father_last", "last"],
+  ] as const)("with %s, stores the name it builds and the choice", async (lastNameFrom, which) => {
+    const middle = `KATI${letters()}`
+    const last = `MWISHO${letters()}`
+    const parts = { firstName: `MWANAFUNZI${letters()}`, fatherFirst: "BABA", fatherMiddle: middle, fatherLast: last }
+    const name = `${parts.firstName} BABA ${which === "middle" ? middle : last}`
+    const sent = form({ parent: parent({ fullName: "FORM PARENT ONE", nameParts: { firstName: "FORM", middleName: "PARENT", lastName: "ONE" } }), children: [child({ fullName: name, nameParts: parts, lastNameFrom })] })
+
+    const result = await submitAdmissionForm(secretClient(), sent)
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(await stored(result.data[0].admissionNumber)).toEqual({ student_name: name, last_name_from: lastNameFrom })
+  })
+
+  test("left out with the name parts, stores the father's last name", async () => {
+    const parts = { firstName: `MWANAFUNZI${letters()}`, fatherFirst: "BABA", fatherMiddle: "KATI", fatherLast: `MWISHO${letters()}` }
+    const sent = form({ children: [child({ fullName: `${parts.firstName} BABA ${parts.fatherLast}`, nameParts: parts })] })
+    const result = await submitAdmissionForm(secretClient(), sent)
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(await stored(result.data[0].admissionNumber)).toEqual({ student_name: `${parts.firstName} BABA ${parts.fatherLast}`, last_name_from: "father_last" })
+  })
+})

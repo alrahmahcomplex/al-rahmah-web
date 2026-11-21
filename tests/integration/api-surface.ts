@@ -1499,6 +1499,9 @@ export const RELATIONS: Record<string, RelationEntry> = {
     anon: ["select", "references", "trigger", "maintain"],
   },
   "public.sibling_rule_settings": { authenticated: [], anon: [] },
+  // The SMS log and its budget (#503): reserve_sms and record_sms only.
+  "public.sms_sends": { authenticated: [], anon: [] },
+  "public.sms_settings": { authenticated: [], anon: [] },
   // Sibling groups and their members (#300).
   "public.seat_placements": {
     authenticated: ["select", "references", "trigger", "maintain"],

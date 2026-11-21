@@ -1,3 +1,4 @@
+import { LAST_NAME_FROM } from "@/lib/names"
 import {
   DAY_OR_BOARDING,
   LEAD_CLASSES,
@@ -34,7 +35,7 @@ export function isStudent(s: RegistrationStudent, people: number, students: numb
     whole(c.person, 1, people) && ("father" in c ? c.father === true : (RELATIONSHIPS as readonly string[]).includes(c.relationship) && optStr(c.relationshipDescription, 60))
   const school =
     s.previousSchool === undefined ||
-    ("notKnown" in s.previousSchool ? s.previousSchool.notKnown === true : str(s.previousSchool.name) && ["private", "public"].includes(s.previousSchool.type) && str(s.previousSchool.region, 60))
+    ("notKnown" in s.previousSchool ? s.previousSchool.notKnown === true : str(s.previousSchool.name) && ["private", "public"].includes(s.previousSchool.type) && str(s.previousSchool.region, 60) && optStr(s.previousSchool.country, 60))
   const sibling =
     s.siblingOf === undefined ||
     ("student" in s.siblingOf ? whole(s.siblingOf.student, 1, students) : str(s.siblingOf.leadId) && UUID.test(s.siblingOf.leadId))
@@ -42,6 +43,7 @@ export function isStudent(s: RegistrationStudent, people: number, students: numb
   const brought = s.broughtBy === undefined || (str(s.broughtBy.name, 120) && optStr(s.broughtBy.phone, 40) && optStr(s.broughtBy.relationship, 60))
   return (
     str(s.firstName) && str(s.fatherFirst) && str(s.fatherMiddle) && str(s.fatherLast) &&
+    (s.lastNameFrom === undefined || (LAST_NAME_FROM as readonly string[]).includes(s.lastNameFrom)) &&
     (STUDENT_GENDERS as readonly string[]).includes(s.gender ?? "") &&
     (LEAD_CLASSES as readonly string[]).includes(s.className) &&
     Number.isInteger(s.enrollmentYear) &&

@@ -2,10 +2,12 @@
 
 import { useId, useLayoutEffect, useRef, useState, type ChangeEvent, type CompositionEvent, type KeyboardEvent, type ReactNode } from "react"
 
+import type { LastNameFrom } from "@/lib/names"
 import { cn } from "@/lib/utils"
 
 import { FieldInput, type FieldInputProps } from "./controls"
-import { formatAgentCode, formatCode, typeInNameBox } from "./typing"
+import { Reveal } from "./switch-row"
+import { cleanName, formatAgentCode, formatCode, typeInNameBox } from "./typing"
 import "./guided-form.css"
 
 // The name boxes and the code box (prototype v38). They live with the guided
@@ -240,14 +242,79 @@ function useOneBox({ value, defaultValue, onValueChange }: OneBoxProps, format: 
 }
 
 /**
+ * One box typed in capitals, spaces kept: a previous school's name (#511,
+ * prototype v52). Save it trimmed.
+ */
+export function CapitalsBox({ className, ...props }: OneBoxProps) {
+  const { value, defaultValue, onValueChange, ...rest } = props
+  const box = useOneBox({ value, defaultValue, onValueChange }, (raw) => raw.toUpperCase(), false)
+  return <FieldInput autoComplete="off" autoCapitalize="characters" spellCheck={false} {...rest} {...box} className={cn(CAPS, className)} />
+}
+
+/**
  * One full-name box in capitals, for "Who brought the students" when it is
  * someone else. Spaces stay. Check `hasTwoNames` before saving and say
  * "at least two names" in the field's error line.
  */
-export function FullNameBox({ className, ...props }: OneBoxProps) {
-  const { value, defaultValue, onValueChange, ...rest } = props
-  const box = useOneBox({ value, defaultValue, onValueChange }, (raw) => raw.toUpperCase(), false)
-  return <FieldInput autoComplete="off" autoCapitalize="characters" spellCheck={false} {...rest} {...box} className={cn(CAPS, className)} />
+export function FullNameBox(props: OneBoxProps) {
+  return <CapitalsBox {...props} />
+}
+
+export type LastNameLabels = {
+  /** Above the two choices, e.g. "Student’s last name". */
+  group: string
+  /** The line over the father's last name, e.g. "Father’s last name". */
+  last: string
+  /** The line over his middle name, e.g. "Father’s middle name". */
+  middle: string
+}
+
+/**
+ * Which of the father's names is the student's last name (#511, prototype
+ * v50): two tiles, each showing the name it gives. It folds open once the
+ * father's middle and last names are typed; his last name is picked to start
+ * with. Put it under `StudentNameBoxes` and show the full name it builds.
+ */
+export function LastNameChoice({
+  name,
+  father,
+  value,
+  onChange,
+  labels,
+}: {
+  /** The radios' name. */
+  name: string
+  father: Pick<FatherName, "fatherMiddle" | "fatherLast">
+  value: LastNameFrom
+  onChange: (value: LastNameFrom) => void
+  labels: LastNameLabels
+}) {
+  const middle = cleanName(father.fatherMiddle)
+  const last = cleanName(father.fatherLast)
+  const open = middle !== "" && last !== ""
+  const head = useId()
+  const tile = (from: LastNameFrom, line: string, shown: string) => (
+    <label>
+      <input type="radio" name={name} value={from} checked={value === from} onChange={() => onChange(from)} />
+      <span>
+        <small>{line}</small>
+        <b>{shown}</b>
+      </span>
+    </label>
+  )
+  return (
+    <Reveal open={open}>
+      <div role="radiogroup" aria-labelledby={head} className="pt-1">
+        <p id={head} className="gf-lnp-head">
+          {labels.group}
+        </p>
+        <div className="gf-seg gf-two gf-lnp">
+          {tile("father_last", labels.last, last)}
+          {tile("father_middle", labels.middle, middle)}
+        </div>
+      </div>
+    </Reveal>
+  )
 }
 
 /**

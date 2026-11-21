@@ -18,15 +18,21 @@ export type PersonNameParts = {
   lastName: string
 }
 
+// Which of the father's names is the student's last name (#511, prototype
+// v50): his last name, unless the family uses his middle name. Stored on the
+// lead as last_name_from.
+export const LAST_NAME_FROM = ["father_last", "father_middle"] as const
+export type LastNameFrom = (typeof LAST_NAME_FROM)[number]
+
 // A part as stored: trimmed, inner whitespace one space, in capitals.
 export function namePart(part: string): string {
   return part.trim().replace(/\s+/g, " ").toUpperCase()
 }
 
 // The student's full name: the student's name, the father's first name and
-// the father's last name. The father's middle name is left out.
-export function studentFullName(parts: StudentNameParts): string {
-  return [parts.firstName, parts.fatherFirst, parts.fatherLast].map(namePart).join(" ")
+// the father's last name, or his middle name when the family uses it.
+export function studentFullName(parts: StudentNameParts, from: LastNameFrom = "father_last"): string {
+  return [parts.firstName, parts.fatherFirst, from === "father_middle" ? parts.fatherMiddle : parts.fatherLast].map(namePart).join(" ")
 }
 
 // The father's full name: all three of his names.

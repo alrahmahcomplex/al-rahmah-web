@@ -40,6 +40,7 @@ import { GuidedDemo } from "./guided-demo"
 import "./kit-page.css"
 import { OverlayCards } from "./overlays"
 import { NamesCard, PickedPartsCards } from "./picked-parts"
+import { LastNameCard, PlaceListsCard, TwoChoicesCard } from "./place-parts"
 
 // The approved prototype's "Design system" page (version 13), rebuilt with
 // the kit, card for card; then the kit's other pieces, filled with the
@@ -585,6 +586,9 @@ function MorePieces({ linkFilter }: { linkFilter: string }) {
 
       <Bento className="kp-ds" data-rise="group">
         <NamesCard />
+        <LastNameCard />
+        <PlaceListsCard />
+        <TwoChoicesCard />
         <OverlayCards />
         <ListInPopoverCard />
       </Bento>

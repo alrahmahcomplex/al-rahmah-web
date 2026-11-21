@@ -1,5 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 
+import type { LastNameFrom } from "@/lib/names"
+
 import type { DayOrBoarding, LeadClass, LeadClosure, LeadStatus, Relationship, StudentGender } from "./leads"
 import type { Result } from "./result"
 
@@ -12,13 +14,15 @@ export type FormChild = {
   admissionNumber: string
   studentName: string
   fatherFullName: string | null
+  // Which of the father's names the student's last name is (#511); null when the name was not typed in parts.
+  lastNameFrom: LastNameFrom | null
   gender: StudentGender | null
   className: LeadClass
   enrollmentYear: number
   dayOrBoarding: DayOrBoarding
   status: LeadStatus
   closure: LeadClosure | null
-  previousSchool: { name: string; type: "private" | "public"; region: string } | { notKnown: true } | null
+  previousSchool: { name: string; type: "private" | "public"; region: string; country?: string } | { notKnown: true } | null
   broughtByName: string | null
   // The parent this child sits on. One child can sit on a copy of the form's parent (separate_from_family).
   contactId: string | null
@@ -71,6 +75,7 @@ function child(r: Row): FormChild {
     admissionNumber: r.admission_number as string,
     studentName: r.student_name as string,
     fatherFullName: text(r.father_full_name),
+    lastNameFrom: r.last_name_from === "father_middle" || r.last_name_from === "father_last" ? r.last_name_from : null,
     gender: (text(r.gender) as StudentGender | null) ?? null,
     className: r.class_name as LeadClass,
     enrollmentYear: Number(r.enrollment_year),
@@ -81,7 +86,12 @@ function child(r: Row): FormChild {
       r.previous_school_not_known === true
         ? { notKnown: true }
         : school
-          ? { name: school, type: r.previous_school_type === "private" ? "private" : "public", region: text(r.previous_school_region) ?? "" }
+          ? {
+              name: school,
+              type: r.previous_school_type === "private" ? "private" : "public",
+              region: text(r.previous_school_region) ?? "",
+              ...(text(r.previous_school_country) ? { country: text(r.previous_school_country)! } : {}),
+            }
           : null,
     broughtByName: text(r.brought_by_name),
     contactId: text(r.contact_id),

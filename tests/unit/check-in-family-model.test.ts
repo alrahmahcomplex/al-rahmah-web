@@ -32,6 +32,7 @@ const child = (more: Partial<FormChild> = {}): FormChild => ({
   admissionNumber: "ADMSN-90005",
   studentName: "YUSUF ALI HASSAN",
   fatherFullName: "ALI OMARI HASSAN",
+  lastNameFrom: null,
   gender: "Boy",
   className: "STD 6",
   enrollmentYear: 2027,
@@ -65,7 +66,7 @@ const family = (children: FormChild[]): AdmissionFormFamily => ({
 describe("the name parts check-in starts from", () => {
   it("are complete when the father has three names and they make the stored name", () => {
     expect(formName("YUSUF ALI HASSAN", "ALI OMARI HASSAN")).toEqual({
-      name: { firstName: "YUSUF", fatherFirst: "ALI", fatherMiddle: "OMARI", fatherLast: "HASSAN" },
+      name: { firstName: "YUSUF", fatherFirst: "ALI", fatherMiddle: "OMARI", fatherLast: "HASSAN", lastNameFrom: "father_last" },
       complete: true,
     })
   })
@@ -77,14 +78,54 @@ describe("the name parts check-in starts from", () => {
     ["YUSUF ALI HASSAN", null],
     // Three father's names that would change the stored student name.
     ["NEEMA JUMA SALIM MRISHO", "JUMA SALIM MRISHO"],
-    // Four father's names: staff confirm how they split.
-    ["NEEMA JUMA MRISHO", "JUMA SALIM ALLY MRISHO"],
+    // Four father's names where no middle/last boundary reproduces the stored name.
+    ["NEEMA JUMA ALLY", "JUMA SALIM ALLY MRISHO"],
   ])("are asked when %s has the father %s", (student, father) => {
     expect(formName(student, father).complete).toBe(false)
   })
 
   it("prefill a two-word father with his first and last names", () => {
-    expect(formName("YUSUF ALI HASSAN", "Ali  Hassan").name).toEqual({ firstName: "YUSUF", fatherFirst: "ALI", fatherMiddle: "", fatherLast: "HASSAN" })
+    expect(formName("YUSUF ALI HASSAN", "Ali  Hassan").name).toEqual({ firstName: "YUSUF", fatherFirst: "ALI", fatherMiddle: "", fatherLast: "HASSAN", lastNameFrom: "father_last" })
+  })
+
+  it("try the stored last-name choice first, then the other one (#511)", () => {
+    expect(formName("YUSUF ALI OMARI", "ALI OMARI HASSAN", "father_middle")).toEqual({
+      name: { firstName: "YUSUF", fatherFirst: "ALI", fatherMiddle: "OMARI", fatherLast: "HASSAN", lastNameFrom: "father_middle" },
+      complete: true,
+    })
+    // No choice stored, or the other choice stored: picks the one that reproduces the stored name.
+    expect(formName("YUSUF ALI OMARI", "ALI OMARI HASSAN")).toEqual({
+      name: { firstName: "YUSUF", fatherFirst: "ALI", fatherMiddle: "OMARI", fatherLast: "HASSAN", lastNameFrom: "father_middle" },
+      complete: true,
+    })
+    expect(formName("YUSUF ALI HASSAN", "ALI OMARI HASSAN", "father_middle")).toEqual({
+      name: { firstName: "YUSUF", fatherFirst: "ALI", fatherMiddle: "OMARI", fatherLast: "HASSAN", lastNameFrom: "father_last" },
+      complete: true,
+    })
+    // When both choices produce the same student name, the stored choice wins.
+    expect(formName("YUSUF ALI HASSAN", "ALI HASSAN HASSAN", "father_middle")).toEqual({
+      name: { firstName: "YUSUF", fatherFirst: "ALI", fatherMiddle: "HASSAN", fatherLast: "HASSAN", lastNameFrom: "father_middle" },
+      complete: true,
+    })
+    expect(formName("YUSUF ALI HASSAN", "ALI HASSAN HASSAN", "father_last")).toEqual({
+      name: { firstName: "YUSUF", fatherFirst: "ALI", fatherMiddle: "HASSAN", fatherLast: "HASSAN", lastNameFrom: "father_last" },
+      complete: true,
+    })
+  })
+
+  it("find the middle/last split for a compound father's name such as BIN HASSAN (#511)", () => {
+    expect(formName("YUSUF ALI BIN HASSAN", "ALI OMARI BIN HASSAN", "father_last")).toEqual({
+      name: { firstName: "YUSUF", fatherFirst: "ALI", fatherMiddle: "OMARI", fatherLast: "BIN HASSAN", lastNameFrom: "father_last" },
+      complete: true,
+    })
+    expect(formName("YUSUF ALI OMARI", "ALI OMARI BIN HASSAN", "father_middle")).toEqual({
+      name: { firstName: "YUSUF", fatherFirst: "ALI", fatherMiddle: "OMARI", fatherLast: "BIN HASSAN", lastNameFrom: "father_middle" },
+      complete: true,
+    })
+    expect(formName("NEEMA JUMA MRISHO", "JUMA SALIM ALLY MRISHO")).toEqual({
+      name: { firstName: "NEEMA", fatherFirst: "JUMA", fatherMiddle: "SALIM ALLY", fatherLast: "MRISHO", lastNameFrom: "father_last" },
+      complete: true,
+    })
   })
 
   it("split a person's stored name into the three boxes", () => {
@@ -108,7 +149,7 @@ describe("the answers check-in starts from", () => {
   it("fill in what the form gave and leave the rest to ask", () => {
     expect(answers.students[0]).toEqual({
       key: 1,
-      name: { firstName: "YUSUF", fatherFirst: "ALI", fatherMiddle: "OMARI", fatherLast: "HASSAN" },
+      name: { firstName: "YUSUF", fatherFirst: "ALI", fatherMiddle: "OMARI", fatherLast: "HASSAN", lastNameFrom: "father_last" },
       gender: "Boy",
       className: "STD 6",
       year: 2027,
@@ -538,5 +579,42 @@ describe("the full payer among children checked in as siblings (#309)", () => {
       ["2", "Fee kept", 0, 1_100_000, false],
     ])
     expect(preview!.total).toBe(2_180_000)
+  })
+})
+
+describe("the last-name choice through check-in (#511)", () => {
+  it("is sent as the lead holds it when staff confirm the prefilled name", () => {
+    const yusuf = child({ studentName: "YUSUF ALI OMARI", fatherFullName: "ALI OMARI HASSAN", lastNameFrom: "father_middle" })
+    const { answers, checkIn } = startCheckIn(family([yusuf]), [yusuf])
+    expect(answers.students[0].name).toMatchObject({ fatherMiddle: "OMARI", fatherLast: "HASSAN", lastNameFrom: "father_middle" })
+    const ready: Answers = { ...answers, custodians: { 1: { kind: "father", phone: "0712345678", whatsapp: "" } } }
+    const [sent] = checkInStudents(payload(ready, 2027).students, ready, checkIn)
+    expect(sent).toMatchObject({ leadId: yusuf.leadId, firstName: "YUSUF", fatherMiddle: "OMARI", fatherLast: "HASSAN", lastNameFrom: "father_middle" })
+  })
+
+  it("keeps a compound last name such as BIN HASSAN through check-in with either choice", () => {
+    const last = child({ studentName: "YUSUF ALI BIN HASSAN", fatherFullName: "ALI OMARI BIN HASSAN", lastNameFrom: "father_last" })
+    const middle = child({
+      leadId: "22222222-2222-4222-8222-222222222222",
+      studentName: "MARIAM ALI OMARI",
+      fatherFullName: "ALI OMARI BIN HASSAN",
+      lastNameFrom: "father_middle",
+    })
+    const { answers, checkIn } = startCheckIn(family([last, middle]), [last, middle])
+    expect(checkIn.children.map((c) => c.given.name)).toEqual([true, true])
+    expect(answers.students.map((s) => s.name)).toEqual([
+      { firstName: "YUSUF", fatherFirst: "ALI", fatherMiddle: "OMARI", fatherLast: "BIN HASSAN", lastNameFrom: "father_last" },
+      { firstName: "MARIAM", fatherFirst: "ALI", fatherMiddle: "OMARI", fatherLast: "BIN HASSAN", lastNameFrom: "father_middle" },
+    ])
+    const ready: Answers = {
+      ...answers,
+      students: answers.students.map((s) => (s.key === 2 ? { ...s, sibling: { kind: "match" as const, of: 1, seen: [1] } } : s)),
+      custodians: { 1: { kind: "father", phone: "0712345678", whatsapp: "" } },
+    }
+    const sent = checkInStudents(payload(ready, 2027).students, ready, checkIn)
+    expect(sent).toEqual([
+      expect.objectContaining({ firstName: "YUSUF", fatherMiddle: "OMARI", fatherLast: "BIN HASSAN", lastNameFrom: "father_last" }),
+      expect.objectContaining({ firstName: "MARIAM", fatherMiddle: "OMARI", fatherLast: "BIN HASSAN", lastNameFrom: "father_middle" }),
+    ])
   })
 })

@@ -49,12 +49,40 @@ export type TypeAheadFieldProps = {
 
 // How tall the list may be: at most 380px, and never past 60% of the screen.
 const listHeight = () => Math.min(380, Math.round(window.innerHeight * 0.6))
-// The least it shrinks to: its search box and about three rows.
+// What a phone keyboard opening makes room for again: the search box and about three rows.
 const LIST_FLOOR = 180
 
 /** The nearest part of the page that scrolls: a sheet, the staff stage, or the window. */
 function scroller(el: HTMLElement): HTMLElement {
   return el.closest<HTMLElement>(".gf-sheet, [data-stage-scroll]") ?? ((document.scrollingElement ?? document.documentElement) as HTMLElement)
+}
+
+/** How much of the scroll area's top stays covered once the box scrolls up: the sticky progress bar of the form the box is in, and a small gap. */
+function topCover(box: HTMLElement, area: HTMLElement): number {
+  for (let at = box.parentElement; at; at = at.parentElement) {
+    const bar = at.querySelector<HTMLElement>(":scope > .gf-bar-row")
+    if (bar) return bar.offsetHeight + 8
+    if (at === area) break
+  }
+  return 8
+}
+
+const TABBABLE = "a[href], button, input, select, textarea, [tabindex]"
+
+/** Moves focus to the field after the box, or the one before it: where Tab or Shift+Tab would go from the box itself. */
+function focusBeside(box: HTMLElement | null, backwards: boolean) {
+  if (!box) return
+  const stops = [...document.querySelectorAll<HTMLElement>(TABBABLE)].filter((el) => {
+    if (el === box) return true
+    if (el.tabIndex < 0 || el.hasAttribute("disabled") || el.closest("[inert], [hidden], .gf-ta-panel")) return false
+    if (!(el instanceof HTMLInputElement)) return true
+    if (el.type === "hidden") return false
+    // A radio group is one stop: its checked radio, or any of them when none is.
+    if (el.type !== "radio" || el.checked) return true
+    return ![...document.querySelectorAll<HTMLInputElement>('input[type="radio"]')].some((r) => r.name === el.name && r.form === el.form && r.checked)
+  })
+  const next = stops[stops.indexOf(box) + (backwards ? -1 : 1)]
+  ;(next ?? box).focus()
 }
 
 /**
@@ -158,13 +186,17 @@ export function TypeAheadField({
           </>
         )}
       </div>
+      {/* The faint match is drawn, not typed into the box, so a screen reader hears it here before Tab takes it. */}
+      <span className="sr-only" aria-live="polite" data-ta-suggestion="">
+        {match ? match.label : ""}
+      </span>
       <input
         ref={boxRef}
         id={boxId}
         type="text"
         className={cn("gf-ta-in", lead && "gf-ta-led")}
         role="combobox"
-        aria-autocomplete="inline"
+        aria-autocomplete="list"
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-controls={open ? listId : undefined}
@@ -220,6 +252,11 @@ export function TypeAheadField({
             setOpen(false)
             if (focusBox) boxRef.current?.focus({ preventScroll: true })
           }}
+          onLeave={(option, backwards) => {
+            setOpen(false)
+            if (option) take(option, "pick")
+            focusBeside(boxRef.current, backwards)
+          }}
         />
       )}
     </div>
@@ -236,17 +273,20 @@ type ListProps = {
   labels: TypeAheadLabels
   onPick: (option: TypeAheadOption) => void
   onClose: (focusBox: boolean) => void
+  /** Tab or Shift+Tab in the search: close, take the faint match when Tab had one, and move on from the box in that direction. */
+  onLeave: (option: TypeAheadOption | null, backwards: boolean) => void
 }
 
 /**
  * The open list: fixed below the box, over the page, never above it (owner,
  * #511: "Open Downward as an Overlay"). Opening first scrolls the box up so
  * the list has room; when the page is too short to scroll that far, room is
- * added at its foot while the list is open. When a phone keyboard leaves less
- * room than that, the list stays below and shrinks to what is left, keeping
- * its search box and about three rows.
+ * added at its foot while the list is open. When a phone keyboard opens, the
+ * box scrolls up again, as far as the form's sticky bar, to keep the search
+ * box and about three rows; the list is never taller than the room left
+ * below the box, so every row can be reached by scrolling inside it.
  */
-function TypeAheadList({ anchor, listId, options, pinned, value, optionLead, labels, onPick, onClose }: ListProps) {
+function TypeAheadList({ anchor, listId, options, pinned, value, optionLead, labels, onPick, onClose, onLeave }: ListProps) {
   const panelRef = useRef<HTMLDivElement>(null)
   const searchRef = useRef<HTMLInputElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
@@ -279,7 +319,7 @@ function TypeAheadList({ anchor, listId, options, pinned, value, optionLead, lab
       const areaRect = isWindow ? v : area.getBoundingClientRect()
       const r0 = box.getBoundingClientRect()
       const lack = r0.bottom + 8 + need - (Math.min(areaRect.bottom, v.bottom) - 12)
-      const room = Math.max(0, r0.top - (Math.max(areaRect.top, v.top) + 84))
+      const room = Math.max(0, r0.top - (Math.max(areaRect.top, v.top) + topCover(box, area)))
       const move = Math.max(0, Math.min(lack, room))
       const left = area.scrollHeight - area.clientHeight - area.scrollTop
       if (move > left) area.style.paddingBottom = `${parseFloat(getComputedStyle(area).paddingBottom) + move - left + 8}px`
@@ -290,7 +330,8 @@ function TypeAheadList({ anchor, listId, options, pinned, value, optionLead, lab
       const v = visible()
       const r = box.getBoundingClientRect()
       if (r.bottom < v.top || r.top > v.bottom) return onClose(false)
-      setPlace({ left: r.left, width: r.width, top: r.bottom + 6, maxHeight: Math.max(LIST_FLOOR, Math.min(want, v.bottom - r.bottom - 18)) })
+      // Never past the visible space: a taller list would put its last rows behind the keyboard.
+      setPlace({ left: r.left, width: r.width, top: r.bottom + 6, maxHeight: Math.max(0, Math.min(want, v.bottom - r.bottom - 18)) })
     }
     let timer = 0
     const later = (moved: number) => {
@@ -347,6 +388,12 @@ function TypeAheadList({ anchor, listId, options, pinned, value, optionLead, lab
   }, [at, listId, place])
 
   function onKey(event: KeyboardEvent<HTMLInputElement>) {
+    // Tab leaves the list for the next field, taking the faint match on the way; Shift+Tab goes back and takes nothing.
+    if (event.key === "Tab") {
+      event.preventDefault()
+      onLeave(!event.shiftKey && match ? match : null, event.shiftKey)
+      return
+    }
     // Enter picks the highlighted option below, which starts on the faint match and moves with the arrows.
     const input = event.currentTarget
     const caretAtEnd = input.selectionStart === input.value.length && input.selectionEnd === input.value.length
@@ -368,8 +415,6 @@ function TypeAheadList({ anchor, listId, options, pinned, value, optionLead, lab
       event.preventDefault()
       event.stopPropagation()
       onClose(true)
-    } else if (event.key === "Tab") {
-      onClose(false)
     }
   }
 

@@ -550,3 +550,14 @@ describe("the full payer among children checked in as siblings (#309)", () => {
     expect(preview!.total).toBe(2_180_000)
   })
 })
+
+describe("the last-name choice through check-in (#511)", () => {
+  it("is sent as the lead holds it when staff confirm the prefilled name", () => {
+    const yusuf = child({ studentName: "YUSUF ALI OMARI", fatherFullName: "ALI OMARI HASSAN", lastNameFrom: "father_middle" })
+    const { answers, checkIn } = startCheckIn(family([yusuf]), [yusuf])
+    expect(answers.students[0].name).toMatchObject({ fatherMiddle: "OMARI", fatherLast: "HASSAN", lastNameFrom: "father_middle" })
+    const ready: Answers = { ...answers, custodians: { 1: { kind: "father", phone: "0712345678", whatsapp: "" } } }
+    const [sent] = checkInStudents(payload(ready, 2027).students, ready, checkIn)
+    expect(sent).toMatchObject({ leadId: yusuf.leadId, firstName: "YUSUF", fatherMiddle: "OMARI", fatherLast: "HASSAN", lastNameFrom: "father_middle" })
+  })
+})

@@ -176,11 +176,107 @@ describe("TypeAheadField", () => {
     }
   })
 
+  it("never makes the list taller than the room a short keyboard viewport leaves, under the form's sticky bar", async () => {
+    // The box starts 250 to 302px down the page, in a form whose sticky bar is 62px tall.
+    let scrolled = 0
+    const rect = vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
+      if (!this.classList.contains("gf-ta")) return new DOMRect()
+      return { top: 250 - scrolled, bottom: 302 - scrolled, left: 16, right: 374, width: 358, height: 52, x: 16, y: 250 - scrolled } as DOMRect
+    })
+    const page = document.documentElement
+    Object.defineProperty(page, "scrollBy", { value: (o: ScrollToOptions) => void (scrolled += o.top ?? 0), configurable: true })
+    const listeners: Record<string, () => void> = {}
+    const viewport = { offsetTop: 0, height: 768, addEventListener: (e: string, f: () => void) => (listeners[e] = f), removeEventListener: () => {} }
+    vi.stubGlobal("visualViewport", viewport)
+    try {
+      const { container } = render(
+        <div>
+          <div className="gf-bar-row" />
+          <Region />
+        </div>,
+      )
+      Object.defineProperty(container.querySelector(".gf-bar-row"), "offsetHeight", { value: 62 })
+      await userEvent.click(screen.getByRole("button", { name: "Show all regions" }))
+      const panel = document.querySelector<HTMLElement>(".gf-ta-panel")!
+      await vi.waitFor(() => expect(panel.style.top).toBe("308px"))
+
+      // The keyboard leaves only the top 235px: the box stops under the bar, and the list ends above the keyboard.
+      viewport.height = 235
+      act(() => listeners.resize())
+      await vi.waitFor(() => expect(panel.style.top).toBe("128px"))
+      expect(scrolled).toBe(180)
+      expect(panel.style.maxHeight).toBe("95px")
+      expect(128 + 95).toBeLessThanOrEqual(viewport.height)
+    } finally {
+      rect.mockRestore()
+      delete (page as unknown as Record<string, unknown>).scrollBy
+      vi.unstubAllGlobals()
+    }
+  })
+
   it("picks with a click", async () => {
     render(<Region />)
     await userEvent.click(screen.getByRole("button", { name: "Show all regions" }))
     await userEvent.click(screen.getByRole("option", { name: "Outside Tanzania (Other Country)" }))
     expect(screen.getByRole("status")).toHaveTextContent("Outside Tanzania")
+  })
+})
+
+function Row() {
+  return (
+    <>
+      <input aria-label="Before" />
+      <Region />
+      <input aria-label="After" />
+    </>
+  )
+}
+
+describe("TypeAheadField, Tab from the list's search", () => {
+  const openAndType = async (letters: string) => {
+    render(<Row />)
+    await userEvent.click(screen.getByRole("button", { name: "Show all regions" }))
+    await userEvent.type(screen.getByRole("combobox", { name: "Search regions" }), letters)
+  }
+
+  it("takes the faint match and moves to the field after the box", async () => {
+    await openAndType("kag")
+    await userEvent.tab()
+    expect(screen.queryByRole("listbox")).toBeNull()
+    expect(screen.getByRole("combobox", { name: "Region" })).toHaveValue("Kagera")
+    expect(screen.getByLabelText("After")).toHaveFocus()
+  })
+
+  it("moves on without picking when nothing matches", async () => {
+    await openAndType("zz")
+    await userEvent.tab()
+    expect(screen.queryByRole("listbox")).toBeNull()
+    expect(screen.getByRole("status")).toHaveTextContent("none")
+    expect(screen.getByLabelText("After")).toHaveFocus()
+  })
+
+  it("goes back to the field before the box with Shift+Tab, picking nothing", async () => {
+    await openAndType("kag")
+    await userEvent.tab({ shift: true })
+    expect(screen.queryByRole("listbox")).toBeNull()
+    expect(screen.getByRole("status")).toHaveTextContent("none")
+    expect(screen.getByLabelText("Before")).toHaveFocus()
+  })
+})
+
+describe("TypeAheadField for a screen reader", () => {
+  it("says the faint match, which is not in the box, and names the list behaviour", async () => {
+    const { container } = render(<Region />)
+    const box = screen.getByRole("combobox", { name: "Region" })
+    expect(box).toHaveAttribute("aria-autocomplete", "list")
+    const said = container.querySelector("[data-ta-suggestion]")
+    expect(said).toHaveAttribute("aria-live", "polite")
+    expect(said).toHaveTextContent("")
+    await userEvent.type(box, "kag")
+    expect(box).toHaveValue("kag")
+    expect(said).toHaveTextContent("Kagera")
+    await userEvent.keyboard("{Escape}")
+    expect(said).toHaveTextContent("")
   })
 })
 

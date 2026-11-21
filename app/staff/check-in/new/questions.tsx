@@ -34,6 +34,7 @@ import {
   TextLink,
 } from "@/components/kit"
 import { Icon } from "@/components/icons"
+import { OUTSIDE_TANZANIA } from "@/lib/places"
 import { STAFF_REMINDER } from "@/lib/referral-notice"
 import { STUDENT_GENDERS, type DayOrBoarding, type LeadClass, type StudentGender } from "@/lib/services/leads"
 
@@ -285,7 +286,9 @@ export function SchoolQuestion({ id, first, saved, onDone, onNotKnown }: { id: s
     const n = name.trim().replace(/\s+/g, " ")
     if (n.length < 3) return setError("Type the school’s name.")
     if (!type || !region) return setError("Choose private or public, and the region.")
-    onDone({ name: n, type, region })
+    // This question asks no country yet (#511): a country saved with the school stays while it is still Outside Tanzania.
+    const country = region === OUTSIDE_TANZANIA && known?.region === OUTSIDE_TANZANIA ? known.country : undefined
+    onDone({ name: n, type, region, ...(country ? { country } : {}) })
   }
 
   return (

@@ -10,7 +10,7 @@ import { COUNTRY_NAMES } from "@/lib/places"
 import { tanzaniaToday } from "@/lib/school-calendar"
 import { submitAdmissionForm } from "@/lib/services/admission-form"
 import { getAdmissionFormFamily } from "@/lib/services/admission-form-family"
-import { correctPreviousSchool, getLeadFatherAndSchool } from "@/lib/services/lead-details"
+import { correctFatherFullName, correctPreviousSchool, getLeadFatherAndSchool } from "@/lib/services/lead-details"
 import { completeAdmissionVisit, registerStudents, updateLeadDetails, type RegistrationStudent } from "@/lib/services/leads"
 
 import { asSystem, inRolledBackTransaction, secretClient, signedIn } from "../support/db"
@@ -94,6 +94,7 @@ describe("the country list", () => {
       "public.previous_school_country(text)",
       "public.registration_last_name_from(jsonb, integer)",
       "public.registration_previous_school_country(jsonb, text, integer)",
+      "public.last_name_from_fits(text, text, public.student_last_name_from)",
     ]
     const rows = await inRolledBackTransaction(
       async (sql) =>
@@ -105,7 +106,7 @@ describe("the country list", () => {
           )
         ).rows,
     )
-    expect(rows).toHaveLength(12)
+    expect(rows).toHaveLength(15)
     expect(rows.filter((r) => r.allowed)).toEqual([])
   })
 })
@@ -285,6 +286,42 @@ describe("corrections on the record", () => {
     expect(read.ok && read.data.lastNameFrom).toBe("father_middle")
     expect(await updateLeadDetails(client, row.id, { lastNameFrom: null })).toEqual({ ok: true, data: null })
     expect((await rowOf(row.id)).last_name_from).toBeNull()
+  })
+
+  test("a one-box name correction never leaves a choice that would build the old name", async () => {
+    const s = student({ lastNameFrom: "father_middle" })
+    const row = await registered(s)
+    const client = await signedIn(ADMISSIONS)
+
+    // Corrected to end with the father's last name: the choice follows the name.
+    expect(await updateLeadDetails(client, row.id, { fullName: studentFullName(s) })).toEqual({ ok: true, data: null })
+    expect(await rowOf(row.id)).toMatchObject({ student_name: studentFullName(s), last_name_from: "father_last" })
+    // And back.
+    expect(await updateLeadDetails(client, row.id, { fullName: studentFullName(s, "father_middle").toLowerCase() })).toEqual({ ok: true, data: null })
+    expect((await rowOf(row.id)).last_name_from).toBe("father_middle")
+    // A name that ends with neither holds no choice.
+    expect(await updateLeadDetails(client, row.id, { fullName: `${s.firstName} ${s.fatherFirst} ${word()}` })).toEqual({ ok: true, data: null })
+    expect((await rowOf(row.id)).last_name_from).toBeNull()
+  })
+
+  test("a corrected father's name that no longer ends the student's name clears the choice", async () => {
+    const s = student({ lastNameFrom: "father_middle" })
+    const row = await registered(s)
+    const corrected = `${s.fatherFirst} ${word()} ${s.fatherLast}`
+    expect(await correctFatherFullName(await signedIn(ADMISSIONS), row.id, { fatherFullName: corrected })).toEqual({ ok: true, data: null })
+    expect(await rowOf(row.id)).toMatchObject({ student_name: studentFullName(s, "father_middle"), father_full_name: corrected, last_name_from: null })
+  })
+
+  test("a changed choice is refused without the name it builds, or with a name it does not build", async () => {
+    const s = student()
+    const row = await registered(s)
+    const client = await signedIn(ADMISSIONS)
+    const refused = { ok: false, error: { kind: "invalid", field: "last_name_from" } }
+    expect(await updateLeadDetails(client, row.id, { lastNameFrom: "father_middle" })).toEqual(refused)
+    expect(await updateLeadDetails(client, row.id, { fullName: studentFullName(s), lastNameFrom: "father_middle" })).toEqual(refused)
+    expect(await rowOf(row.id)).toMatchObject({ student_name: studentFullName(s), last_name_from: "father_last" })
+    // The stored choice sent again alone changes nothing and is accepted.
+    expect(await updateLeadDetails(client, row.id, { lastNameFrom: "father_last" })).toEqual({ ok: true, data: null })
   })
 
   test("a country is kept while the region stays Outside Tanzania, cleared with any other, and refused with one", async () => {

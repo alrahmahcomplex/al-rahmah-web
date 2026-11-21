@@ -190,26 +190,39 @@ describe("the SMS budget and limits", () => {
   })
 
   test("a mobile gets at most 5 confirmation numbers a day, even spread over hours", async () => {
-    await inRolledBackTransaction(async (sql) => {
-      await sql.query(`select set_config('request.jwt.claims', '{"role":"service_role"}', true)`)
-      // Today's sends, all more than an hour old, so only the day's limit can
-      // refuse: five for one mobile, four for another.
-      const [full, room] = [mobile(), mobile()]
-      for (const [to, count] of [[full, 5], [room, 4]] as const) {
-        await sql.query(
-          `insert into public.sms_sends (kind, to_phone, tz_day, result, created_at, finished_at)
-           select 'self_confirm', $1, (now() at time zone 'Africa/Dar_es_Salaam')::date, 'sent', now() - interval '2 hours', now()
-           from generate_series(1, $2)`,
-          [to, count],
-        )
-      }
-      const reserve = async (kind: string, to: string) =>
-        (await sql.query<{ r: { outcome: string } }>("select public.reserve_sms($1, $2) as r", [kind, to])).rows[0].r.outcome
-      expect(await reserve("self_confirm", full)).toBe("mobile_limited")
-      expect(await reserve("courtesy", full)).toBe("reserved")
-      expect(await reserve("reset", room)).toBe("reserved")
-      expect(await reserve("reset", room)).toBe("mobile_limited")
-    })
+    // Rolled back each time. reserve_sms counts by the Tanzanian day at the
+    // moment it runs, so a run that crosses midnight is run again.
+    const tanzanianDay = "select (clock_timestamp() at time zone 'Africa/Dar_es_Salaam')::date::text as day"
+    for (let attempt = 1; ; attempt += 1) {
+      const { outcomes, sameDay } = await inRolledBackTransaction(async (sql) => {
+        await sql.query(`select set_config('request.jwt.claims', '{"role":"service_role"}', true)`)
+        const before = (await sql.query<{ day: string }>(tanzanianDay)).rows[0].day
+        // Today's sends, all more than an hour old, so only the day's limit
+        // can refuse: five for one mobile, four for another.
+        const [full, room] = [mobile(), mobile()]
+        for (const [to, count] of [[full, 5], [room, 4]] as const) {
+          await sql.query(
+            `insert into public.sms_sends (kind, to_phone, tz_day, result, created_at, finished_at)
+             select 'self_confirm', $1, $3::date, 'sent', clock_timestamp() - interval '2 hours', clock_timestamp()
+             from generate_series(1, $2)`,
+            [to, count, before],
+          )
+        }
+        const reserve = async (kind: string, to: string) =>
+          (await sql.query<{ r: { outcome: string } }>("select public.reserve_sms($1, $2) as r", [kind, to])).rows[0].r.outcome
+        const outcomes = [
+          await reserve("self_confirm", full),
+          await reserve("courtesy", full),
+          await reserve("reset", room),
+          await reserve("reset", room),
+        ]
+        const after = (await sql.query<{ day: string }>(tanzanianDay)).rows[0].day
+        return { outcomes, sameDay: before === after }
+      })
+      if (!sameDay && attempt < 3) continue
+      expect(outcomes).toEqual(["mobile_limited", "reserved", "reserved", "mobile_limited"])
+      break
+    }
   })
 
   test("reservations for one mobile at once never pass its limit", async () => {

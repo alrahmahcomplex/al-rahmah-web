@@ -128,7 +128,7 @@ Agent self-confirm, mobile sign-in resets and the courtesy SMS send through Beem
 | Daily budget | `sms_settings.daily_budget` | 500 SMS a day, all kinds, counted by the day in Tanzania |
 | Confirmation numbers per mobile | `sms_settings.per_mobile_hour`, `per_mobile_day` | 3 an hour, 5 a day; the courtesy SMS counts against the budget only |
 
-- **Only Production has the Beem keys.** Without them `smsSender()` refuses every send (`beem_keys_missing` in `sms_sends`), so a missing key shows as failed sends rather than silence. Local runs and CI's test jobs set `SMS_FAKE=1` for a fake that sends nothing and logs the message; Production ignores it. Previews have neither, so SMS fails there.
+- **Only Production has the Beem keys.** Without them `smsSender()` refuses every send (`beem_keys_missing` in `sms_sends`), so a missing key shows as failed sends rather than silence. Local runs and CI's test jobs set `SMS_FAKE=1` for a fake that sends nothing and logs the message. The fake also needs `NEXT_PUBLIC_SUPABASE_URL` on 127.0.0.1 or localhost, so no deployment can use it, whatever its environment variables say. Previews have neither, so SMS fails there.
 - **One SMS, one place in the budget.** A message must fit one GSM-7 segment (160 characters; `€[]{}^~|\` count two). Anything longer, or with a character outside GSM-7 such as a curly apostrophe, is refused before it is reserved.
 - **Every send is in `sms_sends`** with its kind, mobile, result and Beem's request id. "Sent" means Beem accepted it, not that the phone received it; Beem reports delivery only when asked, at least 5 minutes after sending.
 - **The settings are rows, not code.** Change one with a reviewed migration after `set_audit_actor`, like the other settings rows.

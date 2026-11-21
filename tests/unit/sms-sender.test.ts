@@ -85,6 +85,8 @@ describe("Beem's answer must prove the message was taken", () => {
     ["no request id", { successful: true, code: 100, request_id: null }],
     ["an empty request id", { successful: true, code: 100, request_id: " " }],
     ["successful false", { successful: false, code: 100, request_id: 12 }],
+    ['successful "false"', { successful: "false", code: 100, request_id: 12 }],
+    ["no successful at all", { code: 100, request_id: 12 }],
   ])("code 100 with %s is not a send", async (_case, body) => {
     const send = beemSender(KEYS, answering(200, body) as unknown as typeof fetch)
     await expect(send("255712345123", "x")).resolves.toEqual({ ok: false, error: "unreadable_answer" })
@@ -99,14 +101,33 @@ describe("smsSender", () => {
     expect(lines).toEqual(["[fake SMS 1] to 255712345123: Namba yako ni 482913"])
   })
 
-  test("without the keys it refuses every send unless the fake is asked for, and never fakes in Production", async () => {
+  test("without the keys it refuses every send unless the fake is asked for against a local database", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
     const info = vi.spyOn(console, "info").mockImplementation(() => {})
-    for (const env of [{}, { VERCEL_ENV: "preview" }, { VERCEL_ENV: "production" }, { SMS_FAKE: "1", VERCEL_ENV: "production" }, { SMS_FAKE: "true" }]) {
+    const LOCAL = "http://127.0.0.1:55421"
+    const HOSTED = "https://abcdefgh.supabase.co"
+    for (const env of [
+      {},
+      { VERCEL_ENV: "preview" },
+      { VERCEL_ENV: "production" },
+      { SMS_FAKE: "true", NEXT_PUBLIC_SUPABASE_URL: LOCAL },
+      { SMS_FAKE: "1" },
+      // A production runtime that lost VERCEL_ENV still talks to the hosted project.
+      { SMS_FAKE: "1", NODE_ENV: "production", NEXT_PUBLIC_SUPABASE_URL: HOSTED },
+      { SMS_FAKE: "1", VERCEL_ENV: "production", NEXT_PUBLIC_SUPABASE_URL: LOCAL },
+      { SMS_FAKE: "1", NEXT_PUBLIC_SUPABASE_URL: "not a url" },
+    ]) {
       await expect(smsSender(env)("255712345123", "x")).resolves.toEqual({ ok: false, error: "beem_keys_missing" })
     }
-    await expect(smsSender({ SMS_FAKE: "1" })("255712345123", "x")).resolves.toEqual({ ok: true, data: { requestId: "fake-1" } })
-    expect(info).toHaveBeenCalledTimes(1)
+    await expect(smsSender({ SMS_FAKE: "1", NEXT_PUBLIC_SUPABASE_URL: LOCAL })("255712345123", "x")).resolves.toEqual({
+      ok: true,
+      data: { requestId: "fake-1" },
+    })
+    // CI and e2e serve a production build against local Supabase: still the fake.
+    await expect(
+      smsSender({ SMS_FAKE: "1", NODE_ENV: "production", NEXT_PUBLIC_SUPABASE_URL: "http://localhost:55421" })("255712345123", "x"),
+    ).resolves.toEqual({ ok: true, data: { requestId: "fake-1" } })
+    expect(info).toHaveBeenCalledTimes(2)
   })
 
   test("with all three keys it sends through Beem", async () => {

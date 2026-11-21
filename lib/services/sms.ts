@@ -62,7 +62,7 @@ export function beemSender(
     const requestId = answer?.request_id
     if (
       response.ok &&
-      answer?.successful !== false &&
+      answer?.successful === true &&
       answer?.code === 100 &&
       ((typeof requestId === "number" && Number.isFinite(requestId)) || (typeof requestId === "string" && requestId.trim() !== ""))
     ) {
@@ -84,17 +84,28 @@ export function fakeSender(log: (line: string) => void = console.info): SmsSende
   }
 }
 
+// Whether this server talks to a Supabase on this machine: local runs and
+// CI's test jobs do; every deployment talks to the hosted project.
+function localSupabase(url: string | undefined): boolean {
+  try {
+    return url !== undefined && ["127.0.0.1", "localhost", "::1", "[::1]"].includes(new URL(url).hostname)
+  } catch {
+    return false
+  }
+}
+
 // Beem with all three keys. The fake only where it is asked for by name
-// (SMS_FAKE=1: .env.example for local runs, CI's test jobs), and never in
-// Production. Anything else, a deployment that lost a key included, refuses
-// every send, so a missing key shows up as failed sends in the log rather
-// than as numbers that silently never left.
+// (SMS_FAKE=1: .env.example for local runs, CI's test jobs) and the database
+// is a local one, so no deployment can ever fake, whatever its environment
+// variables say. Anything else, a deployment that lost a key included,
+// refuses every send, so a missing key shows up as failed sends in the log
+// rather than as numbers that silently never left.
 export function smsSender(env: Record<string, string | undefined> = process.env): SmsSender {
   const apiKey = env.BEEM_API_KEY
   const secretKey = env.BEEM_SECRET_KEY
   const senderId = env.BEEM_SENDER_ID
   if (apiKey && secretKey && senderId) return beemSender({ apiKey, secretKey, senderId })
-  if (env.SMS_FAKE === "1" && env.VERCEL_ENV !== "production") return fakeSender()
+  if (env.SMS_FAKE === "1" && env.VERCEL_ENV !== "production" && localSupabase(env.NEXT_PUBLIC_SUPABASE_URL)) return fakeSender()
   console.error("BEEM_API_KEY, BEEM_SECRET_KEY and BEEM_SENDER_ID must be set to send SMS (or SMS_FAKE=1 outside Production).")
   return async () => ({ ok: false, error: "beem_keys_missing" })
 }

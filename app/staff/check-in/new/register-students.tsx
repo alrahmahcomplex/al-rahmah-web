@@ -8,7 +8,7 @@ import { Button, ButtonLink, GuidedTask, Note, PageHeader, Sheet, Tag, TextLink,
 import { OUTSIDE_TANZANIA } from "@/lib/places"
 import type { LeadClass, RegistrationQuestion } from "@/lib/services/leads"
 
-import { registerInterview } from "../../applicants/[id]/interview-actions"
+import { registerInterviewFromFinish } from "./interview-actions"
 import { familyHref } from "../../family/model"
 import { completeVisit, type CompleteVisitOutcome } from "../[id]/actions"
 import { checkInStudents, custodianAtCheckIn, type CheckIn } from "../[id]/model"
@@ -1041,7 +1041,7 @@ function RegisterForm({ staffId, today, years, defaultYear, fees, canLink, canEn
     setInterviewError(null)
     setBusyInterview((m) => ({ ...m, [student.leadId]: true }))
     try {
-      const outcome = await registerInterview(student.leadId)
+      const outcome = await registerInterviewFromFinish(student.leadId)
       if (myRound !== roundRef.current) return
       if (outcome.status === "registered") {
         setInterviewed((m) => ({ ...m, [student.leadId]: true }))
@@ -1071,7 +1071,7 @@ function RegisterForm({ staffId, today, years, defaultYear, fees, canLink, canEn
       for (const s of left) {
         if (myRound !== roundRef.current) return
         try {
-          const outcome = await registerInterview(s.leadId)
+          const outcome = await registerInterviewFromFinish(s.leadId)
           if (myRound !== roundRef.current) return
           if (outcome.status === "registered") {
             done += 1

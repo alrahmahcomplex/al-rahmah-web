@@ -100,6 +100,7 @@ describe("sending the Admission form", () => {
           {
             fullName: "ZAWADI JUMA FIXTURE",
             nameParts: { firstName: "Zawadi", ...FATHER },
+            lastNameFrom: "father_last",
             gender: "Boy",
             className: "STD 2",
             enrollmentYear: thisYear,

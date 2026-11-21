@@ -50,6 +50,24 @@ describe("the Admission form's submission hash", () => {
     )
   })
 
+  // The last-name choice (#513): his last name hashes as a form sent before
+  // the choice came in, his middle name makes it a different form, even when
+  // the two give the same full name.
+  it("hashes the father's last name as before the last-name choice, and his middle name as another form", () => {
+    const parts = { firstName: "Amina", middleName: "Juma", lastName: "Fixture" }
+    const inParts = {
+      fullName: "ZAWADI HASSAN FIXTURE",
+      className: "STD 2" as const,
+      enrollmentYear: 2027,
+      dayOrBoarding: "Day" as const,
+      nameParts: { firstName: "ZAWADI", fatherFirst: "HASSAN", fatherMiddle: "FIXTURE", fatherLast: "FIXTURE" },
+    }
+    const one = { parent: { ...parent, nameParts: parts }, children: [inParts] }
+    const lastName = payloadHash({ ...one, children: [{ ...inParts, lastNameFrom: "father_last" as const }] })
+    expect(lastName).toBe(payloadHash(one))
+    expect(payloadHash({ ...one, children: [{ ...inParts, lastNameFrom: "father_middle" as const }] })).not.toBe(lastName)
+  })
+
   it("tells a form in parts from the one-box form with the same full names", () => {
     const oneBox = payloadHash({ parent, children: [child] })
     const inParts = payloadHash({

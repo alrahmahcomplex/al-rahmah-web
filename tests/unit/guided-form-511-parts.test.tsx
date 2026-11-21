@@ -440,4 +440,16 @@ describe("ProgressBar endReset", () => {
     render(<ProgressBar {...base} canBack canReset onReset={() => {}} />)
     expect(screen.queryByRole("button", { name: "Start over" })).toBeNull()
   })
+
+  // #513: the parents' form moves the section chip above the bar while Start over is on the right.
+  it("with chipUp, marks the bar to lift the section chip only while Start over shows after it", () => {
+    const { container, rerender } = render(<ProgressBar {...base} canBack={false} canReset endReset chipUp onReset={() => {}} />)
+    const bar = () => container.querySelector(".gf-bar-row")
+    expect(bar()).not.toHaveClass("gf-chip-up")
+    rerender(<ProgressBar {...base} canBack canReset endReset chipUp onReset={() => {}} />)
+    expect(bar()).toHaveClass("gf-chip-up")
+    // endReset alone, as Register students uses it, keeps the chip in the row.
+    rerender(<ProgressBar {...base} canBack canReset endReset onReset={() => {}} />)
+    expect(bar()).not.toHaveClass("gf-chip-up")
+  })
 })

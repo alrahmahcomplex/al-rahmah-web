@@ -5,10 +5,13 @@ import {
   expectQuestion,
   family,
   fillForm,
+  answerGender,
+  custodianTile,
   fillParent,
   fillStudent,
   nameBox,
   openQuestion,
+  pickSomeoneElse,
   tile,
   PHONE_WIDTH,
   send,
@@ -86,9 +89,8 @@ test("The father is the custodian: the relationship is Father, the phone questio
   await openQuestion(page).getByRole("button", { name: WORDS.en.noMore }).click()
   await expectQuestion(page, WORDS.en.parentName)
 
-  const father = openQuestion(page).getByRole("switch", { name: WORDS.en.fatherSwitch })
   await expect(openQuestion(page).getByText(who.father, { exact: true })).toBeVisible()
-  await father.check()
+  await custodianTile(page, "en", "father").click()
   await expectQuestion(page, `What is ${who.father.split(" ")[0]}'s phone number?`)
   await expect(openQuestion(page).getByText(`Custodian: ${who.father}, the father. The relationship is set to Father.`)).toBeVisible()
   await expect(page.getByRole("button", { name: "Change Relationship" })).toHaveCount(0)
@@ -124,6 +126,50 @@ test("Start over on the first question: nothing to clear on an empty form, and w
   expect(await page.evaluate(() => window.sessionStorage.length)).toBe(0)
 })
 
+test("Start over from a later question asks first and opens the form on the first question, empty", async ({ page, context }) => {
+  const who = family()
+  await setLanguageCookie(context, "en")
+  await page.goto("/apply")
+  await toCode(page, "en", who, nextYear)
+  await page.getByRole("button", { name: WORDS.en.reset }).click()
+  const sheet = page.getByRole("dialog", { name: "Start over?" })
+  await sheet.getByRole("button", { name: "No, keep my answers" }).click()
+  await expect(sheet).toHaveCount(0)
+  await expectQuestion(page, WORDS.en.haveCode)
+
+  await page.getByRole("button", { name: WORDS.en.reset }).click()
+  await page.getByRole("dialog", { name: "Start over?" }).getByRole("button", { name: "Yes, clear the form" }).click()
+  await expectQuestion(page, WORDS.en.studentName)
+  await expect(nameBox(page, "en")).toHaveValue("")
+  await expect(page.getByRole("button", { name: WORDS.en.back })).toHaveCount(0)
+  expect(await page.evaluate(() => window.sessionStorage.length)).toBe(0)
+})
+
+test("The family's choice of the father's middle name ends the student's name, and the school keeps it", async ({ page, context }) => {
+  const who = family()
+  await setLanguageCookie(context, "en")
+  await page.goto("/apply")
+  const q = openQuestion(page)
+  await nameBox(page, "en").fill(who.childTyped)
+  // MWANAFUNZI MAJARIBIO BABA <suffix>: the father's middle name is BABA.
+  await q.getByRole("radio", { name: /^Father's middle name/ }).check()
+  await expect(q.getByText("Student's full name:")).toContainText("MWANAFUNZI MAJARIBIO BABA")
+  await q.getByRole("button", { name: WORDS.en.continue }).click()
+  await answerGender(page, "en")
+  await q.getByRole("button", { name: WORDS.en.chooseOther }).click()
+  await page.getByRole("dialog", { name: WORDS.en.sheetTitle }).getByRole("tab", { name: WORDS.en.levels.primary }).click()
+  await page.getByRole("dialog", { name: WORDS.en.sheetTitle }).getByRole("button", { name: "STD 3", exact: true }).click()
+  await q.getByText(WORDS.en.day, { exact: true }).click()
+  await expectQuestion(page, WORDS.en.another)
+  await q.getByRole("button", { name: WORDS.en.noMore }).click()
+  await fillParent(page, "en", who)
+  await toSend(page, "en")
+  await send(page, "en")
+  await expect(page.getByRole("heading", { name: WORDS.en.done })).toBeVisible()
+  // The name on the confirmation is the one the database built from the choice.
+  await expect(page.getByText("MWANAFUNZI MAJARIBIO BABA", { exact: false })).toBeVisible()
+})
+
 test("Start over on the finished screen opens a new form at once", async ({ page, context }) => {
   const who = family()
   await setLanguageCookie(context, "en")
@@ -145,6 +191,7 @@ test("switching language mid-form keeps every entry", async ({ page, context }) 
   await page.goto("/apply")
   await fillStudent(page, "sw", who.childTyped, nextYear)
   await openQuestion(page).getByRole("button", { name: WORDS.sw.noMore }).click()
+  await pickSomeoneElse(page, "sw")
   await nameBox(page, "sw", "first").fill(who.parent)
 
   await page.getByRole("button", { name: "Menyu" }).click()
@@ -180,8 +227,13 @@ test("Continue names what is missing, and Other asks for a description", async (
   await fillStudent(page, "sw", who.childTyped, nextYear)
   await q.getByRole("button", { name: WORDS.sw.noMore }).click()
   await expectQuestion(page, WORDS.sw.parentName)
+  // Nobody picked yet (#513): Enter on the buttons says to choose.
+  await q.getByRole("radio", { name: new RegExp(`^${WORDS.sw.father}`) }).focus()
+  await page.keyboard.press("Enter")
+  await expect(q.getByText("Chagua msimamizi ni nani.")).toBeVisible()
+  await pickSomeoneElse(page, "sw")
   await q.getByRole("button", { name: "Endelea" }).click()
-  await expect(q.getByText("Andika majina yote matatu ya msimamizi, au washa kitufe kama ni baba.")).toBeVisible()
+  await expect(q.getByText("Andika majina yote matatu ya msimamizi.")).toBeVisible()
   await expect(nameBox(page, "sw", "first")).toBeFocused()
   await nameBox(page, "sw", "first").fill(who.parent)
   await q.getByRole("button", { name: "Endelea" }).click()
@@ -229,13 +281,14 @@ test("a folded answer reopens with its Badilisha link, and Continue returns to t
   await expectQuestion(page, WORDS.sw.fee)
 })
 
-test("Start over sits on the first question, Back takes its place after, and Clear the whole form asks before emptying the form", async ({ page, context }) => {
+test("Start over sits on the first question, stays beside Back after, and Clear the whole form asks before emptying the form", async ({ page, context }) => {
   const who = family()
   await setLanguageCookie(context, "sw")
   await page.goto("/apply")
   await expect(page.getByRole("button", { name: WORDS.sw.reset })).toBeVisible()
   await fillStudent(page, "sw", who.childTyped, nextYear)
-  await expect(page.getByRole("button", { name: WORDS.sw.reset })).toHaveCount(0)
+  // #513: from the second question on, Start over stays on the bar with Back.
+  await expect(page.getByRole("button", { name: WORDS.sw.reset })).toBeVisible()
   await expect(page.getByRole("button", { name: WORDS.sw.back })).toBeVisible()
   // Back on the first question again: Start over comes back, with the answers kept.
   await page.getByRole("button", { name: "Badilisha Jina" }).click()

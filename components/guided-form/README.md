@@ -48,6 +48,7 @@ The language control posts to `setLanguage`, so the page re-renders through the 
 - `activeGroup` past the last group (the send step) keeps the last label in the chip. Hide the whole bar on the success screen.
 - `status` goes to an `aria-live="polite"` line; build it with the page's words.
 - `endReset`: from the second question on, Back keeps the left slot and Start over shows after the section chip (#511, v50). Pass `canReset` with it.
+- `chipUp`: with `endReset` showing, the section chip moves centred above the bar (#513, v55). The Admission form uses it; staff forms leave it off.
 - `kitIcons` (staff pages, set by the kit's `GuidedTask`) draws Back and Start over with the set 1 icons as icon hosts. The public forms leave it off.
 
 Prototype CSS: `.bar-row`, `.navslot`, `.backbtn`, `.resetbtn`, `.prog`, `.pg`, `.who`, `.gn`, `.chip`, `.liquid`, `.ok`, `.secname`.

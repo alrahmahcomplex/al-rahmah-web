@@ -2,7 +2,7 @@
 
 import { useId, useState } from "react"
 
-import { CapitalsBox, ChoiceTiles, cleanName, Hint, Icon, LastNameChoice, StudentNameBoxes, TypeAheadField, type StudentName } from "@/components/guided-form"
+import { CapitalsBox, ChangeLink, ChoiceTiles, cleanName, Hint, Icon, LastNameChoice, ProgressBar, StudentNameBoxes, TypeAheadField, type StudentName } from "@/components/guided-form"
 import { Card } from "@/components/kit"
 import { studentFullName, type LastNameFrom } from "@/lib/names"
 import { COUNTRY_NAMES, countryFlag, OUTSIDE_TANZANIA, regionsOutsideFirst } from "@/lib/places"
@@ -10,7 +10,8 @@ import { COUNTRY_NAMES, countryFlag, OUTSIDE_TANZANIA, regionsOutsideFirst } fro
 import { REGIONS } from "./fixtures"
 
 // The parts Register students and Check-in use from prototype v50 to v55
-// (#511), with the prototype's own words. Nothing is saved.
+// (#511), and the Admission form's bar (#513), with the prototype's own
+// words. Nothing is saved.
 
 const NAME_LABELS = { first: "First name", middle: "Middle name", last: "Last name" }
 const LAST_NAME = { group: "Student’s last name", last: "Father’s last name", middle: "Father’s middle name" }
@@ -110,6 +111,39 @@ export function TwoChoicesCard() {
           { value: "else", label: "Someone else", description: "Mother, guardian or another person" },
         ]}
       />
+    </Card>
+  )
+}
+
+/** The Admission form's bar (#513, prototype v55): from the second question on, Start over on the right and the section chip centred above. */
+export function ChipUpBarCard() {
+  const [step, setStep] = useState(0)
+  const groups = [
+    { label: "Student", steps: 4, done: Math.min(step, 4) },
+    { label: "Custodian", steps: 3, done: Math.max(0, Math.min(step - 4, 3)) },
+  ]
+  const activeGroup = step < 4 ? 0 : 1
+  return (
+    <Card title="Stepper: Start over on the right">
+      <p className="kp-spec">
+        The parents’ form: on the first question Start over holds the left slot. From the second on, Back takes it, Start over moves to the right and the section chip sits centred above the bar (<code>chipUp</code> with <code>endReset</code>). Staff forms leave <code>chipUp</code> off.
+      </p>
+      <ProgressBar
+        className="kp-static"
+        groups={groups}
+        activeGroup={activeGroup}
+        canBack={step > 0}
+        onBack={() => setStep((n) => Math.max(0, n - 1))}
+        canReset
+        endReset
+        chipUp
+        onReset={() => setStep(0)}
+        labels={{ back: "Back", reset: "Start over" }}
+        status=""
+      />
+      <ChangeLink className="self-start" onClick={() => setStep((n) => Math.min(6, n + 1))}>
+        Next question
+      </ChangeLink>
     </Card>
   )
 }

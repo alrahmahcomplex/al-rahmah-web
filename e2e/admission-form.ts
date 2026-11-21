@@ -28,7 +28,7 @@ export function family() {
     phone: `07${String(randomInt(0, 100_000_000)).padStart(8, "0")}`,
     child: child.name,
     childTyped: child.typed,
-    // The father's three names, as the switch "The father is the custodian" shows them.
+    // The father's three names, as The father on the custodian question shows them.
     father: `MAJARIBIO BABA ${suffix}`,
     student,
   }
@@ -52,7 +52,8 @@ export const WORDS = {
     parentName: "Msimamizi ni nani?",
     studentBox: "Jina la mwanafunzi",
     firstBox: "Jina la kwanza",
-    fatherSwitch: "Baba ndiye msimamizi",
+    father: "Baba",
+    someone: "Mtu mwingine",
     mother: "Mama",
     other: "Mwingine",
     otherDescription: "Eleza uhusiano wako na mwanafunzi",
@@ -88,7 +89,8 @@ export const WORDS = {
     parentName: "Who is the custodian?",
     studentBox: "Student's name",
     firstBox: "First name",
-    fatherSwitch: "The father is the custodian",
+    father: "The father",
+    someone: "Someone else",
     mother: "Mother",
     other: "Other",
     otherDescription: "Describe your relationship to the student",
@@ -187,11 +189,26 @@ export async function answerGender(page: Page, lang: Lang, gender: "boy" | "girl
   await openQuestion(page).getByText(WORDS[lang][gender], { exact: true }).click()
 }
 
-/** Answers the custodian's name, Mother, and the phone. Leaves the Discount code open. */
+/**
+ * A custodian button (#513): The father or Someone else. Each holds a line
+ * under its words, so it is found by the words it starts with.
+ */
+export function custodianTile(page: Page, lang: Lang, which: "father" | "someone") {
+  return tile(openQuestion(page), new RegExp(`^${WORDS[lang][which]}`))
+}
+
+/** Picks Someone else on the custodian question, which opens the three name boxes. */
+export async function pickSomeoneElse(page: Page, lang: Lang) {
+  await expectQuestion(page, WORDS[lang].parentName)
+  await custodianTile(page, lang, "someone").click()
+  await expect(nameBox(page, lang, "first")).toBeFocused()
+}
+
+/** Answers the custodian (Someone else, by name), Mother, and the phone. Leaves the Discount code open. */
 export async function fillParent(page: Page, lang: Lang, who: Pick<ReturnType<typeof family>, "parent" | "phone">) {
   const t = WORDS[lang]
   const q = openQuestion(page)
-  await expectQuestion(page, t.parentName)
+  await pickSomeoneElse(page, lang)
   await nameBox(page, lang, "first").fill(who.parent)
   await q.getByRole("button", { name: t.continue }).click()
   await tile(q, t.mother).click()

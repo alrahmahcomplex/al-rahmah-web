@@ -9,15 +9,15 @@ const DRAFT: Draft = {
     firstName: "AMINA",
     middleName: "HASSANI",
     lastName: "FIXTURE",
-    fatherCustodian: false,
+    custodian: "other",
     relationship: "Mother",
     relationshipDescription: "",
     phone: "0700 000 900",
     whatsapp: "",
   },
   children: [
-    { card: 4, firstName: "ZAWADI", fatherFirst: "JUMA", fatherMiddle: "ALI", fatherLast: "FIXTURE", gender: "Girl", className: "STD 2", enrollmentYear: 2027, dayOrBoarding: "Day" },
-    { card: 7, firstName: "JUMA", fatherFirst: "JUMA", fatherMiddle: "ALI", fatherLast: "FIXTURE", gender: "Boy", className: "FORM 1", enrollmentYear: 2026, dayOrBoarding: "Boarding" },
+    { card: 4, firstName: "ZAWADI", fatherFirst: "JUMA", fatherMiddle: "ALI", fatherLast: "FIXTURE", lastNameFrom: "father_middle", gender: "Girl", className: "STD 2", enrollmentYear: 2027, dayOrBoarding: "Day" },
+    { card: 7, firstName: "JUMA", fatherFirst: "JUMA", fatherMiddle: "ALI", fatherLast: "FIXTURE", lastNameFrom: "father_last", gender: "Boy", className: "FORM 1", enrollmentYear: 2026, dayOrBoarding: "Boarding" },
   ],
   discountCode: "AMINA-1",
   linkCode: "BJN-402",
@@ -94,9 +94,30 @@ describe("the Admission form's draft", () => {
     expect(many?.children).toHaveLength(8)
   })
 
-  it("keeps the father switch", () => {
-    writeDraft({ ...DRAFT, parent: { ...DRAFT.parent, fatherCustodian: true, relationship: "Father" } })
-    expect(readDraft(YEARS)?.parent).toMatchObject({ fatherCustodian: true, relationship: "Father" })
+  it("keeps who the custodian is", () => {
+    writeDraft({ ...DRAFT, parent: { ...DRAFT.parent, custodian: "father", relationship: "Father" } })
+    expect(readDraft(YEARS)?.parent).toMatchObject({ custodian: "father", relationship: "Father" })
+    writeDraft({ ...DRAFT, parent: { ...DRAFT.parent, custodian: "" } })
+    expect(readDraft(YEARS)?.parent.custodian).toBe("")
+  })
+
+  it("brings back a draft from the father switch (version 3): on is The father, off with a name typed is Someone else (#513)", () => {
+    const v3 = (parent: Record<string, unknown>) =>
+      JSON.stringify({ version: 3, parent: { ...parent, relationship: "Mother", phone: "0700 000 900" }, children: [{ firstName: "ZAWADI", fatherFirst: "JUMA", fatherMiddle: "ALI", fatherLast: "FIXTURE" }] })
+    expect(parseDraft(v3({ fatherCustodian: true }), YEARS)?.parent.custodian).toBe("father")
+    expect(parseDraft(v3({ fatherCustodian: false, firstName: "AMINA" }), YEARS)?.parent).toMatchObject({ custodian: "other", firstName: "AMINA" })
+    expect(parseDraft(v3({ fatherCustodian: false }), YEARS)?.parent.custodian).toBe("")
+    // The last-name choice came later: his last name.
+    expect(parseDraft(v3({}), YEARS)?.children[0].lastNameFrom).toBe("father_last")
+  })
+
+  it("drops a custodian or a last-name choice it doesn't know", () => {
+    const odd = parseDraft(
+      JSON.stringify({ version: 4, parent: { custodian: "mother" }, children: [{ firstName: "ZAWADI", lastNameFrom: "mother" }] }),
+      YEARS,
+    )
+    expect(odd?.parent.custodian).toBe("")
+    expect(odd?.children[0].lastNameFrom).toBe("father_last")
   })
 
   it("brings back a draft from before the name boxes with its names empty and its other answers kept", () => {

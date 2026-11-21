@@ -4,7 +4,7 @@ import { useEffect, useLayoutEffect, useRef, useState, useTransition } from "rea
 import { toast } from "sonner"
 
 import { BrandTopBar } from "@/components/brand"
-import { buzz, GuidedStack, ProgressBar, prefersReducedMotion, revealStep } from "@/components/guided-form"
+import { buzz, GuidedStack, ProgressBar, prefersReducedMotion, revealStep, useKeepFocusInView } from "@/components/guided-form"
 import type { TurnstileWidgetHandle } from "@/components/turnstile-widget"
 import { usePageLanguage } from "@/components/page-language"
 import { admissionYears, childNameKey, MAX_CHILDREN, type FieldProblem, type FormField, type NamePart } from "@/lib/admission-form"
@@ -17,9 +17,10 @@ import { tanzaniaToday } from "@/lib/school-calendar"
 import { checkDiscountCode, submitAdmissionForm } from "./actions"
 import { Confirmation } from "./confirmation"
 import { COPY } from "./copy"
-import { clearDraft, emptyChild, EMPTY_PARENT, isEmptyDraft, readDraft, writeDraft, type ChildDraft, type ParentDraft } from "./draft"
+import { clearDraft, emptyChild, EMPTY_PARENT, isEmptyDraft, readDraft, writeDraft, type ChildDraft, type Custodian, type ParentDraft } from "./draft"
 import {
   defaultYear as defaultYearFor,
+  fatherIsCustodian,
   firstOpenable,
   furthest,
   keyToParam,
@@ -69,8 +70,14 @@ type Outcome = { fullName: string; admissionNumber: string }
 // How long Continue on the Discount code question waits for the code check.
 const CODE_WAIT_MS = 6000
 
-// How long "The father is the custodian" waits before moving on, as v38 does.
-const SWITCH_PAUSE_MS = 700
+// How long The father, picked as the custodian, shows before the form moves on (prototype v54).
+const FATHER_PAUSE_MS = 450
+
+// How far below the top of the screen a box the caret moves to must sit, so
+// the sticky bar doesn't cover it: the bar alone, and the bar with the section
+// chip above it from the second question on.
+const BAR_INSET = 84
+const BAR_INSET_CHIP_UP = 112
 
 const STUDENT_BOXES = ["firstName", "fatherFirst", "fatherMiddle", "fatherLast"] as const
 const PERSON_BOXES = ["firstName", "middleName", "lastName"] as const
@@ -121,19 +128,19 @@ function nameBox(base: string, part: NamePart | undefined, boxes: readonly strin
   return `#${base}-${box}`
 }
 
-// The custodian's parts the father switch takes from the first student's father.
+// The custodian's parts The father takes from the first student's father.
 const FATHER_PART: Partial<Record<NamePart, NamePart>> = {
   contact_first_name: "father_first",
   contact_middle_name: "father_middle",
   contact_last_name: "father_last",
 }
 
-// A refusal as the page shows it. With the father switch on, the custodian's
+// A refusal as the page shows it. With The father picked, the custodian's
 // names are the first student's father's, so a refused custodian name opens
 // that student's name question on the father's box, the one to fix.
 function refusalShown(result: { field: FormField; child: number | null; part?: NamePart }, parent: ParentDraft): Shown {
   const fatherPart = result.part ? FATHER_PART[result.part] : undefined
-  if (result.field === "contact_name" && parent.fatherCustodian) {
+  if (result.field === "contact_name" && fatherIsCustodian(parent)) {
     return { field: "student_name", child: 0, ...(fatherPart ? { part: fatherPart } : {}), server: true }
   }
   return { field: result.field, child: result.child, ...(result.part ? { part: result.part } : {}), server: true }
@@ -156,7 +163,7 @@ function problemSelector({ field, child, part }: FieldProblem, children: readonl
     case "day_or_boarding":
       return `input[name="board-${card}"]`
     case "contact_name":
-      return parent.fatherCustodian ? "#father-custodian" : nameBox("parent-name", part, PERSON_BOXES, parent)
+      return parent.custodian === "other" ? nameBox("parent-name", part, PERSON_BOXES, parent) : 'input[name="custodian"]'
     case "relationship":
       return 'input[name="relationship"]'
     case "relationship_description":
@@ -183,6 +190,8 @@ const PROBLEM_FIELDS: Record<string, readonly FormField[]> = {
   fatherFirst: ["student_name", "duplicate_child"],
   fatherMiddle: ["student_name", "duplicate_child"],
   fatherLast: ["student_name", "duplicate_child"],
+  // The choice changes the student's name, so it can end a repeat.
+  lastNameFrom: ["duplicate_child"],
   gender: ["gender"],
   className: ["class_name"],
   enrollmentYear: ["enrollment_year"],
@@ -276,8 +285,11 @@ export function AdmissionFormSteps({
   const turnstile = useRef<TurnstileWidgetHandle>(null)
   const doneHeading = useRef<HTMLHeadingElement>(null)
   const lastPointer = useRef(0)
-  // The pause after the father switch turns on, before the form moves on.
+  // The pause after The father is picked, before the form moves on.
   const switchTimer = useRef<number | undefined>(undefined)
+  // When a custodian button was last picked, so the tap that picked The
+  // father doesn't also count as a tap on him again.
+  const pickedAt = useRef(0)
   // The code nobody has that Continue has already stopped on once.
   const stoppedFor = useRef<string | null>(null)
   // The questions this page has history entries for, in history order, and
@@ -588,7 +600,7 @@ export function AdmissionFormSteps({
     const latest = formRef.current
     const done = new Set(latest.done).add(key)
     // With the father as custodian the relationship is Father: answered too.
-    if (key === "pname" && latest.parent.fatherCustodian) done.add("rel")
+    if (key === "pname" && fatherIsCustodian(latest.parent)) done.add("rel")
     const nextChildren = children === f.children ? latest.children : children
     setProblems([])
     setExpanded(new Set())
@@ -661,7 +673,7 @@ export function AdmissionFormSteps({
     const f = formRef.current
     setForm({ ...f, parent: { ...f.parent, ...change } })
     const fields = new Set<FormField>()
-    if ("firstName" in change || "middleName" in change || "lastName" in change || "fatherCustodian" in change) fields.add("contact_name")
+    if ("firstName" in change || "middleName" in change || "lastName" in change || "custodian" in change) fields.add("contact_name")
     if ("relationship" in change) fields.add("relationship").add("relationship_description")
     if ("relationshipDescription" in change) fields.add("relationship_description")
     if ("phone" in change) fields.add("phone")
@@ -669,27 +681,58 @@ export function AdmissionFormSteps({
     clearProblems((shown) => fields.has(shown.field))
   }
 
-  // "The father is the custodian": on, the relationship is Father and the form
-  // moves on to the phone after a moment; off, the name boxes open again and
-  // the relationship question comes back, empty if it was Father.
-  function fatherSwitch(on: boolean) {
+  // Who the custodian is (#513). The father: the relationship is Father and the
+  // form moves on to the phone after a moment. Someone else: the name boxes
+  // open, and the relationship question comes back, empty if it was Father.
+  function pickCustodian(who: Exclude<Custodian, "">) {
     window.clearTimeout(switchTimer.current)
+    pickedAt.current = performance.now()
     const f = formRef.current
-    const parent: ParentDraft = on
-      ? { ...f.parent, fatherCustodian: true, relationship: "Father", relationshipDescription: "" }
-      : { ...f.parent, fatherCustodian: false, relationship: f.parent.relationship === "Father" ? "" : f.parent.relationship }
+    const father = who === "father"
+    const parent: ParentDraft = father
+      ? { ...f.parent, custodian: who, relationship: "Father", relationshipDescription: "" }
+      : { ...f.parent, custodian: who, relationship: f.parent.relationship === "Father" ? "" : f.parent.relationship }
     // The relationship question is answered (Father) or open again at once, not
     // when the pause ends: a Change link during the pause cancels the move on.
     const done = new Set(f.done)
-    if (on) done.add("rel")
+    if (father) done.add("rel")
     else done.delete("rel")
     setForm({ ...f, parent, done })
     clearProblems((shown) => shown.field === "contact_name" || shown.field === "relationship" || shown.field === "relationship_description")
-    if (on) switchTimer.current = window.setTimeout(() => void commit("pname"), prefersReducedMotion() ? 0 : SWITCH_PAUSE_MS)
+    if (father) switchTimer.current = window.setTimeout(() => void commit("pname"), prefersReducedMotion() ? 0 : FATHER_PAUSE_MS)
     else focusSoon(`#parent-name-${PERSON_BOXES.find((key) => !parent[key].trim()) ?? "firstName"}`)
   }
 
-  // Start over, on the first question: a toast on an empty form, the sheet otherwise.
+  // A tap, Enter or Space on a custodian button that picks nothing new. A tap
+  // or Space on The father, already picked, answers the question, as a tap on
+  // a picked tile does elsewhere. Enter answers it as Continue would, so with
+  // nobody picked it says to choose.
+  function custodianAgain(event: React.MouseEvent | React.KeyboardEvent) {
+    const target = event.target
+    if (!(target instanceof HTMLInputElement) || target.name !== "custodian") return
+    const f = formRef.current
+    const fatherAgain = target.value === "father" && fatherIsCustodian(f.parent)
+    if (event.type === "keydown") {
+      const { key } = event as React.KeyboardEvent
+      if (key === "Enter") {
+        event.preventDefault()
+        window.clearTimeout(switchTimer.current)
+        void commit("pname")
+      } else if (key === " " && fatherAgain && target.checked) {
+        event.preventDefault()
+        window.clearTimeout(switchTimer.current)
+        void commit("pname")
+      }
+      return
+    }
+    // Only a tap: Space's own click is handled on its key.
+    if (!fatherAgain || performance.now() - lastPointer.current > 900 || performance.now() - pickedAt.current < 100) return
+    window.clearTimeout(switchTimer.current)
+    window.setTimeout(() => void commit("pname"), prefersReducedMotion() ? 0 : 200)
+  }
+
+  // Start over, on the left on the first question and on the right after: a
+  // toast on an empty form, the sheet otherwise.
   function askStartOver() {
     const f = formRef.current
     const empty = f.done.size === 0 && f.discountCode === startingCode && isEmptyDraft({ parent: f.parent, children: f.children, discountCode: "", linkCode: "", done: [] })
@@ -836,12 +879,19 @@ export function AdmissionFormSteps({
   const feeEach = answer && "amount" in answer ? answer.amount : STANDARD_INTERVIEW_FEE
   const discountEach = Math.max(0, STANDARD_INTERVIEW_FEE - feeEach)
   const applications = shownApplicationCount(live.applications)
+  // From the second question on, Start over shows on the right and the section
+  // chip moves above the bar (#513, prototype v55).
+  const chipUp = !confirmed && order(children).indexOf(open) > 0
+  // On a phone, the box that gets the caret after Space or Enter is brought
+  // above the keyboard, below the sticky bar (#513, prototype v54).
+  useKeepFocusInView(chipUp ? BAR_INSET_CHIP_UP : BAR_INSET)
 
   const message = (field: FormField, childIndex: number | null = null) => {
     const problem = problems.find((shown) => shown.field === field && (childIndex === null || shown.child === null || shown.child === childIndex))
     if (!problem) return null
     if (problem.server && field === "phone") return copy.problems.phone_unreadable
     if (problem.server && field === "enrollment_year") return copy.problems.year_closed
+    if (field === "contact_name" && parent.custodian === "") return copy.chooseCustodian
     if (field === "duplicate_child" && problem.child !== null && children[problem.child]) {
       const key = childNameKey(studentName(children[problem.child]))
       const firstOne = children.slice(0, problem.child).find((child) => childNameKey(studentName(child)) === key) ?? children[problem.child]
@@ -940,7 +990,9 @@ export function AdmissionFormSteps({
               whoLabel={who}
               canBack={at > 0}
               onBack={goBack}
-              canReset={at <= 0}
+              canReset
+              endReset
+              chipUp={chipUp}
               onReset={askStartOver}
               labels={{ back: copy.back, reset: copy.reset }}
               status={status}
@@ -995,7 +1047,8 @@ export function AdmissionFormSteps({
                     change,
                     child: updateChild,
                     parent: updateParent,
-                    fatherSwitch,
+                    custodian: pickCustodian,
+                    custodianAgain,
                     tapChoice,
                     code: (value) => {
                       setForm({ ...formRef.current, discountCode: value })

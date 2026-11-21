@@ -31,13 +31,20 @@ const isString = (value: unknown) => typeof value === "string"
 // Server Actions take input from anyone who can post to them, so the shape is
 // checked here, and the database then checks the rules and the permission.
 
+// A field left out keeps its value, so a screen that changes one answer (the
+// Family page, #512) sends only that one and never overwrites the others with
+// what it read earlier. At least one field is sent.
 export async function correctStudent(leadId: string, changes: LeadDetailsChanges): Promise<CorrectionOutcome> {
+  const absent = (value: unknown) => value === undefined
   if (
     !isString(leadId) ||
-    !isString(changes?.fullName) ||
-    !(LEAD_CLASSES as readonly unknown[]).includes(changes.className) ||
-    !Number.isInteger(changes.enrollmentYear) ||
-    !(DAY_OR_BOARDING as readonly unknown[]).includes(changes.dayOrBoarding)
+    !changes ||
+    typeof changes !== "object" ||
+    !(absent(changes.fullName) || isString(changes.fullName)) ||
+    !(absent(changes.className) || (LEAD_CLASSES as readonly unknown[]).includes(changes.className)) ||
+    !(absent(changes.enrollmentYear) || Number.isInteger(changes.enrollmentYear)) ||
+    !(absent(changes.dayOrBoarding) || (DAY_OR_BOARDING as readonly unknown[]).includes(changes.dayOrBoarding)) ||
+    [changes.fullName, changes.className, changes.enrollmentYear, changes.dayOrBoarding].every(absent)
   ) {
     return REFUSED_INPUT
   }
@@ -67,16 +74,22 @@ export async function correctContact(
   children: string[],
   leadId: string,
 ): Promise<CorrectionOutcome> {
+  // As with correctStudent, a field left out keeps its value (the Family page
+  // sends only what changed). The record's form sends them all.
+  const absent = (value: unknown) => value === undefined
   if (
     !isString(contactId) ||
     !isString(leadId) ||
     !Array.isArray(children) ||
     !children.every(isString) ||
-    !isString(changes?.fullName) ||
-    !(RELATIONSHIPS as readonly unknown[]).includes(changes.relationship) ||
+    !changes ||
+    typeof changes !== "object" ||
+    !(absent(changes.fullName) || isString(changes.fullName)) ||
+    !(absent(changes.relationship) || (RELATIONSHIPS as readonly unknown[]).includes(changes.relationship)) ||
     !(changes.relationshipDescription == null || isString(changes.relationshipDescription)) ||
-    !isString(changes.phone) ||
-    !(changes.whatsapp == null || isString(changes.whatsapp))
+    !(absent(changes.phone) || isString(changes.phone)) ||
+    !(changes.whatsapp == null || isString(changes.whatsapp)) ||
+    [changes.fullName, changes.relationship, changes.phone, changes.whatsapp].every(absent)
   ) {
     return REFUSED_INPUT
   }
@@ -88,9 +101,11 @@ export async function correctContact(
   const result = await updateGuardianContact(supabase, contactId, {
     fullName: changes.fullName,
     relationship: changes.relationship,
-    relationshipDescription: changes.relationshipDescription ?? null,
+    // The description goes with its relationship, never on its own.
+    relationshipDescription: absent(changes.relationship) ? undefined : (changes.relationshipDescription ?? null),
     phone: changes.phone,
-    whatsapp: changes.whatsapp ?? null,
+    // Left out keeps the number; null clears it.
+    whatsapp: absent(changes.whatsapp) ? undefined : (changes.whatsapp ?? null),
   }, children, undefined, leadId)
   if (!result.ok) return correctionOutcome(result.error)
   revalidatePath("/staff/applicants", "layout")

@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from "@testing-library/react"
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { forwardRef, useImperativeHandle, type ImgHTMLAttributes } from "react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
@@ -885,6 +885,54 @@ describe("the Admission form page", { timeout: 30_000 }, () => {
     await waitForQuestion("What is the student's name?")
     expect(open().getByRole("textbox", { name: "Middle name" })).toHaveAttribute("aria-invalid", "true")
     expect(open().getByRole("textbox", { name: "Last name" })).not.toHaveAttribute("aria-invalid", "true")
+  })
+
+  it("switching from Someone else to The father opens the phone question again, so the number is confirmed for him", async () => {
+    const user = userEvent.setup()
+    render(form("en"))
+    await answerStudent(user, "Zawadi", "en")
+    await user.click(await screen.findByRole("button", { name: "No, continue" }))
+    await answerCustodian(user, "en")
+    await user.click(open().getByRole("button", { name: "Skip, no code" }))
+    await user.click(open().getByRole("button", { name: "Continue" }))
+    await waitForQuestion("Check, then send")
+
+    await user.click(screen.getAllByRole("button", { name: "Change Name" }).at(-1)!)
+    await waitForQuestion("Who is the custodian?")
+    await user.click(open().getByRole("radio", { name: /^The father/ }))
+    await waitForQuestion("What is JUMA's phone number?")
+    expect(open().getByRole("textbox")).toHaveValue("0700 000 900")
+  })
+
+  it("a click on The father again, with no pointer (a screen reader), answers the reopened question", async () => {
+    const user = userEvent.setup()
+    render(form("en"))
+    await answerStudent(user, "Zawadi", "en")
+    await user.click(await screen.findByRole("button", { name: "No, continue" }))
+    await waitForQuestion("Who is the custodian?")
+    await user.click(open().getByRole("radio", { name: /^The father/ }))
+    await waitForQuestion("What is JUMA's phone number?")
+    await user.click(screen.getByRole("button", { name: "Back" }))
+    await waitForQuestion("Who is the custodian?")
+    fireEvent.click(open().getByRole("radio", { name: /^The father/ }))
+    await waitForQuestion("What is JUMA's phone number?")
+  })
+
+  it("Someone else picked right after a second tap on The father stays on the custodian question", async () => {
+    const user = userEvent.setup()
+    render(form("en"))
+    await answerStudent(user, "Zawadi", "en")
+    await user.click(await screen.findByRole("button", { name: "No, continue" }))
+    await pickSomeoneElse(user, "en")
+    await user.type(nameBox("en", "first"), "Amina Hassani Mfano")
+    // The pause before moving on is real here (no reduced motion).
+    document.documentElement.classList.remove("rm")
+    await user.click(open().getByRole("radio", { name: /^The father/ }))
+    await new Promise((resolve) => setTimeout(resolve, 150))
+    await user.click(open().getByRole("radio", { name: /^The father/ }))
+    await user.click(open().getByRole("radio", { name: /^Someone else/ }))
+    await new Promise((resolve) => setTimeout(resolve, 700))
+    expect(open().getByRole("heading", { name: "Who is the custodian?" })).toBeInTheDocument()
   })
 
   it("tapping The father again on a reopened custodian question answers it", async () => {

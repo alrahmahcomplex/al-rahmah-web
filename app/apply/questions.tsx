@@ -92,7 +92,7 @@ export type QuestionsProps = {
     parent: (change: Partial<ParentDraft>) => void
     // The father or Someone else picked as the custodian (#513).
     custodian: (who: Exclude<Custodian, "">) => void
-    // A tap, Enter or Space on the custodian buttons: The father again answers the question.
+    // Enter, or a click on The father again: answers the custodian question.
     custodianAgain: (event: React.MouseEvent | React.KeyboardEvent) => void
     // A tap on a choice answers the question, even on the one already picked.
     tapChoice: (key: StepKey, event: React.MouseEvent) => void

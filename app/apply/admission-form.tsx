@@ -287,9 +287,9 @@ export function AdmissionFormSteps({
   const lastPointer = useRef(0)
   // The pause after The father is picked, before the form moves on.
   const switchTimer = useRef<number | undefined>(undefined)
-  // When a custodian button was last picked, so the tap that picked The
-  // father doesn't also count as a tap on him again.
-  const pickedAt = useRef(0)
+  // The browser event that last picked a custodian button, so the click that
+  // picked The father doesn't also count as a click on him again.
+  const pickedBy = useRef<Event | undefined>(undefined)
   // The code nobody has that Continue has already stopped on once.
   const stoppedFor = useRef<string | null>(null)
   // The questions this page has history entries for, in history order, and
@@ -686,7 +686,7 @@ export function AdmissionFormSteps({
   // open, and the relationship question comes back, empty if it was Father.
   function pickCustodian(who: Exclude<Custodian, "">) {
     window.clearTimeout(switchTimer.current)
-    pickedAt.current = performance.now()
+    pickedBy.current = window.event
     const f = formRef.current
     const father = who === "father"
     const parent: ParentDraft = father
@@ -697,38 +697,36 @@ export function AdmissionFormSteps({
     const done = new Set(f.done)
     if (father) done.add("rel")
     else done.delete("rel")
+    // A different custodian: the phone question opens again, so the number
+    // typed for the one before is confirmed for this one (review, #513).
+    if (f.parent.custodian !== "" && f.parent.custodian !== who) done.delete("phone")
     setForm({ ...f, parent, done })
     clearProblems((shown) => shown.field === "contact_name" || shown.field === "relationship" || shown.field === "relationship_description")
     if (father) switchTimer.current = window.setTimeout(() => void commit("pname"), prefersReducedMotion() ? 0 : FATHER_PAUSE_MS)
     else focusSoon(`#parent-name-${PERSON_BOXES.find((key) => !parent[key].trim()) ?? "firstName"}`)
   }
 
-  // A tap, Enter or Space on a custodian button that picks nothing new. A tap
-  // or Space on The father, already picked, answers the question, as a tap on
-  // a picked tile does elsewhere. Enter answers it as Continue would, so with
-  // nobody picked it says to choose.
+  // Enter, or a click on a custodian button that picks nothing new. A click
+  // on The father, already picked, answers the question, as a tap on a picked
+  // tile does elsewhere: a tap, Space and a screen reader's click alike, since
+  // no Continue shows for him. Arrow keys always pick the other button, so
+  // they never land here. Enter answers it as Continue would, so with nobody
+  // picked it says to choose.
   function custodianAgain(event: React.MouseEvent | React.KeyboardEvent) {
     const target = event.target
     if (!(target instanceof HTMLInputElement) || target.name !== "custodian") return
-    const f = formRef.current
-    const fatherAgain = target.value === "father" && fatherIsCustodian(f.parent)
     if (event.type === "keydown") {
-      const { key } = event as React.KeyboardEvent
-      if (key === "Enter") {
-        event.preventDefault()
-        window.clearTimeout(switchTimer.current)
-        void commit("pname")
-      } else if (key === " " && fatherAgain && target.checked) {
-        event.preventDefault()
-        window.clearTimeout(switchTimer.current)
-        void commit("pname")
-      }
+      if ((event as React.KeyboardEvent).key !== "Enter") return
+      event.preventDefault()
+      window.clearTimeout(switchTimer.current)
+      void commit("pname")
       return
     }
-    // Only a tap: Space's own click is handled on its key.
-    if (!fatherAgain || performance.now() - lastPointer.current > 900 || performance.now() - pickedAt.current < 100) return
+    // The click that picked him is the pick's own; his pause moves on.
+    if (target.value !== "father" || !fatherIsCustodian(formRef.current.parent) || event.nativeEvent === pickedBy.current) return
     window.clearTimeout(switchTimer.current)
-    window.setTimeout(() => void commit("pname"), prefersReducedMotion() ? 0 : 200)
+    // Kept in the same timer, so picking Someone else straight after cancels it.
+    switchTimer.current = window.setTimeout(() => void commit("pname"), prefersReducedMotion() ? 0 : 200)
   }
 
   // Start over, on the left on the first question and on the right after: a

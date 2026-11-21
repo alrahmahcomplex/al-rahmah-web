@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test"
 
 import { admissionYears } from "../lib/admission-form"
+import { inRolledBackTransaction } from "../tests/support/db"
 import {
   expectQuestion,
   family,
@@ -167,8 +168,13 @@ test("The family's choice of the father's middle name ends the student's name, a
   await toSend(page, "en")
   await send(page, "en")
   await expect(page.getByRole("heading", { name: WORDS.en.done })).toBeVisible()
-  // The name on the confirmation is the one the database built from the choice.
   await expect(page.getByText("MWANAFUNZI MAJARIBIO BABA", { exact: false })).toBeVisible()
+  // The lead holds the name the database built from the choice, and the choice.
+  const number = await page.getByText(/^ADMSN-\d{5}$/).textContent()
+  const row = await inRolledBackTransaction(
+    async (sql) => (await sql.query("select student_name, last_name_from::text from public.leads where admission_number = $1", [number])).rows[0],
+  )
+  expect(row).toEqual({ student_name: `MWANAFUNZI MAJARIBIO BABA`, last_name_from: "father_middle" })
 })
 
 test("Start over on the finished screen opens a new form at once", async ({ page, context }) => {

@@ -90,7 +90,7 @@ function StartStep({ language, onSms }: { language: Language; onSms: (phone: str
     return (
       <>
         <AuthHeading>{copy.forgotHeading}</AuthHeading>
-        <p role="status" className="text-center font-exo text-[14px] text-slate-700">
+        <p role="status" className="text-center text-[14px] text-slate-700">
           {copy.sent}
         </p>
       </>
@@ -212,7 +212,7 @@ function SmsStep({
           <button
             type="submit"
             disabled={resending || left > 0}
-            className="rounded-full px-4 py-2 font-exo text-[14px] font-semibold text-blue-600 underline-offset-2 enabled:hover:underline disabled:text-slate-400"
+            className="rounded-full px-4 py-2 text-[14px] font-semibold text-blue-600 underline-offset-2 enabled:hover:underline disabled:text-slate-400"
           >
             {left > 0 ? (
               <>
@@ -281,7 +281,7 @@ function PasswordStep({ language }: { language: Language }) {
           minLength={MINIMUM_PASSWORD_LENGTH}
           autoFocus
         />
-        <p id="password-rule" className="-mt-1 pl-4 font-exo text-[12px] text-slate-500">
+        <p id="password-rule" className="-mt-1 pl-4 text-[12px] text-slate-500">
           {copy.passwordRule}
         </p>
         <PasswordField id="confirm" label={copy.confirmPassword} autoComplete="new-password" required shown={shown} minLength={MINIMUM_PASSWORD_LENGTH} />

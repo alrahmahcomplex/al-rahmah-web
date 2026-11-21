@@ -180,6 +180,7 @@ export default async function AgentStudentsPage({ searchParams }: { searchParams
                 }))}
                 words={{
                   heading: copy.remindHeading(reminders.length),
+                  seeAll: copy.seeAllReminders(reminders.length),
                   prepare: copy.prepare,
                   title: copy.reminderTitle,
                   openWhatsApp: copy.openWhatsApp,

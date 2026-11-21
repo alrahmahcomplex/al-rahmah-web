@@ -140,6 +140,8 @@ export type ReminderItem = { name: string; className: string; waiting: string; m
 
 export type ReminderWords = {
   heading: string
+  // Under the first REMINDERS_SHOWN, to show the rest: "Ona wote (23)".
+  seeAll: string
   prepare: string
   title: string
   openWhatsApp: string
@@ -148,20 +150,27 @@ export type ReminderWords = {
   close: string
 }
 
-// Who could use a reminder, the longest wait first. Its "Andaa ujumbe" is the
+// How many reminders show before "Ona wote" (owner, decision 67).
+export const REMINDERS_SHOWN = 5
+
+// Who could use a reminder, the longest wait first: the first five, then
+// "Ona wote (n)" shows the rest in place, in the same order. They all came
+// in the page's one read, so showing the rest asks nothing more of the server. Its "Andaa ujumbe" is the
 // page's orange button; the others are outlined. Each opens the reminder in a
 // sheet, with WhatsApp (no number) and Copy.
 export function Reminders({ items, words }: { items: ReminderItem[]; words: ReminderWords }) {
   const [shown, setShown] = useState<number | null>(null)
+  const [all, setAll] = useState(false)
   const box = useRef<HTMLParagraphElement>(null)
   const item = shown === null ? null : items[shown]
+  const listed = all ? items : items.slice(0, REMINDERS_SHOWN)
   const href = item ? discountCodeShareLink(item.message) : null
 
   return (
     <section className="flex flex-col gap-3">
       <h2 className="font-exo text-[17px] leading-tight font-extrabold text-blue-600 italic">{words.heading}</h2>
       <ul className="flex flex-col gap-2.5">
-        {items.map((reminder, index) => (
+        {listed.map((reminder, index) => (
           <li key={index} className="flex flex-col gap-2 rounded-[20px] border-[1.5px] border-orange-500/35 bg-[#fffaf4] px-4 py-3">
             <p className="text-base leading-snug font-semibold wrap-anywhere text-slate-800">
               {reminder.name} <span className="font-normal text-slate-600">· {reminder.className}</span>
@@ -178,6 +187,12 @@ export function Reminders({ items, words }: { items: ReminderItem[]; words: Remi
           </li>
         ))}
       </ul>
+      {/* Outlined: the first reminder keeps the page's one orange button. */}
+      {!all && items.length > REMINDERS_SHOWN && (
+        <button type="button" onClick={() => setAll(true)} className={cn(OUTLINED, "min-h-11 text-base")}>
+          {words.seeAll}
+        </button>
+      )}
       <BottomSheet open={item !== null} onClose={() => setShown(null)} title={words.title} closeLabel={words.close}>
         {item && (
           <div className="flex flex-col gap-3">

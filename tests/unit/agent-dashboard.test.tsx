@@ -2,7 +2,7 @@ import { render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { afterEach, describe, expect, it, vi } from "vitest"
 
-import { MessagePicker } from "@/app/discount-code/students/dashboard"
+import { MessagePicker, Reminders, type ReminderItem } from "@/app/discount-code/students/dashboard"
 
 const LINK = "https://alrahmah.example/apply?ref=ABK-014"
 const WORDS = {
@@ -42,5 +42,49 @@ describe("the message picker", () => {
 
     expect(await screen.findByText(LINK)).toBeInTheDocument()
     expect(screen.getByText(WORDS.copyFailed)).toBeInTheDocument()
+  })
+})
+
+// "Wanaweza kukumbushwa": the five longest waits, then "Ona wote (n)" (decision 67).
+describe("the reminders", () => {
+  const reminders = (count: number): ReminderItem[] =>
+    Array.from({ length: count }, (_, index) => ({
+      name: `Mtoto ${index + 1}`,
+      className: "STD 3",
+      waiting: `Alijisajili siku ${40 - index} zilizopita, bado hajatembelea shule.`,
+      message: `Habari! Mtoto ${index + 1}`,
+    }))
+  const words = (count: number) => ({
+    heading: `Wanaweza kukumbushwa (${count})`,
+    seeAll: `Ona wote (${count})`,
+    prepare: "Andaa ujumbe",
+    title: "Ujumbe wa kukumbusha",
+    openWhatsApp: "Fungua WhatsApp",
+    copyMessage: "Nakili ujumbe",
+    messageCopied: "Ujumbe umenakiliwa",
+    close: "Funga",
+  })
+  const names = () => screen.getAllByRole("listitem").map((item) => item.querySelector("p")?.textContent?.split(" ·")[0])
+
+  it("shows the five longest waits under the full count, and the rest in place, in the same order", async () => {
+    const user = userEvent.setup()
+    render(<Reminders items={reminders(7)} words={words(7)} />)
+
+    expect(screen.getByRole("heading", { name: "Wanaweza kukumbushwa (7)" })).toBeInTheDocument()
+    expect(names()).toEqual(["Mtoto 1", "Mtoto 2", "Mtoto 3", "Mtoto 4", "Mtoto 5"])
+
+    await user.click(screen.getByRole("button", { name: "Ona wote (7)" }))
+    expect(names()).toEqual(["Mtoto 1", "Mtoto 2", "Mtoto 3", "Mtoto 4", "Mtoto 5", "Mtoto 6", "Mtoto 7"])
+    expect(screen.queryByRole("button", { name: "Ona wote (7)" })).not.toBeInTheDocument()
+
+    // A reminder shown after the click opens its own message.
+    await user.click(screen.getAllByRole("button", { name: "Andaa ujumbe" })[6])
+    expect(await screen.findByText("Habari! Mtoto 7")).toBeInTheDocument()
+  })
+
+  it("offers no 'Ona wote' with five or fewer", () => {
+    render(<Reminders items={reminders(5)} words={words(5)} />)
+    expect(screen.getAllByRole("listitem")).toHaveLength(5)
+    expect(screen.queryByRole("button", { name: /Ona wote/ })).not.toBeInTheDocument()
   })
 })

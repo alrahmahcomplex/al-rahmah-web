@@ -20,6 +20,8 @@ type Copy = {
   // The count per step, and who could use a reminder.
   whereFamilies: string
   remindHeading: (count: number) => string
+  // Under the first five reminders, to show them all (decision 67).
+  seeAllReminders: (count: number) => string
   waiting: Record<ReminderStep, (days: number) => string>
   prepare: string
   reminderTitle: string
@@ -61,6 +63,7 @@ export const STUDENTS_COPY: Record<Language, Copy> = {
     close: "Funga",
     whereFamilies: "Familia zako ziko wapi",
     remindHeading: (count) => `Wanaweza kukumbushwa (${count})`,
+    seeAllReminders: (count) => `Ona wote (${count})`,
     waiting: {
       Applied: (days) => `Alijisajili siku ${days} zilizopita, bado hajatembelea shule.`,
       Visited: (days) => `Alitembelea siku ${days} zilizopita, bado hajafanya usaili.`,
@@ -122,6 +125,7 @@ export const STUDENTS_COPY: Record<Language, Copy> = {
     close: "Close",
     whereFamilies: "Where your families are",
     remindHeading: (count) => `Could use a reminder (${count})`,
+    seeAllReminders: (count) => `See all (${count})`,
     waiting: {
       Applied: (days) => `Applied ${days} days ago, hasn't visited yet.`,
       Visited: (days) => `Visited ${days} days ago, no interview yet.`,

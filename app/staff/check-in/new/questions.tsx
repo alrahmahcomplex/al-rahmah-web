@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useId, useRef, useState, type FormEvent, type MouseEvent, type ReactNode } from "react"
+import { useEffect, useId, useMemo, useRef, useState, type FormEvent, type MouseEvent, type ReactNode } from "react"
 
 import {
   CapitalsBox,
@@ -37,7 +37,7 @@ import {
 } from "@/components/kit"
 import { Icon } from "@/components/icons"
 import type { LastNameFrom } from "@/lib/names"
-import { COUNTRY_NAMES, countryFlag, OUTSIDE_TANZANIA, regionsOutsideFirst } from "@/lib/places"
+import { countriesSavedFirst, countryFlag, countryNeed, OUTSIDE_TANZANIA, regionsOutsideFirst, sameSchoolName } from "@/lib/places"
 import { STAFF_REMINDER } from "@/lib/referral-notice"
 import { STUDENT_GENDERS, type DayOrBoarding, type LeadClass, type StudentGender } from "@/lib/services/leads"
 
@@ -82,7 +82,6 @@ const STUDENT_KEYS = ["firstName", "fatherFirst", "fatherMiddle", "fatherLast"] 
 
 const OUTSIDE_LABEL = "Outside Tanzania (Other Country)"
 const REGION_OPTIONS = regionsOutsideFirst(REGIONS).map((r) => ({ value: r, label: r === OUTSIDE_TANZANIA ? OUTSIDE_LABEL : r }))
-const COUNTRY_OPTIONS = COUNTRY_NAMES.map((c) => ({ value: c, label: c }))
 const flag = (country: string) => <span className="gf-flag">{countryFlag(country)}</span>
 const listLabels = (one: string, many: string) => ({
   field: one[0].toUpperCase() + one.slice(1),
@@ -292,6 +291,10 @@ export function SchoolQuestion({
   const [type, setType] = useState<"private" | "public" | null>(known?.type ?? null)
   const [region, setRegion] = useState(known?.region ?? "")
   const [country, setCountry] = useState(known?.region === OUTSIDE_TANZANIA ? (known.country ?? "") : "")
+  // Staff picked a country (it then counts for another school too), or changed the box at all.
+  const [countryPicked, setCountryPicked] = useState(false)
+  const [countryTouched, setCountryTouched] = useState(false)
+  const countryOptions = useMemo(() => countriesSavedFirst(known?.country).map((c) => ({ value: c, label: c })), [known?.country])
   const [error, setError] = useState("")
   const formRef = useRef<HTMLFormElement>(null)
   const focusTimer = useRef(0)
@@ -321,8 +324,12 @@ export function SchoolQuestion({
     if (n.length < 2) return setError("Type the school’s name.")
     if (!type) return setError("Choose private or public.")
     if (!region) return setError("Choose the region from the list.")
-    if (out && !country) return setError("Choose the country from the list.")
-    onDone({ name: n, type, region, ...(out ? { country } : {}) })
+    // The lead's rule (#511): another school or a new region abroad needs its country picked, the saved one again
+    // included; private or public alone, or an old school abroad with no country left as it is, needs none.
+    const need = countryNeed({ saved: known, name: n, region, country, picked: countryPicked, touched: countryTouched })
+    if (need === "missing") return setError("Choose the country from the list.")
+    if (need === "again") return setError("Choose the country again for the new school.")
+    onDone({ name: n, type, region, ...(out && country ? { country } : {}) })
   }
 
   return (
@@ -397,22 +404,26 @@ export function SchoolQuestion({
             <Hint>Which country is the school in?</Hint>
             <TypeAheadField
               id={countryId}
-              options={COUNTRY_OPTIONS}
+              options={countryOptions}
+              pinned={known?.country}
               value={country}
-              invalid={!!error && out && !country}
+              invalid={!!error && out}
               aria-describedby={errId}
               lead={(v) => (v ? flag(v) : <GuidedIcon name="globe" small />)}
               optionLead={flag}
               labels={COUNTRY_LABELS}
               onValueChange={(v) => {
                 setCountry(v)
+                setCountryTouched(true)
+                if (v) setCountryPicked(true)
                 setError("")
               }}
             />
           </GuidedReveal>
         </GuidedReveal>
         <FieldError id={errId} message={error} />
-        <GuidedReveal open={!!region && (!out || !!country)}>
+        {/* An old school abroad with no country: Continue shows once private or public changes, the name kept. */}
+        <GuidedReveal open={!!region && (!out || !!country || (!!needsCountry && type !== known?.type && sameSchoolName(name, known?.name)))}>
           <ContinuePill type="submit">Continue</ContinuePill>
         </GuidedReveal>
         <TextLink className="rs-nk" onClick={onNotKnown}>

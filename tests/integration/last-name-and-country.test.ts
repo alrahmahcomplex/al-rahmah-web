@@ -537,6 +537,10 @@ describe("corrections on the record", () => {
       ok: false,
       error: { kind: "invalid", field: "previous_school_country" },
     })
+    // The same name in other capitals and spacing is the same school: no country needed.
+    expect(await correctPreviousSchool(client, row.id, { ...old, name: "example  school abroad" })).toEqual({ ok: true, data: null })
+    expect(await rowOf(row.id)).toMatchObject({ previous_school_region: "Outside Tanzania", previous_school_country: null })
+
     // Moved abroad from a school here with no country: refused too.
     expect(await correctPreviousSchool(client, row.id, { kind: "school", name: "A SCHOOL HERE", type: "public", region: "Mwanza" })).toEqual({ ok: true, data: null })
     expect(await correctPreviousSchool(client, row.id, old)).toEqual({ ok: false, error: { kind: "invalid", field: "previous_school_country" } })

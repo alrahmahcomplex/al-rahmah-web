@@ -19,12 +19,14 @@
 -- 1. registration_previous_school_country refuses a school Outside Tanzania
 --    whose country is missing, empty, or not on previous_school_countries().
 --    register_students and complete_admission_visit call it.
--- 2. complete_admission_visit skips that check for a school sent back as the
---    lead holds it: Outside Tanzania, the same name, and no country on file
---    or sent. Left out, the school stays as it is.
--- 3. update_lead_details refuses a school Outside Tanzania whose name or
---    region changes without a country sent, and keeps the stored country
---    for any other change.
+-- 2. complete_admission_visit skips that check for the school on file sent
+--    back Outside Tanzania with the same name (capitals and spacing aside) and
+--    no country: it keeps the country the lead holds, or none. Left out, as
+--    Check-in's Not known yet does, the school stays exactly as the database
+--    holds it.
+-- 3. update_lead_details refuses a school Outside Tanzania whose name
+--    (capitals and spacing aside) or region changes without a country sent,
+--    and keeps the stored country for any other change.
 --
 -- Rollback: restore registration_previous_school_country,
 -- complete_admission_visit and update_lead_details as
@@ -496,15 +498,15 @@ AS $function$
                 s_school_type[i] := parsed.school_type;
                 s_school_region[i] := parsed.region;
                 s_school_unknown[i] := parsed.not_known;
-                -- An Outside Tanzania school saved before the country list, sent
-                -- back unchanged with no country, stays as it is. Entered or
-                -- changed, it needs its country.
+                -- The school on file, Outside Tanzania, sent back with the same
+                -- name (in any capitals and spacing) and no country: it keeps the
+                -- country the lead holds, none on a school saved before the
+                -- country list. Entered or with another name, it needs its country.
                 if s_school_region[i] = 'Outside Tanzania'
                    and lead.previous_school_region = 'Outside Tanzania'
-                   and lead.previous_school_country is null
-                   and s_school[i] is not distinct from lead.previous_school_name
+                   and upper(s_school[i]) is not distinct from upper(public.clean_name_part(lead.previous_school_name))
                    and nullif(btrim(coalesce(item -> 'previous_school' ->> 'country', '')), '') is null then
-                    s_school_country[i] := null;
+                    s_school_country[i] := lead.previous_school_country;
                 else
                     s_school_country[i] := public.registration_previous_school_country(item -> 'previous_school', s_school_region[i], i);
                 end if;
@@ -1117,7 +1119,7 @@ begin
     -- Outside Tanzania needs its country sent: the stored one is not kept for
     -- another school. Private or public alone keeps the stored country, and a
     -- school saved before the country list, unchanged, stays valid without one.
-    if (school_name is distinct from lead.previous_school_name
+    if (upper(public.clean_name_part(school_name)) is distinct from upper(public.clean_name_part(lead.previous_school_name))
         or school_region is distinct from lead.previous_school_region)
        and nullif(btrim(coalesce(changes ->> 'previous_school_country', '')), '') is null then
         school_country := null;

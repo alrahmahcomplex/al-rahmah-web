@@ -105,4 +105,34 @@ describe("SchoolSheet", () => {
     fireEvent.change(region, { target: { value: "Outside Tanzania (Other Country)" } })
     expect(within(sheet()).getByRole("combobox", { name: "Country" })).toHaveValue("Kenya")
   })
+
+  it("for another school, saves the saved country only once staff pick it again (#511)", async () => {
+    render(<Sheet school={{ kind: "school", name: "GREEN HILLS", type: "private", region: "Outside Tanzania", country: "Kenya" }} />)
+    fireEvent.change(within(sheet()).getByRole("textbox", { name: "School name" }), { target: { value: "BLUE HILLS" } })
+    await save()
+    expect(actions.savePreviousSchool).not.toHaveBeenCalled()
+    expect(within(sheet()).getByRole("alert")).toHaveTextContent("Choose the country again for the new school.")
+
+    fireEvent.click(within(sheet()).getByRole("button", { name: "Show all countries" }))
+    const first = within(await screen.findByRole("listbox", { name: "Countries" })).getAllByRole("option")[0]
+    expect(first).toHaveTextContent("Kenya")
+    fireEvent.click(first)
+    await save()
+    expect(actions.savePreviousSchool).toHaveBeenCalledWith("lead", { kind: "school", name: "BLUE HILLS", type: "private", region: "Outside Tanzania", country: "Kenya" })
+  })
+
+  it("refuses a country typed off the list instead of keeping the old one (#511)", async () => {
+    render(<Sheet school={{ kind: "school", name: "GREEN HILLS", type: "private", region: "Outside Tanzania", country: "Kenya" }} />)
+    fireEvent.change(within(sheet()).getByRole("combobox", { name: "Country" }), { target: { value: "Uganada" } })
+    await save()
+    expect(actions.savePreviousSchool).not.toHaveBeenCalled()
+    expect(within(sheet()).getByRole("alert")).toHaveTextContent("Choose the country from the list.")
+  })
+
+  it("saves private or public alone on an old school abroad with no country, keeping its name as stored (#511)", async () => {
+    render(<Sheet school={{ kind: "school", name: "Green Hills", type: "private", region: "Outside Tanzania" }} />)
+    fireEvent.click(within(sheet()).getByRole("radio", { name: "Public" }))
+    await save()
+    expect(actions.savePreviousSchool).toHaveBeenCalledWith("lead", { kind: "school", name: "Green Hills", type: "public", region: "Outside Tanzania" })
+  })
 })

@@ -231,3 +231,36 @@ const byName = (a: string, b: string) => a.localeCompare(b, "en", { sensitivity:
 export function regionsOutsideFirst(regions: readonly string[]): string[] {
   return [...regions.filter((r) => r === OUTSIDE_TANZANIA), ...regions.filter((r) => r !== OUTSIDE_TANZANIA).sort(byName)]
 }
+
+/** The country list with the school's saved country first, so confirming it again is one tap (#511). */
+export function countriesSavedFirst(saved: string | null | undefined): string[] {
+  return saved && COUNTRY_NAMES.includes(saved) ? [saved, ...COUNTRY_NAMES.filter((c) => c !== saved)] : [...COUNTRY_NAMES]
+}
+
+/** The same previous school's name, whatever its capitals and spacing (#511). */
+export function sameSchoolName(a: string | null | undefined, b: string | null | undefined): boolean {
+  const clean = (s: string | null | undefined) => (s ?? "").trim().replace(/\s+/g, " ").toUpperCase()
+  return clean(a) === clean(b)
+}
+
+/**
+ * Where a previous school's country stands in an editor (#511, lead's rule). `missing`: a school entered, or with
+ * its name or region changed, Outside Tanzania needs a country picked. `again`: the saved country still shows for
+ * another school or a new region, and counts once staff pick it again. Private or public alone, or a school saved
+ * before the country list left as it is, needs nothing.
+ */
+export function countryNeed(input: {
+  saved: { name: string; region: string; country?: string | null } | null | undefined
+  name: string
+  region: string
+  country: string
+  picked: boolean
+  touched: boolean
+}): "ok" | "missing" | "again" {
+  const { saved, name, region, country, picked, touched } = input
+  if (region !== OUTSIDE_TANZANIA) return "ok"
+  const changed = !saved || !sameSchoolName(name, saved.name) || region !== saved.region
+  if (!country) return changed || touched ? "missing" : "ok"
+  if (changed && saved?.country && country === saved.country && !picked) return "again"
+  return "ok"
+}

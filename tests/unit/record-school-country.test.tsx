@@ -38,13 +38,46 @@ beforeEach(() => {
 })
 
 describe("PreviousSchoolRow", () => {
-  it("shows the country of a school abroad, and fills it in for another school", async () => {
+  it("for another school, shows the saved country but saves only once staff pick it again, first in the list", async () => {
     editor(KENYA)
     expect(screen.getByText("EXAMPLE SCHOOL ABROAD · Private · Kenya")).toBeInTheDocument()
     expect(screen.getByRole("combobox", { name: "Country" })).toHaveValue("Kenya")
     rename("ANOTHER SCHOOL ABROAD")
     await save()
+    expect(actions.savePreviousSchool).not.toHaveBeenCalled()
+    expect(screen.getByRole("alert")).toHaveTextContent("Choose the country again for the new school.")
+
+    await userEvent.click(screen.getByRole("button", { name: "Show all countries" }))
+    const first = (await screen.findAllByRole("option"))[0]
+    expect(first).toHaveTextContent("Kenya")
+    await userEvent.click(first)
+    await save()
     expect(actions.savePreviousSchool).toHaveBeenCalledWith("lead", { kind: "school", name: "ANOTHER SCHOOL ABROAD", type: "private", region: "Outside Tanzania", country: "Kenya" })
+  })
+
+  it("private or public alone keeps the saved country with no pick", async () => {
+    editor(KENYA)
+    fireEvent.click(screen.getByRole("radio", { name: "Public" }))
+    await save()
+    expect(actions.savePreviousSchool).toHaveBeenCalledWith("lead", { kind: "school", name: "EXAMPLE SCHOOL ABROAD", type: "public", region: "Outside Tanzania", country: "Kenya" })
+  })
+
+  it("a country typed off the list is refused, not saved as the old one", async () => {
+    editor(KENYA)
+    const country = screen.getByRole("combobox", { name: "Country" })
+    await userEvent.clear(country)
+    await userEvent.type(country, "Uganada")
+    await save()
+    expect(actions.savePreviousSchool).not.toHaveBeenCalled()
+    expect(screen.getByRole("alert")).toHaveTextContent("Choose the country from the list.")
+  })
+
+  it("the same name in other capitals is the same school: saved as the record holds it", async () => {
+    editor({ kind: "school", name: "Example School Abroad", type: "private", region: "Outside Tanzania" })
+    rename("EXAMPLE SCHOOL ABROAD")
+    fireEvent.click(screen.getByRole("radio", { name: "Public" }))
+    await save()
+    expect(actions.savePreviousSchool).toHaveBeenCalledWith("lead", { kind: "school", name: "Example School Abroad", type: "public", region: "Outside Tanzania" })
   })
 
   it("saves another country staff pick", async () => {

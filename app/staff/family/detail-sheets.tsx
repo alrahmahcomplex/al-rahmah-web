@@ -1,10 +1,10 @@
 "use client"
 
-import { useEffect, useId, useRef, useState } from "react"
+import { useEffect, useId, useMemo, useRef, useState } from "react"
 
 import { CapitalsBox, Icon as GuidedIcon, Reveal, TypeAheadField } from "@/components/guided-form"
 import { Button, ChoiceTiles, ClassPicker, FieldError, Note, Sheet, toast } from "@/components/kit"
-import { COUNTRY_NAMES, countryFlag, OUTSIDE_TANZANIA, regionsOutsideFirst } from "@/lib/places"
+import { countriesSavedFirst, countryFlag, countryNeed, OUTSIDE_TANZANIA, regionsOutsideFirst, sameSchoolName } from "@/lib/places"
 import type { LeadPreviousSchool, PreviousSchoolType } from "@/lib/services/lead-details"
 import { DAY_OR_BOARDING, type DayOrBoarding, type LeadClass } from "@/lib/services/leads"
 
@@ -14,7 +14,6 @@ import { LOST, saveStudent, useSheetSave, type StudentDetails } from "./saving"
 
 const OUTSIDE_LABEL = "Outside Tanzania (Other Country)"
 const REGION_OPTIONS = regionsOutsideFirst(REGIONS).map((r) => ({ value: r, label: r === OUTSIDE_TANZANIA ? OUTSIDE_LABEL : r }))
-const COUNTRY_OPTIONS = COUNTRY_NAMES.map((c) => ({ value: c, label: c }))
 const flag = (country: string) => <span className="gf-flag">{countryFlag(country)}</span>
 const listLabels = (one: string, many: string) => ({
   field: one[0].toUpperCase() + one.slice(1),
@@ -165,6 +164,10 @@ export function SchoolSheet({
   const [type, setType] = useState<PreviousSchoolType | null>(known?.type ?? null)
   const [region, setRegion] = useState(known?.region ?? "")
   const [country, setCountry] = useState(known?.region === OUTSIDE_TANZANIA ? (known.country ?? "") : "")
+  // Staff picked a country (it then counts for another school too), or changed the box at all (#511).
+  const [countryPicked, setCountryPicked] = useState(false)
+  const [countryTouched, setCountryTouched] = useState(false)
+  const countryOptions = useMemo(() => countriesSavedFirst(known?.country).map((c) => ({ value: c, label: c })), [known?.country])
   const { problem, setProblem, pending, run } = useSheetSave()
   const id = useId()
   const out = region === OUTSIDE_TANZANIA
@@ -177,15 +180,19 @@ export function SchoolSheet({
     if (n.length < 2) return setProblem("Type the school’s name.")
     if (!type) return setProblem("Choose private or public.")
     if (!region) return setProblem("Choose the region from the list.")
-    // Another school, or a new region, needs its country; private or public alone keeps the saved one, or none
-    // on a school saved before the country list (#511).
-    if (out && !country && (n !== known?.name || region !== known?.region)) return setProblem("Choose the country from the list.")
+    // The lead's rule (#511): another school or a new region abroad needs its country picked, the saved one again
+    // included; private or public alone keeps the saved one, or none on a school saved before the country list.
+    const need = countryNeed({ saved: known, name: n, region, country, picked: countryPicked, touched: countryTouched })
+    if (need === "missing") return setProblem("Choose the country from the list.")
+    if (need === "again") return setProblem("Choose the country again for the new school.")
+    // The same name in other capitals is the same school: the record keeps it as it is.
+    const savedName = known && sameSchoolName(n, known.name) ? known.name : n
     run(
       async () => {
         try {
           const outcome = await savePreviousSchool(leadId, {
             kind: "school",
-            name: n,
+            name: savedName,
             type,
             region,
             ...(out && country ? { country } : {}),
@@ -268,10 +275,13 @@ export function SchoolSheet({
               <TypeAheadField
                 id={`${id}-country-field`}
                 compact
-                options={COUNTRY_OPTIONS}
+                options={countryOptions}
+                pinned={known?.country}
                 value={country}
                 onValueChange={(next) => {
                   setCountry(next)
+                  setCountryTouched(true)
+                  if (next) setCountryPicked(true)
                   setProblem(null)
                 }}
                 lead={(value) => (value ? flag(value) : <GuidedIcon name="globe" small />)}

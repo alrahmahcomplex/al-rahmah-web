@@ -5,7 +5,7 @@ import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } fro
 import { GuidedHead, GuidedStack, GuidedStep, Hint, QuestionTitle, revealStep, SummaryRow, ContinuePill, useKeepFocusInView, type ProgressGroup } from "@/components/guided-form"
 import { Icon } from "@/components/icons"
 import { Button, ButtonLink, GuidedTask, Note, PageHeader, Sheet, Tag, TextLink, toast } from "@/components/kit"
-import { OUTSIDE_TANZANIA } from "@/lib/places"
+import { OUTSIDE_TANZANIA, sameSchoolName } from "@/lib/places"
 import type { LeadClass, RegistrationQuestion } from "@/lib/services/leads"
 
 import { registerInterviewFromFinish } from "./interview-actions"
@@ -536,11 +536,13 @@ function RegisterForm({ staffId, today, years, defaultYear, fees, canLink, canEn
         const prefillSchool = s.school ?? form?.prefillSchool
         const needsCountry = !!prefillSchool && !("notKnown" in prefillSchool) && prefillSchool.region === OUTSIDE_TANZANIA && !prefillSchool.country
         // An Outside Tanzania school on file from before the country list, kept as it is: valid with no country.
+        // An Outside Tanzania school on file from before the country list: kept as it is, or with only private or
+        // public changed, it is valid with no country.
         const old = form?.prefillSchool
-        const kept =
-          !!old && !!s.school && !("notKnown" in s.school) && !s.school.country &&
-          s.school.name === old.name && s.school.type === old.type && s.school.region === old.region
-        const done = schoolComplete(s.school) || kept
+        const legacy =
+          !!old && !!s.school && !("notKnown" in s.school) && s.school.region === OUTSIDE_TANZANIA && !s.school.country &&
+          (s.school.kept || sameSchoolName(s.school.name, old.name))
+        const done = schoolComplete(s.school) || legacy
         out.push({
           id: `${sid}.school`,
           group: 0,
@@ -552,7 +554,7 @@ function RegisterForm({ staffId, today, years, defaultYear, fees, canLink, canEn
               ? ""
               : "notKnown" in s.school
                 ? "Not known yet · add it later on the student’s record"
-                : `${s.school.name} · ${s.school.type === "private" ? "Private" : "Public"} · ${schoolWhere(s.school)}${kept ? " · country not known yet" : ""}`,
+                : `${s.school.name} · ${s.school.type === "private" ? "Private" : "Public"} · ${schoolWhere(s.school)}${legacy ? " · country not known yet" : ""}`,
           body: () => (
             <SchoolQuestion
               id={`rs-${sid}-school`}
@@ -563,7 +565,7 @@ function RegisterForm({ staffId, today, years, defaultYear, fees, canLink, canEn
               onNotKnown={() => {
                 // At check-in, an old school abroad with no country stays on the record as it is, the country still empty.
                 if (old) {
-                  answer(`${sid}.school`, setStudent(s.key, { school: old }))
+                  answer(`${sid}.school`, setStudent(s.key, { school: { ...old, kept: true } }))
                   return
                 }
                 answer(`${sid}.school`, setStudent(s.key, { school: { notKnown: true } }))

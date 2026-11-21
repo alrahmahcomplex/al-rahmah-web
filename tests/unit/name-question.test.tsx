@@ -118,6 +118,30 @@ describe("SchoolQuestion at check-in, round 2 of #526", () => {
     expect(onDone).toHaveBeenCalledWith({ ...OLD, country: "Uganda" })
   })
 
+  it("saves private or public alone on an old school abroad with no country", async () => {
+    const onDone = vi.fn()
+    render(<SchoolQuestion id="s" first="YUSUF" saved={OLD} needsCountry onDone={onDone} onNotKnown={() => {}} />)
+    await userEvent.click(screen.getByRole("radio", { name: "Public" }))
+    await userEvent.click(screen.getByRole("button", { name: /Continue/ }))
+    expect(onDone).toHaveBeenCalledWith({ name: "IS", type: "public", region: "Outside Tanzania" })
+  })
+
+  it("for another school, the saved country counts only once picked again", async () => {
+    const ABROAD = { name: "EXAMPLE SCHOOL ABROAD", type: "private" as const, region: "Outside Tanzania", country: "Kenya" }
+    const onDone = vi.fn()
+    render(<SchoolQuestion id="s" first="YUSUF" saved={ABROAD} onDone={onDone} onNotKnown={() => {}} />)
+    const name = screen.getByRole("textbox", { name: "School name" })
+    await userEvent.clear(name)
+    await userEvent.type(name, "another school")
+    await userEvent.click(screen.getByRole("button", { name: /Continue/ }))
+    expect(onDone).not.toHaveBeenCalled()
+    expect(screen.getByText("Choose the country again for the new school.")).toBeInTheDocument()
+    await userEvent.click(screen.getByRole("button", { name: "Show all countries" }))
+    await userEvent.click((await screen.findAllByRole("option"))[0])
+    await userEvent.click(screen.getByRole("button", { name: /Continue/ }))
+    expect(onDone).toHaveBeenCalledWith({ ...ABROAD, name: "ANOTHER SCHOOL" })
+  })
+
   it("Not known yet answers in one press, with no warning, on an old school abroad with no country", async () => {
     const onNotKnown = vi.fn()
     render(<SchoolQuestion id="s" first="YUSUF" saved={OLD} needsCountry onDone={() => {}} onNotKnown={onNotKnown} />)

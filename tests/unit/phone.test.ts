@@ -11,7 +11,18 @@ describe("readSignInLogin", () => {
     expect(readSignInLogin(typed)).toEqual(login)
   })
 
-  test.each(["", "neema", "0754 888", "0222 123 456", "@example.test", "neema@", "ne ema@example.test"])("refuses %j", (typed) => {
+  test.each([
+    "",
+    "neema",
+    "0754 888",
+    "0222 123 456",
+    "@example.test",
+    "neema@",
+    "ne ema@example.test",
+    "neema@example..test",
+    "neema@-example.test",
+    "neema@@example.test",
+  ])("refuses %j", (typed) => {
     expect(readSignInLogin(typed)).toBeNull()
   })
 })

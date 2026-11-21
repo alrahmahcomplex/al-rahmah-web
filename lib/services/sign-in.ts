@@ -38,16 +38,19 @@ export async function signIn(
   const signedIn = await passwordSignIn(supabase, login, password, captchaToken)
   if (!signedIn.ok) return signedIn
 
-  const refused = async (error: SignInError): Promise<Result<SignedInAs, SignInError>> => {
-    await supabase.auth.signOut()
+  const refused = async (error: SignInError, scope?: "local"): Promise<Result<SignedInAs, SignInError>> => {
+    await supabase.auth.signOut(scope ? { scope } : undefined)
     return { ok: false, error }
   }
 
   // Staff first: a staff record decides it, active or not. Fails closed.
   // Staff sign in with their email only (#503, owner decision 76): a mobile
   // that reaches a staff login is refused like any other login with no place.
+  // The database already keeps phones off staff logins (mobile_login_guards);
+  // if one ever got through, only this browser's new session ends, not the
+  // staff member's sessions on their other devices.
   const staff = await getStaffUser(supabase)
-  if (staff.ok) return "email" in login ? { ok: true, data: "staff" } : refused("no-account")
+  if (staff.ok) return "email" in login ? { ok: true, data: "staff" } : refused("no-account", "local")
   if (staff.error !== "not-staff") return refused(staff.error === "signed-out" ? "unavailable" : staff.error)
 
   const agent = await getAgentUser(supabase)

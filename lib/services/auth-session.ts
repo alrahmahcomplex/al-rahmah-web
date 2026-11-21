@@ -47,7 +47,11 @@ export async function passwordSignIn(
       : { phone: withoutPlus(login.phone), password, options: { captchaToken } },
   )
   if (!error) return { ok: true, data: null }
-  const failure = classifySignInError(error as { code?: string; status?: number })
+  const classified = classifySignInError(error as { code?: string; status?: number })
+  // Supabase checks a ban before the password, so "banned" for a mobile would
+  // tell anyone the number was a retired agent's. Retirement clears the
+  // mobile too; this covers a login banned any other way.
+  const failure = classified === "banned" && "phone" in login ? "invalid-credentials" : classified
   if (failure === "unavailable") console.error("Sign-in failed", error)
   return { ok: false, error: failure }
 }

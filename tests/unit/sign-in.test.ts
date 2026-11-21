@@ -76,11 +76,24 @@ describe("signing in on the one sign-in page", () => {
     expect(signOut).not.toHaveBeenCalled()
   })
 
-  it("refuses a staff login reached by mobile and ends the session: staff sign in with their email only", async () => {
+  it("refuses a staff login reached by mobile and ends only this browser's session: staff sign in with their email only", async () => {
     const { client, signOut } = fakeSupabase({ staff: STAFF, agent: AGENT })
 
     expect(await signIn(client, { phone: "+255712345123" }, "fixture-password", TOKEN)).toEqual({ ok: false, error: "no-account" })
     expect(signOut).toHaveBeenCalledTimes(1)
+    expect(signOut).toHaveBeenCalledWith({ scope: "local" })
+  })
+
+  it("answers a banned login reached by mobile with wrong details, so the number gives nothing away", async () => {
+    const banned = { message: "User is banned", code: "user_banned", status: 400 }
+    const byMobile = fakeSupabase({ signInError: banned })
+    expect(await signIn(byMobile.client, { phone: "+255712345123" }, "wrong-password", TOKEN)).toEqual({
+      ok: false,
+      error: "invalid-credentials",
+    })
+    // An email keeps today's answer.
+    const byEmail = fakeSupabase({ signInError: banned })
+    expect(await signIn(byEmail.client, { email: "neema@example.test" }, "wrong-password", TOKEN)).toEqual({ ok: false, error: "banned" })
   })
 
   it("sends an active staff member to the staff side and keeps the session", async () => {

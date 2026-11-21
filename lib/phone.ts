@@ -14,11 +14,15 @@ export function normalizeTanzanianMobile(raw: string): string | null {
 // is sent anywhere for it.
 export type SignInLogin = { email: string } | { phone: string }
 
+// The browser's own check for an email box (the HTML standard's valid email
+// address), which the sign-in field used before it took mobiles too.
+const EMAIL = /^[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*$/
+
 export function readSignInLogin(raw: string): SignInLogin | null {
   const typed = raw.trim()
   if (typed.includes("@")) {
     const email = typed.toLowerCase()
-    return /^[^@\s]+@[^@\s]+$/.test(email) && email.length <= 254 ? { email } : null
+    return EMAIL.test(email) && email.length <= 254 ? { email } : null
   }
   const phone = normalizeTanzanianMobile(typed)
   return phone ? { phone } : null

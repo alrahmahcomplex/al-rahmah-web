@@ -304,7 +304,10 @@ content_path = "./supabase/templates/recovery.html"
 # "Allow new users to sign up" stays OFF. Logins are made by the app only.
 enable_signup = true
 # If enabled, users need to confirm their phone number before signing in.
-enable_confirmations = false
+# On, so a signed-in person asking to change their phone gets a pending
+# change, which the database refuses (mobile_login_guards), instead of the
+# number being set at once. Hosted's "Confirm phone" is on too.
+enable_confirmations = true
 # Template for sending OTP to users
 template = "Your code is {{ .Code }}"
 # Controls the minimum amount of time that must pass before sending another sms otp.

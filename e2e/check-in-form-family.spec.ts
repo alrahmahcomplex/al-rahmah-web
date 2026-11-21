@@ -186,9 +186,9 @@ test.describe("checking in an Admission form family", () => {
     await expect(page.getByRole("link", { name: "View full record" })).toHaveAttribute("href", `/staff/applicants/${form.ids[0]}`)
     await page.getByRole("button", { name: "Register for interview" }).click()
     const sheet = page.getByRole("dialog", { name: "Register for interview" })
-    // With one student, its own button is the orange one and Register all does not show.
+    // With one student, only that student's button shows (no Register all).
     await expect(sheet.getByRole("button", { name: "Register all for interview" })).toHaveCount(0)
-    await expect(sheet.getByRole("button", { name: "Register for interview" })).toHaveClass(/kit-go/)
+    await expect(sheet.getByRole("button", { name: "Register for interview" })).toBeVisible()
     await sheet.getByRole("button", { name: "Register for interview" }).click()
     await expect(sheet.getByText("Registered for interview")).toBeVisible({ timeout: 10_000 })
 

@@ -29,11 +29,14 @@ export function GenderSheet({
   studentName,
   className,
   gender,
+  onSaved,
 }: {
   leadId: string
   studentName: string
   className: LeadClass
   gender: StudentGender | null
+  // After a save, for a page the save does not refresh itself (the Family page).
+  onSaved?: () => void
 }) {
   const [open, setOpen] = useState(false)
   const [picked, setPicked] = useState<StudentGender | null>(gender)
@@ -110,6 +113,7 @@ export function GenderSheet({
       if (outcome.status === "saved") {
         setOpen(false)
         toast(`Saved: ${answer}.`)
+        onSaved?.()
         return
       }
       setProblem(outcome.status === "refused" ? outcome.message : LOST)

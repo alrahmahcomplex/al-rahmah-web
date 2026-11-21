@@ -21,6 +21,7 @@ import {
   Button,
   ChipButtons,
   ChoiceTiles,
+  ClassPicker,
   DefaultTile,
   Field,
   FieldError,
@@ -28,7 +29,6 @@ import {
   Note,
   Sheet,
   Switch,
-  TabSwitch,
   Table,
   Tag,
   TextLink,
@@ -157,7 +157,6 @@ export function ClassQuestion({
   const [picked, setPicked] = useState<LeadClass | undefined>(saved)
   const [yearOpen, setYearOpen] = useState(false)
   const [sheet, setSheet] = useState(false)
-  const [level, setLevel] = useState(() => String(Math.max(1, CLASS_LEVELS.findIndex((l) => saved && l.classes.includes(saved)))))
   const pick = (cls: LeadClass) => {
     setPicked(cls)
     onPick(cls)
@@ -195,32 +194,15 @@ export function ClassQuestion({
         Choose another class
       </ContinuePill>
       <Sheet open={sheet} onOpenChange={setSheet} placement="centre" title="Choose a class" closeLabel="Close">
-        <TabSwitch
+        <ClassPicker
           label="School level"
-          value={level}
-          onChange={setLevel}
-          tabs={CLASS_LEVELS.map((l, i) => ({
-            value: String(i),
-            label: l.label,
-            panel: (
-              <div className="rs-classes" data-n={l.classes.length}>
-                {l.classes.map((cls) => (
-                  <button
-                    key={cls}
-                    type="button"
-                    className="rs-class"
-                    aria-pressed={cls === picked}
-                    onClick={() => {
-                      setSheet(false)
-                      window.setTimeout(() => pick(cls), 200)
-                    }}
-                  >
-                    {cls}
-                  </button>
-                ))}
-              </div>
-            ),
-          }))}
+          levels={CLASS_LEVELS}
+          picked={picked}
+          defaultLevel={1}
+          onPick={(cls) => {
+            setSheet(false)
+            window.setTimeout(() => pick(cls), 200)
+          }}
         />
       </Sheet>
     </div>

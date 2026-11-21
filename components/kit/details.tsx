@@ -12,10 +12,28 @@ export type KeyValueItem = {
   reason?: ReactNode
   /** Tabular figures for an Admission Number, money or a date. */
   numeric?: boolean
+  /** A TextLink at the end of the row, such as Change. Any row with one rules the list: a line between rows, the action in its own column. */
+  action?: ReactNode
 }
 
 /** Facts about one record (DESIGN.md, Lists): the key in Slate Quiet, the value in 600. */
 export function KeyValueList({ items, className }: { items: KeyValueItem[]; className?: string }) {
+  if (items.some((item) => item.action !== undefined)) {
+    return (
+      <dl className={cn("kit-kv-ruled", className)}>
+        {items.map((item, i) => (
+          <div key={i} className="kit-kv-row">
+            <dt>{item.key}</dt>
+            <dd className={item.numeric ? "kit-num" : undefined}>
+              {item.value}
+              {item.reason && <small>{item.reason}</small>}
+            </dd>
+            <span className="kit-kv-act">{item.action}</span>
+          </div>
+        ))}
+      </dl>
+    )
+  }
   return (
     <dl className={cn("kit-kv", className)}>
       {items.map((item, i) => (

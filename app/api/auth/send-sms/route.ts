@@ -14,9 +14,14 @@ import { resetSms } from "./words"
 // - 200 {} when the SMS went out, and also when it is deliberately not sent
 //   (a phone change, a login that isn't an agent's). Auth then tells the
 //   person what it tells everyone, and nothing is retried.
+// - 200 too when Beem is slow to answer: Supabase stores the number only
+//   after a 200 within its 5-second hook timeout, so a message Beem delivers
+//   late is still a number that works. Beem gets 3.5 s here.
 // - 401 for a bad signature; 400 when the send failed (budget, limits, the
 //   provider). Never 429 or 503, which Supabase retries: a retry could text
 //   the same person twice.
+
+const BEEM_TIMEOUT_MS = 3_500
 
 function failed(status: number, message: string): Response {
   return Response.json({ error: { http_code: status, message } }, { status })
@@ -45,17 +50,20 @@ export async function POST(request: Request): Promise<Response> {
   const supabase = smsClient()
   if (!supabase) return failed(400, "SMS unavailable")
 
-  const sent = await sendAuthSms(supabase, smsSender(), payload, resetSms)
+  const sent = await sendAuthSms(supabase, smsSender(process.env, { timeoutMs: BEEM_TIMEOUT_MS }), payload, resetSms)
   if (sent.ok) return Response.json({})
 
   switch (sent.error) {
     case "phone-change":
     case "not-agent":
+    case "not-active":
       console.info(`Send SMS hook: nothing sent (${sent.error})`)
       return Response.json({})
     case "invalid":
       return failed(400, "Unreadable request")
     default:
+      // Beem may still deliver it: let Supabase keep the number.
+      if (sent.error.kind === "provider-error" && sent.error.code === "timeout") return Response.json({})
       return failed(400, `SMS not sent: ${sent.error.kind}`)
   }
 }

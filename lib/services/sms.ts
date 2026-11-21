@@ -30,7 +30,7 @@ const TIMEOUT_MS = 10_000
 type BeemAnswer = { successful?: boolean; code?: number; request_id?: number | string }
 
 export function beemSender(
-  { apiKey, secretKey, senderId }: { apiKey: string; secretKey: string; senderId: string },
+  { apiKey, secretKey, senderId, timeoutMs = TIMEOUT_MS }: { apiKey: string; secretKey: string; senderId: string; timeoutMs?: number },
   fetchImpl: typeof fetch = fetch,
 ): SmsSender {
   const authorization = `Basic ${Buffer.from(`${apiKey}:${secretKey}`).toString("base64")}`
@@ -41,7 +41,7 @@ export function beemSender(
         method: "POST",
         headers: { Authorization: authorization, "Content-Type": "application/json", Accept: "application/json" },
         body: JSON.stringify({ source_addr: senderId, encoding: 0, message, recipients: [{ recipient_id: 1, dest_addr: to }] }),
-        signal: AbortSignal.timeout(TIMEOUT_MS),
+        signal: AbortSignal.timeout(timeoutMs),
       })
     } catch (error) {
       return { ok: false, error: (error as { name?: unknown } | null)?.name === "TimeoutError" ? "timeout" : "network" }
@@ -100,11 +100,13 @@ function localSupabase(url: string | undefined): boolean {
 // variables say. Anything else, a deployment that lost a key included,
 // refuses every send, so a missing key shows up as failed sends in the log
 // rather than as numbers that silently never left.
-export function smsSender(env: Record<string, string | undefined> = process.env): SmsSender {
+// timeoutMs: the Send SMS hook passes a shorter one, so it answers Supabase
+// within Supabase's own hook timeout (5 s).
+export function smsSender(env: Record<string, string | undefined> = process.env, { timeoutMs }: { timeoutMs?: number } = {}): SmsSender {
   const apiKey = env.BEEM_API_KEY
   const secretKey = env.BEEM_SECRET_KEY
   const senderId = env.BEEM_SENDER_ID
-  if (apiKey && secretKey && senderId) return beemSender({ apiKey, secretKey, senderId })
+  if (apiKey && secretKey && senderId) return beemSender({ apiKey, secretKey, senderId, timeoutMs })
   if (env.SMS_FAKE === "1" && env.VERCEL_ENV !== "production" && localSupabase(env.NEXT_PUBLIC_SUPABASE_URL)) return fakeSender()
   console.error("BEEM_API_KEY, BEEM_SECRET_KEY and BEEM_SENDER_ID must be set to send SMS (or SMS_FAKE=1 outside Production).")
   return async () => ({ ok: false, error: "beem_keys_missing" })

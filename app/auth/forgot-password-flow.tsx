@@ -33,14 +33,14 @@ const RESEND_SECONDS = 60
 // shown as an expired one.
 const NUMBER_LIFETIME_MS = 10 * 60 * 1000
 
-type Step = { at: "start" } | { at: "sms"; phone: string; sentAt: number } | { at: "password" }
+type Step = { at: "start" } | { at: "sms"; phone: string; sentAt: number } | { at: "password"; proven: string }
 
 export function ForgotPasswordFlow({ language }: { language: Language }) {
   const [step, setStep] = useState<Step>({ at: "start" })
   if (step.at === "sms") {
-    return <SmsStep language={language} phone={step.phone} sentAt={step.sentAt} onResent={(sentAt) => setStep({ ...step, sentAt })} onRight={() => setStep({ at: "password" })} />
+    return <SmsStep language={language} phone={step.phone} sentAt={step.sentAt} onResent={(sentAt) => setStep({ ...step, sentAt })} onRight={(proven) => setStep({ at: "password", proven })} />
   }
-  if (step.at === "password") return <PasswordStep language={language} />
+  if (step.at === "password") return <PasswordStep language={language} proven={step.proven} />
   return <StartStep language={language} onSms={(phone) => setStep({ at: "sms", phone, sentAt: Date.now() })} />
 }
 
@@ -127,7 +127,7 @@ function SmsStep({
   phone: string
   sentAt: number
   onResent: (sentAt: number) => void
-  onRight: () => void
+  onRight: (proven: string) => void
 }) {
   const copy = LINK_REQUEST_COPY[language]
   const sms = copy.sms
@@ -136,31 +136,39 @@ function SmsStep({
   const [note, setNote] = useState<CheckNote | null>(null)
   // The note for a wrong answer waits until the cross has landed.
   const pendingNote = useRef<CheckNote | null>(null)
+  const proven = useRef("")
+  // From the sixth digit until a wrong answer settles: no resend meanwhile.
+  const [checking, setChecking] = useState(false)
   const [resendStatus, setResendStatus] = useState<SmsRequestStatus | null>(null)
   const [resending, startResend] = useTransition()
   const left = useCountdown(sentAt)
 
   async function check(code: string): Promise<ConfirmationResult> {
     setNote(null)
+    setChecking(true)
     let answer: Awaited<ReturnType<typeof checkSmsReset>>
     try {
       answer = await checkSmsReset(phone, code)
     } catch {
       answer = { error: "unavailable" }
     }
-    if ("ok" in answer) return "ok"
+    if ("ok" in answer) {
+      proven.current = answer.proven
+      return "ok"
+    }
     pendingNote.current =
       answer.error === "wrong-number" ? (Date.now() - sentAt > NUMBER_LIFETIME_MS ? { kind: "expired" } : { kind: "wrong" }) : { kind: "message", error: answer.error }
     return "bad"
   }
   function settled(result: ConfirmationResult) {
-    if (result === "ok") return onRight()
+    if (result === "ok") return onRight(proven.current)
+    setChecking(false)
     setNote(pendingNote.current)
   }
 
   function resend(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (resending || left > 0) return
+    if (resending || checking || left > 0) return
     const token = String(new FormData(event.currentTarget).get("cf-turnstile-response") ?? "")
     if (!token) {
       setResendStatus(turnstile.current?.reveal() ? null : "check-pending")
@@ -221,7 +229,7 @@ function SmsStep({
           <TurnstileWidget ref={turnstile} action="agent-link" language={language} className="mb-3" />
           <button
             type="submit"
-            disabled={resending || left > 0}
+            disabled={resending || checking || left > 0}
             className="rounded-full px-4 py-2 text-[14px] font-semibold text-blue-600 underline-offset-2 enabled:hover:underline disabled:text-slate-400"
           >
             {left > 0 ? (
@@ -260,7 +268,7 @@ function formatSeconds(total: number): string {
   return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`
 }
 
-function PasswordStep({ language }: { language: Language }) {
+function PasswordStep({ language, proven }: { language: Language; proven: string }) {
   const copy = ACCOUNT_COPY[language]
   const reset = LINK_REQUEST_COPY[language]
   const [state, formAction, pending] = useActionState(saveSmsResetPassword, null)
@@ -279,6 +287,7 @@ function PasswordStep({ language }: { language: Language }) {
     <>
       <AuthHeading intro={reset.sms.passwordIntro}>{reset.resetHeading}</AuthHeading>
       <form action={formAction} className="flex flex-col gap-3">
+        <input type="hidden" name="proven" value={proven} />
         <PasswordField
           id="password"
           label={copy.newPassword}

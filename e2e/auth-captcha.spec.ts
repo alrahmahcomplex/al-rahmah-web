@@ -42,7 +42,7 @@ test.describe("with Supabase's CAPTCHA protection on", () => {
 
   test("a wrong password still says wrong password, and a fresh check lets the right one in", async ({ page }) => {
     await logIn(page, MANAGER.email, "not-the-password")
-    await expect(page.locator("form").getByRole("alert")).toContainText("Barua pepe au nenosiri si sahihi.")
+    await expect(page.locator("form").getByRole("alert")).toContainText("Barua pepe, namba ya simu au nenosiri si sahihi.")
 
     // The spent token was replaced, so a second try on the same page works.
     await expect(page.locator('input[name="cf-turnstile-response"]')).toHaveValue(/.+/, { timeout: 20_000 })

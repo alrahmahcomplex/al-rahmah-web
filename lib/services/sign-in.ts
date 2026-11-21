@@ -1,5 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 
+import type { SignInLogin } from "@/lib/phone"
+
 import { getAgentUser, type AgentAccessError } from "./agent-auth"
 import { passwordSignIn, type SignInFailure } from "./auth-session"
 import type { Result } from "./result"
@@ -20,18 +22,20 @@ export type SignInError =
   | Exclude<AgentAccessError, "not-agent">
   // A valid login that is neither an active staff member's nor an agent's.
   | "no-account"
+  // Neither an email nor a Tanzanian mobile was typed: nothing was sent.
+  | "invalid-login"
 
 export const HOME: Record<SignedInAs, string> = { staff: "/staff", agent: "/discount-code/students" }
 
 export async function signIn(
   supabase: SupabaseClient,
-  email: string,
+  login: SignInLogin,
   password: string,
   captchaToken: string,
 ): Promise<Result<SignedInAs, SignInError>> {
   // signInWithPassword replaces any session this browser already holds, so a
   // second login never sits on top of the first.
-  const signedIn = await passwordSignIn(supabase, email, password, captchaToken)
+  const signedIn = await passwordSignIn(supabase, login, password, captchaToken)
   if (!signedIn.ok) return signedIn
 
   const refused = async (error: SignInError): Promise<Result<SignedInAs, SignInError>> => {
@@ -40,8 +44,10 @@ export async function signIn(
   }
 
   // Staff first: a staff record decides it, active or not. Fails closed.
+  // Staff sign in with their email only (#503, owner decision 76): a mobile
+  // that reaches a staff login is refused like any other login with no place.
   const staff = await getStaffUser(supabase)
-  if (staff.ok) return { ok: true, data: "staff" }
+  if (staff.ok) return "email" in login ? { ok: true, data: "staff" } : refused("no-account")
   if (staff.error !== "not-staff") return refused(staff.error === "signed-out" ? "unavailable" : staff.error)
 
   const agent = await getAgentUser(supabase)

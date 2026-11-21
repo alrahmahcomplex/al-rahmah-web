@@ -121,7 +121,7 @@ describe("reading the staff record when PostgREST's clock lags", () => {
       staffRecords: [ISSUED_AT_FUTURE, { data: MANAGER_ROW, error: null }],
     })
 
-    expect(await withTimersRunning(signIn(client, "manager@example.test", "fixture-password", TOKEN))).toEqual({
+    expect(await withTimersRunning(signIn(client, { email: "manager@example.test" }, "fixture-password", TOKEN))).toEqual({
       ok: true,
       data: "staff",
     })
@@ -147,7 +147,7 @@ describe("reading the staff record when PostgREST's clock lags", () => {
     vi.useFakeTimers()
     const { client, signOut, rpc } = signedOut({ staffRecords: [ISSUED_AT_FUTURE, ISSUED_AT_FUTURE] })
 
-    expect(await withTimersRunning(signIn(client, "manager@example.test", "fixture-password", TOKEN))).toEqual({
+    expect(await withTimersRunning(signIn(client, { email: "manager@example.test" }, "fixture-password", TOKEN))).toEqual({
       ok: false,
       error: "unavailable",
     })

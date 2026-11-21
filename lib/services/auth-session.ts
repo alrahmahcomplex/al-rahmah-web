@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 
 import { MINIMUM_PASSWORD_LENGTH } from "@/lib/password"
+import { withoutPlus, type SignInLogin } from "@/lib/phone"
 
 import { readWithClockRetry } from "./clock-retry"
 import type { Result } from "./result"
@@ -30,14 +31,21 @@ export function classifySignInError(error: { code?: string; status?: number }): 
 // password sign-in. It checks the token itself, so nothing here checks it
 // first: Cloudflare accepts a token only once. Without a token, nothing is
 // sent.
+//
+// The login is an email, or since #503 a mobile, which Supabase Auth keeps
+// as 255 and nine digits, without the +.
 export async function passwordSignIn(
   supabase: SupabaseClient,
-  email: string,
+  login: SignInLogin,
   password: string,
   captchaToken: string,
 ): Promise<Result<null, SignInFailure>> {
   if (!captchaToken) return { ok: false, error: "check-pending" }
-  const { error } = await supabase.auth.signInWithPassword({ email, password, options: { captchaToken } })
+  const { error } = await supabase.auth.signInWithPassword(
+    "email" in login
+      ? { email: login.email, password, options: { captchaToken } }
+      : { phone: withoutPlus(login.phone), password, options: { captchaToken } },
+  )
   if (!error) return { ok: true, data: null }
   const failure = classifySignInError(error as { code?: string; status?: number })
   if (failure === "unavailable") console.error("Sign-in failed", error)

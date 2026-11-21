@@ -23,7 +23,7 @@ const TOKEN = "XXXX.DUMMY.TOKEN.XXXX"
 
 function posted(email: string, password = "fixture-password", token = TOKEN) {
   const data = new FormData()
-  data.set("email", email)
+  data.set("login", email)
   data.set("password", password)
   if (token) data.set("cf-turnstile-response", token)
   return data
@@ -42,8 +42,23 @@ describe("the one sign-in form", () => {
     expect(stubs.limit).toHaveBeenCalledWith(
       expect.objectContaining({ key: "sign-in", subject: "neema@example.test" }),
     )
-    expect(stubs.signIn).toHaveBeenCalledWith({ session: "client" }, "neema@example.test", "fixture-password", TOKEN)
+    expect(stubs.signIn).toHaveBeenCalledWith({ session: "client" }, { email: "neema@example.test" }, "fixture-password", TOKEN)
     expect(stubs.redirect).toHaveBeenCalledWith("/discount-code/students")
+  })
+
+  it("takes a mobile in any typed form and counts it as the stored number", async () => {
+    await expect(signIn(null, posted(" 0712 345 123 "))).rejects.toThrow("NEXT_REDIRECT")
+
+    expect(stubs.limit).toHaveBeenCalledWith(expect.objectContaining({ key: "sign-in", subject: "+255712345123" }))
+    expect(stubs.signIn).toHaveBeenCalledWith({ session: "client" }, { phone: "+255712345123" }, "fixture-password", TOKEN)
+  })
+
+  it("answers neither-an-email-nor-a-mobile at once, counting nothing and sending nothing", async () => {
+    for (const typed of ["0754 888", "0222 123 456", "neema", "@example.test"]) {
+      expect(await signIn(null, posted(typed))).toEqual({ error: "invalid-login" })
+    }
+    expect(stubs.limit).not.toHaveBeenCalled()
+    expect(stubs.signIn).not.toHaveBeenCalled()
   })
 
   it("answers rate-limited, not wrong password, and never tries the password, when the limit is reached", async () => {

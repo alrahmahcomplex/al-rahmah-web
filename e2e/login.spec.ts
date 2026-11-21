@@ -9,14 +9,14 @@ test.describe("the one sign-in page", () => {
     await page.goto("/auth")
 
     await expect(page.getByRole("heading", { name: "Karibu!" })).toBeVisible()
-    await expect(page.getByLabel("Barua pepe")).toHaveAttribute("placeholder", "Barua pepe")
+    await expect(page.getByLabel("Barua pepe au namba ya simu")).toHaveAttribute("placeholder", "Barua pepe au namba ya simu")
     await expect(page.getByLabel("Nenosiri", { exact: true })).toHaveAttribute("placeholder", "Nenosiri")
     await expect(page.getByText(/Discount code holders/)).toHaveCount(0)
     await expect(page.getByRole("link", { name: "Umesahau nenosiri?" })).toHaveAttribute("href", "/auth/forgot-password")
 
     await page.getByRole("button", { name: "English" }).click()
     await expect(page.getByRole("heading", { name: "Welcome!" })).toBeVisible()
-    await expect(page.getByLabel("Email")).toHaveAttribute("placeholder", "Email")
+    await expect(page.getByLabel("Email or mobile number")).toHaveAttribute("placeholder", "Email or mobile number")
   })
 
   test("the password toggle shows and hides the password", async ({ page }) => {
@@ -77,7 +77,7 @@ test.describe("signing in", () => {
     await signIn(page, MANAGER.email, "not-the-password")
 
     const alert = page.locator("form").getByRole("alert")
-    await expect(alert).toContainText("Barua pepe au nenosiri si sahihi.")
+    await expect(alert).toContainText("Barua pepe, namba ya simu au nenosiri si sahihi.")
     // The email stays; the wrong password is cleared, ready to type again (#273).
     await expect(page.getByLabel("Barua pepe")).toHaveValue(MANAGER.email)
     await expect(page.getByLabel("Nenosiri", { exact: true })).toHaveValue("")

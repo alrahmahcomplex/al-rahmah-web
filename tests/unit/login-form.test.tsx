@@ -30,7 +30,7 @@ beforeEach(() => {
 
 async function submit(email: string, password: string, button: string) {
   for (const [label, value] of [
-    [/^(Email|Barua pepe)$/, email],
+    [/^(Email or mobile number|Barua pepe au namba ya simu)$/, email],
     [/^(Password|Nenosiri)$/, password],
   ] as const) {
     await userEvent.clear(screen.getByLabelText(label))
@@ -41,8 +41,8 @@ async function submit(email: string, password: string, button: string) {
 
 describe("the one sign-in form", () => {
   it.each([
-    ["sw", "Barua pepe", "Nenosiri", "Umesahau nenosiri?"],
-    ["en", "Email", "Password", "Forgot your password?"],
+    ["sw", "Barua pepe au namba ya simu", "Nenosiri", "Umesahau nenosiri?"],
+    ["en", "Email or mobile number", "Password", "Forgot your password?"],
   ] as const)("in %s, names each box by a label and shows it as the placeholder", (language, email, password, forgot) => {
     render(<LoginForm language={language} notice={null} />)
 
@@ -55,12 +55,12 @@ describe("the one sign-in form", () => {
   it("after a wrong password, puts the reset link under the warning, once", async () => {
     render(<LoginForm language="en" notice={null} />)
 
-    await userEvent.type(screen.getByLabelText("Email"), "someone@example.test")
+    await userEvent.type(screen.getByLabelText("Email or mobile number"), "someone@example.test")
     await userEvent.type(screen.getByLabelText("Password"), "wrong-password")
     await userEvent.click(screen.getByRole("button", { name: "Log In" }))
 
     const alert = await screen.findByRole("alert")
-    expect(alert).toHaveTextContent("Wrong email or password.")
+    expect(alert).toHaveTextContent("Wrong email, mobile number or password.")
     expect(alert.querySelector('a[href="/auth/forgot-password"]')).toHaveTextContent("Forgot your password?")
     expect(screen.getAllByRole("link", { name: "Forgot your password?" })).toHaveLength(1)
   })
@@ -69,7 +69,7 @@ describe("the one sign-in form", () => {
     stubs.signIn.mockResolvedValue({ error: "switched-off" })
     render(<LoginForm language="sw" notice={null} />)
 
-    await userEvent.type(screen.getByLabelText("Barua pepe"), "neema@example.test")
+    await userEvent.type(screen.getByLabelText("Barua pepe au namba ya simu"), "neema@example.test")
     await userEvent.type(screen.getByLabelText("Nenosiri"), "a-password")
     await userEvent.click(screen.getByRole("button", { name: "Ingia" }))
 
@@ -118,7 +118,7 @@ describe("the one sign-in form", () => {
     await submit("neema@example.test", "a-password", "Ingia")
 
     await vi.waitFor(() => expect(stubs.reveal).toHaveBeenCalled())
-    expect(screen.getByLabelText("Barua pepe")).toHaveValue("neema@example.test")
+    expect(screen.getByLabelText("Barua pepe au namba ya simu")).toHaveValue("neema@example.test")
     expect(screen.getByLabelText("Nenosiri")).toHaveValue("a-password")
   })
 
@@ -128,7 +128,7 @@ describe("the one sign-in form", () => {
     await submit("someone@example.test", "wrong-password", "Log In")
 
     await screen.findByRole("alert")
-    expect(screen.getByLabelText("Email")).toHaveValue("someone@example.test")
+    expect(screen.getByLabelText("Email or mobile number")).toHaveValue("someone@example.test")
     expect(screen.getByLabelText("Password")).toHaveValue("")
     expect(screen.getByLabelText("Password")).toHaveFocus()
   })
@@ -158,7 +158,7 @@ describe("the one sign-in form", () => {
 
     await submit("someone@example.test", "wrong-password", "Log In")
     await screen.findByRole("alert")
-    await userEvent.click(screen.getByLabelText("Email"))
+    await userEvent.click(screen.getByLabelText("Email or mobile number"))
     await submit("someone@example.test", "wrong-again", "Log In")
 
     await vi.waitFor(() => expect(stubs.signIn).toHaveBeenCalledTimes(2))
@@ -188,7 +188,7 @@ describe("the one sign-in form", () => {
     await submit("someone@example.test", "a-password", "Log In")
 
     await screen.findByRole("alert")
-    expect(screen.getByLabelText("Email")).toHaveValue("someone@example.test")
+    expect(screen.getByLabelText("Email or mobile number")).toHaveValue("someone@example.test")
     expect(screen.getByLabelText("Password")).toHaveValue("a-password")
   })
 
@@ -213,7 +213,7 @@ describe("the one sign-in form", () => {
     const alert = await screen.findByRole("alert")
     expect(alert).toHaveTextContent("The security check didn't finish. Try again.")
     expect(alert).not.toHaveTextContent("captcha_failed")
-    expect(alert).not.toHaveTextContent("Wrong email or password.")
+    expect(alert).not.toHaveTextContent("Wrong email, mobile number or password.")
     expect(stubs.reset).toHaveBeenCalledTimes(1)
   })
 

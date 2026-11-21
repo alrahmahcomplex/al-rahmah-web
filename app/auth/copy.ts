@@ -19,7 +19,8 @@ export type LoginMessage = { text: string; code?: string; forgot?: boolean }
 type Copy = {
   title: string
   welcome: string
-  email: string
+  // Since #503 the field takes an email or a mobile number.
+  login: string
   password: string
   showPassword: string
   hidePassword: string
@@ -44,7 +45,7 @@ export const LOGIN_COPY: Record<Language, Copy> = {
   sw: {
     title: "Ingia",
     welcome: "Karibu!",
-    email: "Barua pepe",
+    login: "Barua pepe au namba ya simu",
     password: "Nenosiri",
     showPassword: "Onyesha nenosiri",
     hidePassword: "Ficha nenosiri",
@@ -53,7 +54,8 @@ export const LOGIN_COPY: Record<Language, Copy> = {
     forgot: "Umesahau nenosiri?",
     studentsNote: "Ingia uone wanafunzi uliowaleta.",
     messages: {
-      "invalid-credentials": { text: "Barua pepe au nenosiri si sahihi.", forgot: true },
+      "invalid-credentials": { text: "Barua pepe, namba ya simu au nenosiri si sahihi.", forgot: true },
+      "invalid-login": { text: "Andika barua pepe, au namba ya simu kama 0712 345 678.", code: "invalid_login" },
       "rate-limited": { text: "Majaribio ni mengi mno. Subiri dakika chache, kisha ujaribu tena.", code: "rate_limited" },
       banned: { text: OFF_SW, code: "banned" },
       "check-pending": { text: "Subiri ukaguzi wa usalama ukamilike, kisha uingie." },
@@ -71,7 +73,7 @@ export const LOGIN_COPY: Record<Language, Copy> = {
   en: {
     title: "Sign in",
     welcome: "Welcome!",
-    email: "Email",
+    login: "Email or mobile number",
     password: "Password",
     showPassword: "Show password",
     hidePassword: "Hide password",
@@ -80,7 +82,8 @@ export const LOGIN_COPY: Record<Language, Copy> = {
     forgot: "Forgot your password?",
     studentsNote: "Sign in to see the students you referred.",
     messages: {
-      "invalid-credentials": { text: "Wrong email or password.", forgot: true },
+      "invalid-credentials": { text: "Wrong email, mobile number or password.", forgot: true },
+      "invalid-login": { text: "Type an email, or a mobile number like 0712 345 678.", code: "invalid_login" },
       "rate-limited": { text: "Too many sign-in attempts. Wait a few minutes, then try again.", code: "rate_limited" },
       banned: { text: OFF_EN, code: "banned" },
       "check-pending": { text: "Wait a moment for the security check to finish, then sign in." },

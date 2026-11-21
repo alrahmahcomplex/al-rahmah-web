@@ -9,6 +9,21 @@ export function normalizeTanzanianMobile(raw: string): string | null {
   return match ? `+255${match[1]}` : null
 }
 
+// What someone typed in "Email or mobile number" (#503): an email when it has
+// an @, otherwise a Tanzanian mobile. Anything else is neither, and nothing
+// is sent anywhere for it.
+export type SignInLogin = { email: string } | { phone: string }
+
+export function readSignInLogin(raw: string): SignInLogin | null {
+  const typed = raw.trim()
+  if (typed.includes("@")) {
+    const email = typed.toLowerCase()
+    return /^[^@\s]+@[^@\s]+$/.test(email) && email.length <= 254 ? { email } : null
+  }
+  const phone = normalizeTanzanianMobile(typed)
+  return phone ? { phone } : null
+}
+
 // Supabase Auth and Beem write a phone without the +: 255 and nine digits.
 export function withoutPlus(mobile: string): string {
   return mobile.startsWith("+") ? mobile.slice(1) : mobile

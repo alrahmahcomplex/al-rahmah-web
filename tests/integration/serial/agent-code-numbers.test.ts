@@ -206,7 +206,8 @@ describe("the Discount code format", () => {
     await atNumber(999, async (sql) => {
       await onlyTestAgents(sql)
       await plant(sql, codesFor("QVW", [1, 998]))
-      expect(await signUp(sql, "XAVIER YUSUF ZUBERI")).toMatchObject({ outcome: "registered", code: "XYZ-999" })
+      // Not XYZ: a seeded lead carries XYZ-999.
+      expect(await create(sql, "ZAWADI XENIA QUINN")).toBe("ZXQ-999")
     })
   })
 

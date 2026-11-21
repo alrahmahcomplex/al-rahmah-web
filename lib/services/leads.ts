@@ -1,5 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 
+import type { LastNameFrom } from "@/lib/names"
+
 import type { Result } from "./result"
 import type { SiblingBasis } from "./sibling-groups"
 
@@ -192,6 +194,8 @@ export type RegistrationStudent = {
   fatherFirst: string
   fatherMiddle: string
   fatherLast: string
+  // Which of the father's names is the student's last name (#511). Left out, his last name.
+  lastNameFrom?: LastNameFrom
   className: LeadClass
   enrollmentYear: number
   dayOrBoarding: DayOrBoarding
@@ -203,8 +207,8 @@ export type RegistrationStudent = {
     | { person: number; father: true }
     | { person: number; relationship: Relationship; relationshipDescription?: string }
   broughtBy?: { name: string; phone?: string; relationship?: string }
-  // Asked from STD 2 up.
-  previousSchool?: { name: string; type: "private" | "public"; region: string } | { notKnown: true }
+  // Asked from STD 2 up. `country` is required for a school Outside Tanzania, and refused for any other (#511).
+  previousSchool?: { name: string; type: "private" | "public"; region: string; country?: string } | { notKnown: true }
   siblingOf?: { student: number } | { leadId: string }
   // The answer to a `same-father` question: these fathers' names match, but
   // the children are not siblings.
@@ -277,6 +281,8 @@ export type RegistrationInvalidField =
   | "previous_school_name"
   | "previous_school_type"
   | "previous_school_region"
+  | "previous_school_country"
+  | "last_name_from"
   | "sibling_of"
   | "sibling_father_full_name"
   | "answer"
@@ -371,6 +377,7 @@ function studentPayload(student: RegistrationStudent) {
     father_first: student.fatherFirst,
     father_middle: student.fatherMiddle,
     father_last: student.fatherLast,
+    ...(student.lastNameFrom ? { last_name_from: student.lastNameFrom } : {}),
     class_name: student.className,
     enrollment_year: student.enrollmentYear,
     day_or_boarding: student.dayOrBoarding,
@@ -390,7 +397,7 @@ function studentPayload(student: RegistrationStudent) {
       ? null
       : "notKnown" in previousSchool
         ? { not_known: true }
-        : { name: previousSchool.name, type: previousSchool.type, region: previousSchool.region },
+        : { name: previousSchool.name, type: previousSchool.type, region: previousSchool.region, ...(previousSchool.country ? { country: previousSchool.country } : {}) },
     sibling_of: !siblingOf ? null : "student" in siblingOf ? { student: siblingOf.student } : { lead_id: siblingOf.leadId },
     not_a_sibling: student.notASibling ?? false,
     sibling_father_full_name: student.siblingFatherFullName ?? null,
@@ -498,6 +505,7 @@ export type CheckInStudent = Pick<
   | "fatherFirst"
   | "fatherMiddle"
   | "fatherLast"
+  | "lastNameFrom"
   | "custodian"
   | "broughtBy"
   | "gender"
@@ -973,7 +981,8 @@ export async function countLeadsByYear(
 
 // The student's details a correction may change. A field left out keeps its
 // value.
-export type LeadDetailsChanges = Partial<NewStudent>
+// `lastNameFrom` is sent with the name it builds (#511); null clears it.
+export type LeadDetailsChanges = Partial<NewStudent> & { lastNameFrom?: LastNameFrom | null }
 
 // The parent/guardian details a correction may change. A field left out keeps
 // its value; an empty WhatsApp number means the same as the phone.
@@ -1059,6 +1068,7 @@ export async function updateLeadDetails(
         enrollment_year: changes.enrollmentYear,
         day_or_boarding: changes.dayOrBoarding,
         gender: changes.gender,
+        last_name_from: changes.lastNameFrom,
       }),
     }),
     "correct a lead's details",

@@ -38,6 +38,11 @@ export type ProgressBarProps = {
   /** Start over replaces Back on the first question. */
   canReset?: boolean
   onReset?: () => void
+  /**
+   * From the second question on, Back keeps the left slot and Start over
+   * shows after the section chip (#511, prototype v50). Needs `canReset`.
+   */
+  endReset?: boolean
   labels: ProgressBarLabels
   /** The screen-reader progress line, e.g. "Msimamizi: hatua 2 kati ya 3". Read politely when it changes. */
   status: string
@@ -144,14 +149,16 @@ function Group({ group, index, active, who, cheerDelay }: { group: ProgressGroup
 
 /**
  * The sticky row above the guided form: Back (or Start over on the first
- * question), the grouped step chips, and the outlined section chip.
+ * question), the grouped step chips, the outlined section chip and, with
+ * `endReset`, Start over after it from the second question on.
  * Maps to `.bar-row`, `.navslot`, `.prog`, `.pg`, `.gn`, `.secname` in c2.html.
  */
-export function ProgressBar({ groups, activeGroup, whoLabel, canBack, onBack, canReset = false, onReset, labels, status, kitIcons = false, cheerDelay = 820, className }: ProgressBarProps) {
+export function ProgressBar({ groups, activeGroup, whoLabel, canBack, onBack, canReset = false, onReset, endReset = false, labels, status, kitIcons = false, cheerDelay = 820, className }: ProgressBarProps) {
   const [spin, setSpin] = useState(0)
   const host = kitIcons ? "" : undefined
   const glyph = (name: "back" | "reset") => (kitIcons ? <KitIcon name={name} /> : <Icon name={name} />)
   const showReset = canReset && !canBack
+  const showEnd = endReset && canReset && canBack
   const section = groups[Math.min(Math.max(activeGroup, 0), groups.length - 1)]?.label
 
   useEffect(() => {
@@ -201,6 +208,24 @@ export function ProgressBar({ groups, activeGroup, whoLabel, canBack, onBack, ca
         <span className="gf-secname" aria-hidden="true">
           {section}
         </span>
+      )}
+      {endReset && (
+        <button
+          type="button"
+          className={cn("gf-round gf-reset gf-reset-end", !showEnd && "gf-off", spin > 0 && "gf-spin")}
+          aria-label={labels.reset}
+          title={labels.reset}
+          tabIndex={showEnd ? 0 : -1}
+          aria-hidden={showEnd ? undefined : true}
+          data-icon-host={host}
+          onClick={() => {
+            if (!showEnd) return
+            setSpin((n) => n + 1)
+            onReset?.()
+          }}
+        >
+          {glyph("reset")}
+        </button>
       )}
       <span className="sr-only" aria-live="polite">
         {status}

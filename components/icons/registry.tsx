@@ -225,6 +225,12 @@ export const globe = icon({
   ),
 })
 
+// Version 53: the region field's map pin (#511). The pin is the main object, its centre the second.
+export const pin = icon({
+  outline: <path d="M20 10c0 5-8 12-8 12s-8-7-8-12a8 8 0 0 1 16 0z" />,
+  detail: <circle cx="12" cy="10" r="3" />,
+})
+
 export const trash = icon({
   outline: (
     <>
@@ -300,6 +306,7 @@ export const ICONS = {
   upload,
   up,
   pen,
+  pin,
 } satisfies Record<string, IconDef>
 
 export type IconName = keyof typeof ICONS

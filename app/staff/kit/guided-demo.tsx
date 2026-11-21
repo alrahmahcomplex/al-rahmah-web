@@ -172,7 +172,9 @@ export function GuidedDemo() {
         activeGroup,
         canBack: at > 0,
         onBack: () => at > 0 && setEdit(visible[at - 1].id),
-        canReset: at === 0 && openId === steps[0].id,
+        // From the second question on, Start over shows after the section chip (#511).
+        canReset: true,
+        endReset: true,
         onReset: () => later(restart, RESET_MS),
         labels: { back: "Back", reset: "Start over" },
         status: g ? `${g.label}: ${g.done} of ${g.steps}` : "",

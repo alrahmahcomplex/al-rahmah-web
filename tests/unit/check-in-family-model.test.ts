@@ -32,6 +32,7 @@ const child = (more: Partial<FormChild> = {}): FormChild => ({
   admissionNumber: "ADMSN-90005",
   studentName: "YUSUF ALI HASSAN",
   fatherFullName: "ALI OMARI HASSAN",
+  lastNameFrom: null,
   gender: "Boy",
   className: "STD 6",
   enrollmentYear: 2027,
@@ -65,7 +66,7 @@ const family = (children: FormChild[]): AdmissionFormFamily => ({
 describe("the name parts check-in starts from", () => {
   it("are complete when the father has three names and they make the stored name", () => {
     expect(formName("YUSUF ALI HASSAN", "ALI OMARI HASSAN")).toEqual({
-      name: { firstName: "YUSUF", fatherFirst: "ALI", fatherMiddle: "OMARI", fatherLast: "HASSAN" },
+      name: { firstName: "YUSUF", fatherFirst: "ALI", fatherMiddle: "OMARI", fatherLast: "HASSAN", lastNameFrom: "father_last" },
       complete: true,
     })
   })
@@ -84,7 +85,16 @@ describe("the name parts check-in starts from", () => {
   })
 
   it("prefill a two-word father with his first and last names", () => {
-    expect(formName("YUSUF ALI HASSAN", "Ali  Hassan").name).toEqual({ firstName: "YUSUF", fatherFirst: "ALI", fatherMiddle: "", fatherLast: "HASSAN" })
+    expect(formName("YUSUF ALI HASSAN", "Ali  Hassan").name).toEqual({ firstName: "YUSUF", fatherFirst: "ALI", fatherMiddle: "", fatherLast: "HASSAN", lastNameFrom: "father_last" })
+  })
+
+  it("end the student's name with the father's middle name when the lead holds that choice (#511)", () => {
+    expect(formName("YUSUF ALI OMARI", "ALI OMARI HASSAN", "father_middle")).toEqual({
+      name: { firstName: "YUSUF", fatherFirst: "ALI", fatherMiddle: "OMARI", fatherLast: "HASSAN", lastNameFrom: "father_middle" },
+      complete: true,
+    })
+    expect(formName("YUSUF ALI OMARI", "ALI OMARI HASSAN").complete).toBe(false)
+    expect(formName("YUSUF ALI HASSAN", "ALI OMARI HASSAN", "father_middle").complete).toBe(false)
   })
 
   it("split a person's stored name into the three boxes", () => {
@@ -108,7 +118,7 @@ describe("the answers check-in starts from", () => {
   it("fill in what the form gave and leave the rest to ask", () => {
     expect(answers.students[0]).toEqual({
       key: 1,
-      name: { firstName: "YUSUF", fatherFirst: "ALI", fatherMiddle: "OMARI", fatherLast: "HASSAN" },
+      name: { firstName: "YUSUF", fatherFirst: "ALI", fatherMiddle: "OMARI", fatherLast: "HASSAN", lastNameFrom: "father_last" },
       gender: "Boy",
       className: "STD 6",
       year: 2027,

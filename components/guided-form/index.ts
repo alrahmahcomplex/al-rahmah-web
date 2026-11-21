@@ -27,12 +27,15 @@ export {
 export { Icon, type IconName } from "./icons"
 export {
   AgentCodeBox,
+  CapitalsBox,
   CodeBox,
   FatherNameBoxes,
   FullNameBox,
+  LastNameChoice,
   PersonNameBoxes,
   StudentNameBoxes,
   type FatherName,
+  type LastNameLabels,
   type NameLabels,
   type PersonName,
   type StudentName,
@@ -42,3 +45,6 @@ export { AGENT_CODE_PATTERN, cleanName, formatAgentCode, formatCode, hasTwoNames
 export { buzz, foldMs, prefersReducedMotion } from "./motion"
 export { ProgressBar, type ProgressBarLabels, type ProgressBarProps, type ProgressGroup } from "./progress-bar"
 export { GuidedHead, GuidedNote, GuidedStack, GuidedStep, revealStep, SummaryRow, type GuidedStepProps, type StepState } from "./stack"
+export { keepInView, useKeepFocusInView } from "./keep-in-view"
+export { TypeAheadField, type TypeAheadFieldProps, type TypeAheadLabels } from "./type-ahead-field"
+export { completion, exactly, restOf, search, startsWith, takesCompletion, type TypeAheadOption } from "./type-ahead"

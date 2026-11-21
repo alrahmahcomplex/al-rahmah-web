@@ -728,3 +728,20 @@ test("a form with nothing typed is empty", () => {
   expect(isEmpty(form([{ key: 1 }]))).toBe(true)
   expect(isEmpty(form([{ key: 1, board: "Day" }]))).toBe(false)
 })
+
+describe("the last-name choice and the school's country (#511)", () => {
+  test("the student's name ends with the father's middle name when that is picked, and the save says so", () => {
+    const s = student(1, "Neema", "Juma Salim Mrisho", { school: { name: "EXAMPLE SCHOOL ABROAD", type: "private", region: "Outside Tanzania", country: "Kenya" } })
+    const middle = { ...s, name: { ...s.name!, lastNameFrom: "father_middle" as const } }
+    const [sent] = payload(form([middle], { custodians: { 1: { kind: "father", phone: "0712345678", whatsapp: "" } } }), 2027).students
+    expect(sent).toMatchObject({ lastNameFrom: "father_middle", previousSchool: { region: "Outside Tanzania", country: "Kenya" } })
+    const [plain] = payload(form([s], { custodians: { 1: { kind: "father", phone: "0712345678", whatsapp: "" } } }), 2027).students
+    expect(plain.lastNameFrom).toBe("father_last")
+  })
+
+  test("a changed last-name choice keeps the father's name, so no sibling answer is asked again", () => {
+    const a = form([student(1, "Neema", "Juma Salim Mrisho"), student(2, "Hamisi", "Juma Salim Mrisho", { sibling: { kind: "match", of: 1, seen: [1] } })])
+    const next = withName(a, 2, { ...name("Hamisi", "Juma Salim Mrisho"), lastNameFrom: "father_middle" })
+    expect(next.students[1].sibling).toEqual({ kind: "match", of: 1, seen: [1] })
+  })
+})

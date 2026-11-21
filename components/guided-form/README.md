@@ -47,6 +47,7 @@ The language control posts to `setLanguage`, so the page re-renders through the 
 - A group whose `done` reaches `steps` merges, gets the green tick and, 820 ms later, the number cheers (pop, shake, bubbles, deep orange). A group already full on first paint shows the orange number without the cheer.
 - `activeGroup` past the last group (the send step) keeps the last label in the chip. Hide the whole bar on the success screen.
 - `status` goes to an `aria-live="polite"` line; build it with the page's words.
+- `endReset`: from the second question on, Back keeps the left slot and Start over shows after the section chip (#511, v50). Pass `canReset` with it.
 - `kitIcons` (staff pages, set by the kit's `GuidedTask`) draws Back and Start over with the set 1 icons as icon hosts. The public forms leave it off.
 
 Prototype CSS: `.bar-row`, `.navslot`, `.backbtn`, `.resetbtn`, `.prog`, `.pg`, `.who`, `.gn`, `.chip`, `.liquid`, `.ok`, `.secname`.
@@ -88,7 +89,7 @@ Prototype CSS: `.stack`, `.item`, `.step`, `.sum-w`, `.fold`, `.settled`, `.head
 | `Hint` | Grey help line | `.hint` |
 | `FieldInput` | Pill input, 52px, centred text; `invalid`, `icon`, `alignStart` | `.input` |
 | `FieldError` | Red line that folds open under a field | `.err` |
-| `ChoiceTiles` | Radios; `layout="rows"` (Day/Boarding, tick on the right), `"two"` (year), `"four"` (relationship) | `.choice`, `.seg` |
+| `ChoiceTiles` | Radios; `layout="rows"` (Day/Boarding, tick on the right), `"two"` (year), `"four"` (relationship), `"pair"` (two big tiles with a line under each label: the custodian's The father / Someone else, #511) | `.choice`, `.seg`, `.cpk` |
 | `DefaultTile` | One-tap answer with tagline, e.g. FORM 1 with "Wazazi wengi huchagua" | `.pop` |
 | `ContinuePill` | Orange "Endelea ›" (`variant="go"`, chevron always added) or outlined (`variant="ghost"`, `icon="plus"` for "Ndiyo, ongeza mwanafunzi"); `pending` shows a spinner | `.btn-go`, `.btn-ghost` |
 | `NoticeBox` | `tone` good, wait, bad or info; optional `role` | `.notice` |
@@ -102,6 +103,8 @@ Prototype CSS: `.stack`, `.item`, `.step`, `.sum-w`, `.fold`, `.settled`, `.head
 | `Icon` | The prototype's line icons by name | `icon()` in core.js |
 | `SwitchRow` | A whole-row switch with a small line under its label ("The father is the custodian", with his three names): a real checkbox, `role="switch"`. Tinted Whisper with an indigo line while on. The kit's `Switch` needs kit.css, so public pages use this one | `.swt.swrow` |
 | `Reveal` | A part that folds open and shut (`open`), `inert` while shut, such as the custodian's name boxes under the switch | `.rv` |
+| `TypeAheadField` | One option from a list (#511, v53): a faint match after the typed letters, taken with → at the end, Tab or Enter (Space when one fits); the arrow opens the list below the box, over the page, with a search box. `pinned` draws the first option with a line under it; `lead` and `optionLead` draw a pin or a flag. `value` is empty until a whole option is typed or picked | `acField`, `.acw`, `.acp` |
+| `useKeepFocusInView` | Mount once on a form page: on a phone, the box that gets the caret (Space or Enter in the name boxes) is brought above the keyboard (#511, v54). `keepInView(el)` does it once | `keepInView` |
 
 **Focus ring.** Every part here draws 3px of `--gf-focus-ring` (indigo at 47%), 2px out: 3.16:1 on Paper and 3.06:1 on Lavender Whisper. The choices, round buttons and switch get it from `guided-form.css`; the pills and links from `ring-(color:--gf-focus-ring)`.
 
@@ -126,6 +129,8 @@ const LABELS = { first: "First name", middle: "Middle name", last: "Last name" }
 | `FatherNameBoxes` | First and Middle side by side, Last across | `fatherFirst`, `fatherMiddle`, `fatherLast` |
 | `StudentNameBoxes` | The student's name across, then the "Father's name" group in the father layout | `firstName`, `fatherFirst`, `fatherMiddle`, `fatherLast` |
 | `FullNameBox` | One box, spaces kept ("Who brought the students") | its `name` |
+| `CapitalsBox` | One box in capitals, spaces kept: a previous school's name (#511, v52) | its `name` |
+| `LastNameChoice` | Which of the father's names is the student's last name (#511, v50): two tiles showing the name each gives, folding open once his middle and last names are typed, his last name picked to start with. Put it under `StudentNameBoxes` | its `name` (`father_last` or `father_middle`) |
 | `CodeBox` | The Admission form's box, for an agent's code or a Promo code: capitals, no spaces; three letters followed by a digit get the hyphen between them (AAN132 → AAN-132) and a hyphen typed again there is dropped; anything else, such as a Promo code (SAVE10, KARIBU2026, AS-135, $AVE), stays as typed; at most 20 characters | its `name` |
 | `AgentCodeBox` | An agent's code only, ABC-123: three letters, the hyphen by itself, three digits; anything else is dropped and a repeated hyphen ignored | its `name` |
 | `CodePicker` | `CodeBox` with an arrow that opens the codes to pick from under a search box, Promo codes first, then agent codes, each A to Z, and a faint completion of the first listed code the typed letters begin (Tab or → takes it). The list opens in the page's flow, pushing what follows down. Register Students reads the list from `usable_discount_codes` | nothing; the caller keeps `value` |

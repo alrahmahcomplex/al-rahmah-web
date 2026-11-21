@@ -1,5 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 
+import type { LastNameFrom } from "@/lib/names"
+
 import type { Result } from "./result"
 
 // The father's full name and the previous school on a lead (#299, #298),
@@ -16,8 +18,9 @@ export type FatherNameSource = "derived" | "backfilled" | "edited" | "typo_confi
 
 export type PreviousSchoolType = "private" | "public"
 
+// `country`: the country of a school Outside Tanzania, when one was given (#511).
 export type LeadPreviousSchool =
-  | { kind: "school"; name: string; type: PreviousSchoolType; region: string }
+  | { kind: "school"; name: string; type: PreviousSchoolType; region: string; country?: string }
   | { kind: "not-known" }
   // Not given.
   | null
@@ -26,6 +29,8 @@ export type LeadFatherAndSchool = {
   fatherFullName: string | null
   fatherFullNameSource: FatherNameSource | null
   previousSchool: LeadPreviousSchool
+  // Which of the father's names the student's last name is (#511); null when the name was not typed in parts.
+  lastNameFrom: LastNameFrom | null
   // Who brought the student (#298), "Name (Relationship)"; null when nobody is recorded.
   broughtBy: string | null
 }
@@ -37,6 +42,8 @@ type Row = {
   previous_school_type: PreviousSchoolType | null
   previous_school_region: string | null
   previous_school_not_known: boolean
+  previous_school_country: string | null
+  last_name_from: LastNameFrom | null
   brought_by_name: string | null
   brought_by_relationship: string | null
 }
@@ -48,7 +55,7 @@ export async function getLeadFatherAndSchool(
   const { data, error } = await supabase
     .from("leads")
     .select(
-      "father_full_name, father_full_name_source, previous_school_name, previous_school_type, previous_school_region, previous_school_not_known, brought_by_name, brought_by_relationship",
+      "father_full_name, father_full_name_source, previous_school_name, previous_school_type, previous_school_region, previous_school_not_known, previous_school_country, last_name_from, brought_by_name, brought_by_relationship",
     )
     .eq("id", leadId)
     .maybeSingle<Row>()
@@ -67,8 +74,15 @@ export async function getLeadFatherAndSchool(
       previousSchool: data.previous_school_not_known
         ? { kind: "not-known" }
         : data.previous_school_name && data.previous_school_type && data.previous_school_region
-          ? { kind: "school", name: data.previous_school_name, type: data.previous_school_type, region: data.previous_school_region }
+          ? {
+              kind: "school",
+              name: data.previous_school_name,
+              type: data.previous_school_type,
+              region: data.previous_school_region,
+              ...(data.previous_school_country ? { country: data.previous_school_country } : {}),
+            }
           : null,
+      lastNameFrom: data.last_name_from,
       broughtBy: data.brought_by_name
         ? data.brought_by_relationship
           ? `${data.brought_by_name} (${data.brought_by_relationship})`
@@ -86,6 +100,7 @@ export type DetailField =
   | "previous_school_type"
   | "previous_school_region"
   | "previous_school_not_known"
+  | "previous_school_country"
 
 export type DetailCorrectionError =
   // Signed out, or without leads.edit.
@@ -125,6 +140,7 @@ const DETAIL_FIELDS: readonly string[] = [
   "previous_school_type",
   "previous_school_region",
   "previous_school_not_known",
+  "previous_school_country",
 ]
 
 function correctionError(error: RpcError, what: string): DetailCorrectionError {
@@ -185,11 +201,13 @@ export async function correctFatherFullName(
 
 // Gives or corrects the previous school on an open lead, or marks it Not
 // known yet. Needs leads.edit. The database checks the name (2 to 120
-// characters), the type and the region against its list.
+// characters), the type and the region against its list. A school Outside
+// Tanzania may name its country, from its list (#511); any other region
+// clears the country.
 export async function correctPreviousSchool(
   supabase: SupabaseClient,
   leadId: string,
-  school: { kind: "school"; name: string; type: PreviousSchoolType; region: string } | { kind: "not-known" },
+  school: { kind: "school"; name: string; type: PreviousSchoolType; region: string; country?: string } | { kind: "not-known" },
 ): Promise<Result<null, DetailCorrectionError>> {
   const { error } = await supabase.rpc("update_lead_details", {
     lead_id: leadId,
@@ -201,6 +219,7 @@ export async function correctPreviousSchool(
             previous_school_type: school.type,
             previous_school_region: school.region,
             previous_school_not_known: false,
+            ...(school.country ? { previous_school_country: school.country } : {}),
           },
   })
   if (!error) return { ok: true, data: null }

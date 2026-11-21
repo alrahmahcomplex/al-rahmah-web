@@ -49,6 +49,8 @@ export type TypeAheadFieldProps = {
 
 // How tall the list may be: at most 380px, and never past 60% of the screen.
 const listHeight = () => Math.min(380, Math.round(window.innerHeight * 0.6))
+// The least it shrinks to: its search box and about three rows.
+const LIST_FLOOR = 180
 
 /** The nearest part of the page that scrolls: a sheet, the staff stage, or the window. */
 function scroller(el: HTMLElement): HTMLElement {
@@ -237,17 +239,19 @@ type ListProps = {
 }
 
 /**
- * The open list: fixed below the box, over the page. Opening first scrolls
- * the box up so the list has room; when the page is too short to scroll that
- * far, room is added at its foot while the list is open.
+ * The open list: fixed below the box, over the page, never above it (owner,
+ * #511: "Open Downward as an Overlay"). Opening first scrolls the box up so
+ * the list has room; when the page is too short to scroll that far, room is
+ * added at its foot while the list is open. When a phone keyboard leaves less
+ * room than that, the list stays below and shrinks to what is left, keeping
+ * its search box and about three rows.
  */
 function TypeAheadList({ anchor, listId, options, pinned, value, optionLead, labels, onPick, onClose }: ListProps) {
   const panelRef = useRef<HTMLDivElement>(null)
   const searchRef = useRef<HTMLInputElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
   const [query, setQuery] = useState("")
-  // Below the box, or above it (`bottom`) when a phone keyboard leaves more room there.
-  const [place, setPlace] = useState<{ left: number; width: number; maxHeight: number } & ({ top: number } | { bottom: number }) | null>(null)
+  const [place, setPlace] = useState<{ left: number; top: number; width: number; maxHeight: number } | null>(null)
   const shown = useMemo(() => search(options, query), [options, query])
   const match = completion(shown, query)
   const rest = match ? restOf(query, match.label) : ""
@@ -262,42 +266,56 @@ function TypeAheadList({ anchor, listId, options, pinned, value, optionLead, lab
     const area = scroller(box)
     const isWindow = area === (document.scrollingElement ?? document.documentElement)
     const want = listHeight()
-    const areaRect = isWindow ? { top: 0, bottom: window.innerHeight } : area.getBoundingClientRect()
-    const r0 = box.getBoundingClientRect()
-    const lack = r0.bottom + 8 + want - (Math.min(areaRect.bottom, window.innerHeight) - 12)
-    const room = Math.max(0, r0.top - (areaRect.top + 84))
-    const move = Math.max(0, Math.min(lack, room))
-    const left = area.scrollHeight - area.clientHeight - area.scrollTop
     const padWas = area.style.paddingBottom
-    if (move > left) area.style.paddingBottom = `${parseFloat(getComputedStyle(area).paddingBottom) + move - left + 8}px`
     const calm = prefersReducedMotion()
-    if (move > 1) area.scrollBy({ top: move, behavior: calm ? "auto" : "smooth" })
-
     // The part of the screen a phone keyboard leaves free: the visual viewport, in the page's fixed coordinates.
-    const put = () => {
+    const visible = () => {
       const vv = window.visualViewport
-      const top = vv ? vv.offsetTop : 0
-      const bottom = vv ? vv.offsetTop + vv.height : window.innerHeight
-      const r = box.getBoundingClientRect()
-      if (r.bottom < top || r.top > bottom) return onClose(false)
-      const below = bottom - r.bottom - 18
-      const above = r.top - top - 18
-      if (below >= Math.min(want, 170) || below >= above) setPlace({ left: r.left, width: r.width, top: r.bottom + 6, maxHeight: Math.max(0, Math.min(want, below)) })
-      else setPlace({ left: r.left, width: r.width, bottom: window.innerHeight - r.top + 6, maxHeight: Math.min(want, above) })
+      return vv ? { top: vv.offsetTop, bottom: vv.offsetTop + vv.height } : { top: 0, bottom: window.innerHeight }
     }
-    const timer = window.setTimeout(put, move > 1 && !calm ? 360 : 0)
+    // Scrolls the box up until `need` px of list fit below it, as far as the room above allows; returns how far.
+    const makeRoom = (need: number) => {
+      const v = visible()
+      const areaRect = isWindow ? v : area.getBoundingClientRect()
+      const r0 = box.getBoundingClientRect()
+      const lack = r0.bottom + 8 + need - (Math.min(areaRect.bottom, v.bottom) - 12)
+      const room = Math.max(0, r0.top - (Math.max(areaRect.top, v.top) + 84))
+      const move = Math.max(0, Math.min(lack, room))
+      const left = area.scrollHeight - area.clientHeight - area.scrollTop
+      if (move > left) area.style.paddingBottom = `${parseFloat(getComputedStyle(area).paddingBottom) + move - left + 8}px`
+      if (move > 1) area.scrollBy({ top: move, behavior: calm ? "auto" : "smooth" })
+      return move
+    }
+    const put = () => {
+      const v = visible()
+      const r = box.getBoundingClientRect()
+      if (r.bottom < v.top || r.top > v.bottom) return onClose(false)
+      setPlace({ left: r.left, width: r.width, top: r.bottom + 6, maxHeight: Math.max(LIST_FLOOR, Math.min(want, v.bottom - r.bottom - 18)) })
+    }
+    let timer = 0
+    const later = (moved: number) => {
+      window.clearTimeout(timer)
+      timer = window.setTimeout(put, moved > 1 && !calm ? 360 : 0)
+    }
+    later(makeRoom(want))
+    // The keyboard opening or closing: make room for at least the floor again, then place the list.
+    const onViewport = () => {
+      const v = visible()
+      const r = box.getBoundingClientRect()
+      later(v.bottom - r.bottom - 18 < Math.min(want, LIST_FLOOR) ? makeRoom(LIST_FLOOR) : 0)
+    }
     const onScroll = (event: Event) => {
       if (!panelRef.current?.contains(event.target as Node)) put()
     }
     window.addEventListener("scroll", onScroll, true)
     window.addEventListener("resize", put)
-    window.visualViewport?.addEventListener("resize", put)
+    window.visualViewport?.addEventListener("resize", onViewport)
     window.visualViewport?.addEventListener("scroll", put)
     return () => {
       window.clearTimeout(timer)
       window.removeEventListener("scroll", onScroll, true)
       window.removeEventListener("resize", put)
-      window.visualViewport?.removeEventListener("resize", put)
+      window.visualViewport?.removeEventListener("resize", onViewport)
       window.visualViewport?.removeEventListener("scroll", put)
       area.style.paddingBottom = padWas
     }
@@ -360,8 +378,7 @@ function TypeAheadList({ anchor, listId, options, pinned, value, optionLead, lab
       ref={panelRef}
       className="gf-ta-panel"
       data-keep-in-view-skip=""
-      data-above={place && "bottom" in place ? "" : undefined}
-      style={place ? { left: place.left, width: place.width, maxHeight: place.maxHeight, ...("bottom" in place ? { bottom: place.bottom } : { top: place.top }) } : { visibility: "hidden" }}
+      style={place ? { left: place.left, top: place.top, width: place.width, maxHeight: place.maxHeight } : { visibility: "hidden" }}
     >
       <div className="gf-ta-search">
         <Icon name="search" small />

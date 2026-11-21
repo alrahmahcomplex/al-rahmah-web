@@ -132,11 +132,19 @@ describe("TypeAheadField", () => {
     expect(screen.getByRole("status")).toHaveTextContent("none")
   })
 
-  it("moves the list above the box when a phone keyboard leaves no room below it", async () => {
-    // The box sits 250 to 302px down a 768px page; the keyboard then leaves the top 300px visible.
+  // Owner, #511: "I want the Dropdown to scroll on view when clicked and to Open Downward as an Overlay".
+  it("opens below the box and, when a phone keyboard opens, scrolls up to stay visible above it", async () => {
+    // The box starts 250 to 302px down the page; scrolling moves it up.
+    let scrolled = 0
     const rect = vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
-      return this.classList.contains("gf-ta") ? ({ top: 250, bottom: 302, left: 16, right: 374, width: 358, height: 52, x: 16, y: 250 } as DOMRect) : new DOMRect()
+      if (!this.classList.contains("gf-ta")) return new DOMRect()
+      return { top: 250 - scrolled, bottom: 302 - scrolled, left: 16, right: 374, width: 358, height: 52, x: 16, y: 250 - scrolled } as DOMRect
     })
+    const page = document.documentElement
+    const scrollBy = vi.fn((o: ScrollToOptions) => {
+      scrolled += o.top ?? 0
+    })
+    Object.defineProperty(page, "scrollBy", { value: scrollBy, configurable: true })
     const listeners: Record<string, () => void> = {}
     const viewport = { offsetTop: 0, height: 768, addEventListener: (e: string, f: () => void) => (listeners[e] = f), removeEventListener: () => {} }
     vi.stubGlobal("visualViewport", viewport)
@@ -144,17 +152,26 @@ describe("TypeAheadField", () => {
       render(<Region />)
       await userEvent.click(screen.getByRole("button", { name: "Show all regions" }))
       const panel = document.querySelector<HTMLElement>(".gf-ta-panel")!
+      // Room enough below: no scroll, and the list opens just under the box.
       await vi.waitFor(() => expect(panel.style.top).toBe("308px"))
-      expect(panel).not.toHaveAttribute("data-above")
+      expect(panel.style.maxHeight).toBe("380px")
+      expect(scrollBy).not.toHaveBeenCalled()
 
-      viewport.height = 300
+      // The keyboard leaves the top 340px: the box scrolls up, room is added at the page's foot, and the list stays below.
+      viewport.height = 340
       act(() => listeners.resize())
-      expect(panel).toHaveAttribute("data-above")
-      expect(panel.style.top).toBe("")
-      expect(panel.style.bottom).toBe(`${window.innerHeight - 250 + 6}px`)
-      expect(panel.style.maxHeight).toBe("232px")
+      expect(scrollBy).toHaveBeenCalledWith(expect.objectContaining({ top: 162 }))
+      expect(page.style.paddingBottom).not.toBe("")
+      await vi.waitFor(() => expect(panel.style.top).toBe("146px"))
+      expect(panel.style.maxHeight).toBe("182px")
+      expect(146 + 182).toBeLessThanOrEqual(viewport.height)
+
+      // Closing the list takes the added room away.
+      await userEvent.keyboard("{Escape}")
+      expect(page.style.paddingBottom).toBe("")
     } finally {
       rect.mockRestore()
+      delete (page as unknown as Record<string, unknown>).scrollBy
       vi.unstubAllGlobals()
     }
   })

@@ -3,12 +3,11 @@
 import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react"
 
 import { GuidedHead, GuidedStack, GuidedStep, Hint, QuestionTitle, revealStep, SummaryRow, ContinuePill, useKeepFocusInView, type ProgressGroup } from "@/components/guided-form"
-import { Icon } from "@/components/icons"
-import { Button, ButtonLink, GuidedTask, Note, PageHeader, Sheet, Tag, TextLink, toast } from "@/components/kit"
+import { Button, ButtonLink, GuidedTask, Note, PageHeader, Sheet, TextLink, toast } from "@/components/kit"
 import { OUTSIDE_TANZANIA, sameSchoolName } from "@/lib/places"
 import type { LeadClass, RegistrationQuestion } from "@/lib/services/leads"
 
-import { registerInterviewFromFinish } from "./interview-actions"
+import { InterviewSheet, RegisteredChip, useInterviewRegistration } from "./interview-sheet"
 import { familyHref } from "../../family/model"
 import { completeVisit, type CompleteVisitOutcome } from "../[id]/actions"
 import { checkInStudents, custodianAtCheckIn, type CheckIn } from "../[id]/model"
@@ -208,15 +207,10 @@ function RegisterForm({ staffId, today, years, defaultYear, fees, canLink, canEn
     Object.fromEntries(checkInChildren.filter((c) => c.linked === linked && read[c.leadId]).map((c) => [c.key, read[c.leadId]]))
   const [edit, setEdit] = useState<string | null>(null)
   const [finished, setFinished] = useState<Finished | null>(null)
-  const [interviewOpen, setInterviewOpen] = useState(false)
-  const [interviewed, setInterviewed] = useState<Record<string, boolean>>({})
-  const [busyInterview, setBusyInterview] = useState<Record<string, boolean>>({})
-  const [busyAll, setBusyAll] = useState(false)
-  const [interviewError, setInterviewError] = useState<string | null>(null)
+  const interviews = useInterviewRegistration(finished?.students ?? null)
   const [instant, setInstant] = useState(false)
   const [interacted, setInteracted] = useState(false)
   const [round, setRound] = useState(0)
-  const roundRef = useRef(0)
   const [pending, setPending] = useState(false)
   // Saved, and the finished screen is on its way: the form stays locked until it shows.
   const [saved, setSaved] = useState(false)
@@ -294,18 +288,13 @@ function RegisterForm({ staffId, today, years, defaultYear, fees, canLink, canEn
     timers.clear()
     clearDraft(staffId, mode?.family)
     setInstant(true)
-    roundRef.current += 1
     setRound((r) => r + 1)
     setAnswers(mode ? mode.start : freshAnswers(nextKey()))
     setEdit(null)
     setFinished(null)
     setSaved(false)
     setResetting(false)
-    setInterviewOpen(false)
-    setInterviewed({})
-    setBusyInterview({})
-    setBusyAll(false)
-    setInterviewError(null)
+    interviews.reset()
     setFailure(null)
     setOnFileFees({})
     asked.current.clear()
@@ -1061,72 +1050,6 @@ function RegisterForm({ staffId, today, years, defaultYear, fees, canLink, canEn
     return a <= b ? mismatch.pair.mine.first : mismatch.pair.theirs.first
   })()
 
-  async function registerOneInterview(student: FinishedStudent) {
-    if (busyAll || busyInterview[student.leadId] || interviewed[student.leadId]) return
-    const myRound = roundRef.current
-    setInterviewError(null)
-    setBusyInterview((m) => ({ ...m, [student.leadId]: true }))
-    try {
-      const outcome = await registerInterviewFromFinish(student.leadId)
-      if (myRound !== roundRef.current) return
-      if (outcome.status === "registered" || outcome.status === "already") {
-        setInterviewed((m) => ({ ...m, [student.leadId]: true }))
-        toast(outcome.status === "already" ? `${firstOf(student.name)} was already on the interview list.` : `${firstOf(student.name)} is on the interview list.`)
-      } else {
-        setInterviewError(`${student.name}: ${outcome.message}`)
-      }
-    } catch {
-      if (myRound !== roundRef.current) return
-      setInterviewError(`${student.name}: The registration could not be saved. Try again in a moment.`)
-    } finally {
-      if (myRound === roundRef.current) setBusyInterview((m) => ({ ...m, [student.leadId]: false }))
-    }
-  }
-
-  async function registerAllInterviews() {
-    if (!finished || busyAll || Object.values(busyInterview).some(Boolean)) return
-    const left = finished.students.filter((s) => !interviewed[s.leadId])
-    if (left.length === 0) return
-    const myRound = roundRef.current
-    setInterviewError(null)
-    setBusyAll(true)
-    let done = 0
-    let firstDone: FinishedStudent | null = null
-    const errors: string[] = []
-    try {
-      for (const s of left) {
-        if (myRound !== roundRef.current) return
-        try {
-          const outcome = await registerInterviewFromFinish(s.leadId)
-          if (myRound !== roundRef.current) return
-          if (outcome.status === "registered") {
-            done += 1
-            if (!firstDone) firstDone = s
-            setInterviewed((m) => ({ ...m, [s.leadId]: true }))
-          } else if (outcome.status === "already") {
-            // Put on the list by someone else since the form was saved: done, not retried.
-            setInterviewed((m) => ({ ...m, [s.leadId]: true }))
-          } else {
-            errors.push(`${s.name}: ${outcome.message}`)
-          }
-        } catch {
-          if (myRound !== roundRef.current) return
-          errors.push(`${s.name}: The registration could not be saved.`)
-        }
-      }
-      if (myRound !== roundRef.current) return
-      if (done > 0) {
-        toast(done > 1 ? `${done} students are on the interview list.` : `${firstOf(firstDone!.name)} is on the interview list.`)
-      }
-      if (errors.length > 0) setInterviewError(errors.join(" "))
-    } finally {
-      if (myRound === roundRef.current) setBusyAll(false)
-    }
-  }
-
-  const remainingInterviews = finished ? finished.students.filter((s) => !interviewed[s.leadId]) : []
-  const showRegisterAll = !!finished && finished.students.length > 1 && remainingInterviews.length > 0
-  const anyInterviewBusy = busyAll || Object.values(busyInterview).some(Boolean)
 
   return (
     <>
@@ -1177,12 +1100,7 @@ function RegisterForm({ staffId, today, years, defaultYear, fees, canLink, canEn
                   label: (
                     <span className="rs-done-name">
                       <span>{s.name}</span>
-                      {interviewed[s.leadId] && (
-                        <Tag tone="ok" className="rs-iv-chip">
-                          <Icon name="check" size={16} />
-                          Registered for interview
-                        </Tag>
-                      )}
+                      {interviews.interviewed[s.leadId] && <RegisteredChip />}
                     </span>
                   ),
                   value: s.admissionNumber,
@@ -1203,10 +1121,7 @@ function RegisterForm({ staffId, today, years, defaultYear, fees, canLink, canEn
                       <Button
                         size="wide"
                         chevron
-                        onClick={() => {
-                          setInterviewError(null)
-                          setInterviewOpen(true)
-                        }}
+                        onClick={interviews.openSheet}
                       >
                         Register for interview
                       </Button>
@@ -1245,74 +1160,7 @@ function RegisterForm({ staffId, today, years, defaultYear, fees, canLink, canEn
         </GuidedStack>
       </GuidedTask>
 
-      <Sheet
-        open={interviewOpen && !!finished}
-        onOpenChange={(next) => {
-          if (!anyInterviewBusy) setInterviewOpen(next)
-        }}
-        placement="centre"
-        title="Register for interview"
-        hint={
-          finished && finished.students.length > 1
-            ? "Register each student who is ready. A student who didn’t come today can be registered later, from the family’s record."
-            : "The student goes on the interview list."
-        }
-        closeLabel="Close"
-        foot={
-          <div className="rs-iv-foot">
-            {showRegisterAll && (
-              <Button size="wide" pending={busyAll} aria-disabled={anyInterviewBusy || undefined} onClick={registerAllInterviews}>
-                {busyAll ? "Registering…" : "Register all for interview"}
-              </Button>
-            )}
-            <Button variant="ghost" size="wide" aria-disabled={anyInterviewBusy || undefined} onClick={() => !anyInterviewBusy && setInterviewOpen(false)}>
-              {remainingInterviews.length > 0 ? "Close" : "Done"}
-            </Button>
-          </div>
-        }
-      >
-        {finished && (
-          <div className="rs-col">
-            {interviewError && (
-              <Note tone="bad" icon="alert" role="alert">
-                {interviewError}
-              </Note>
-            )}
-            <div className="rs-iv-list">
-              {finished.students.map((s) => {
-                const done = !!interviewed[s.leadId]
-                const busy = !!busyInterview[s.leadId]
-                return (
-                  <div key={s.leadId} className="rs-iv-row">
-                    <span className="rs-iv-tx">
-                      <b>{s.name}</b>
-                      <small>{`${s.className} · ${s.admissionNumber}`}</small>
-                    </span>
-                    <span className="rs-iv-act">
-                      {done ? (
-                        <Tag tone="ok" className="rs-iv-chip">
-                          <Icon name="check" size={16} />
-                          Registered for interview
-                        </Tag>
-                      ) : (
-                        <Button
-                          variant={showRegisterAll ? "ghost" : "go"}
-                          size="small"
-                          pending={busy}
-                          aria-disabled={busyAll || busy || undefined}
-                          onClick={() => registerOneInterview(s)}
-                        >
-                          {busy ? "Registering…" : "Register for interview"}
-                        </Button>
-                      )}
-                    </span>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-        )}
-      </Sheet>
+      <InterviewSheet reg={interviews} students={finished?.students ?? null} />
 
       <Sheet
         open={startOver}

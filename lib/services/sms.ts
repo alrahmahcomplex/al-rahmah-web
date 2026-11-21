@@ -154,15 +154,22 @@ export type SmsError =
 
 type Reservation = { outcome?: string; send_id?: string }
 
+// Shared with a caller that stops waiting (the Send SMS hook): `reserved`
+// turns true once the send has its place and goes to the provider;
+// `abandoned`, set by the caller, stops a send that has neither yet.
+export type SendGate = { reserved: boolean; abandoned: boolean }
+
 // Sends one SMS through `send` after reserving its place. `supabase` holds the
 // secret key: reserve_sms and record_sms accept nothing else.
 export async function sendSms(
   supabase: SupabaseClient,
   send: SmsSender,
   sms: { kind: SmsKind; to: string; agentId?: string | null; message: string },
+  gate?: SendGate,
 ): Promise<Result<{ sendId: string }, SmsError>> {
   const mobile = normalizeTanzanianMobile(sms.to)
   if (!mobile || !fitsOneSms(sms.message)) return { ok: false, error: { kind: "invalid" } }
+  if (gate?.abandoned) return { ok: false, error: { kind: "unavailable" } }
 
   const reserved = await supabase.rpc("reserve_sms", { kind: sms.kind, to_phone: mobile, agent_id: sms.agentId ?? null })
   if (reserved.error) {
@@ -177,6 +184,14 @@ export async function sendSms(
     return { ok: false, error: { kind: "unavailable" } }
   }
   const sendId = row.send_id
+  // Abandoned while reserving: never sent, and recorded as not sent. The
+  // place stays counted, as a provider error's does.
+  if (gate?.abandoned) {
+    const recorded = await supabase.rpc("record_sms", { send_id: sendId, result: "provider_error", provider_request_id: null, error_code: "abandoned" })
+    if (recorded.error) console.error("Could not record an SMS", sendId, recorded.error)
+    return { ok: false, error: { kind: "unavailable" } }
+  }
+  if (gate) gate.reserved = true
 
   let delivered: Result<{ requestId: string }, string>
   try {

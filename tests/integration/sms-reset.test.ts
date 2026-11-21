@@ -82,7 +82,7 @@ async function sendsTo(phone: string) {
 describe("the Send SMS hook", () => {
   test("texts an agent's login through the fake sender, with the budget and the log", async () => {
     const agent = await agentWithMobileLogin()
-    const response = await POST(hookRequest({ user: { id: agent.userId, phone: agent.phone.slice(1), phone_change: "" }, sms: { otp: "739204" } }))
+    const response = await POST(hookRequest({ user: { id: agent.userId, phone: agent.phone.slice(1) }, sms: { otp: "739204", phone: agent.phone.slice(1) } }))
     expect(response.status).toBe(200)
     expect(await response.json()).toEqual({})
     expect(await sendsTo(agent.phone)).toEqual([{ kind: "reset", result: "sent", agent_id: agent.agentId }])
@@ -104,7 +104,7 @@ describe("the Send SMS hook", () => {
 
     const agent = await agentWithMobileLogin()
     const asked = mobile()
-    const change = await POST(hookRequest({ user: { id: agent.userId, phone: agent.phone.slice(1), phone_change: asked.slice(1) }, sms: { otp: "739204" } }))
+    const change = await POST(hookRequest({ user: { id: agent.userId, phone: agent.phone.slice(1), new_phone: asked.slice(1) }, sms: { otp: "739204", phone: asked.slice(1) } }))
     expect(change.status).toBe(200)
     expect(await sendsTo(asked)).toEqual([])
     expect(await sendsTo(agent.phone)).toEqual([])

@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest"
 vi.mock("server-only", () => ({}))
 
 import { sendAuthSms } from "@/lib/services/auth-sms"
-import { checkResetNumber, confirmResetSession, requestResetSms, saveResetPassword } from "@/lib/services/sms-reset"
+import { checkResetNumber, confirmResetSession, requestResetSms, saveResetPassword, sessionProvedBy } from "@/lib/services/sms-reset"
 
 import { resetSms } from "@/app/api/auth/send-sms/words"
 import { fitsOneSms } from "@/lib/services/sms"
@@ -29,7 +29,7 @@ function authClient({
       signedIn.value = true
       return { data: { user: { id: "user-1" }, session: {} }, error: null }
     }),
-    getClaims: vi.fn(async () => (signedIn.value ? { data: { claims: { sub: "user-1" } }, error: null } : { data: null, error: null })),
+    getClaims: vi.fn(async () => (signedIn.value ? { data: { claims: { sub: "user-1", phone: "255712345123" } }, error: null } : { data: null, error: null })),
     signOut: vi.fn(async () => {
       signedIn.value = false
       return { error: null }
@@ -86,9 +86,19 @@ describe("checking the number", () => {
   it("finishes an unconfirmed check on the same session, and on no other login", async () => {
     const { client, auth, signedIn } = authClient()
     signedIn.value = true
-    expect(await confirmResetSession(client, "user-1")).toEqual({ ok: true, data: { userId: "user-1" } })
-    expect(await confirmResetSession(client, "someone-else")).toEqual({ ok: false, error: "wrong-number" })
+    expect(await confirmResetSession(client, "user-1", "+255712345123")).toEqual({ ok: true, data: { userId: "user-1" } })
+    expect(await confirmResetSession(client, "someone-else", "+255712345123")).toEqual({ ok: false, error: "wrong-number" })
     expect(auth.verifyOtp).not.toHaveBeenCalled()
+  })
+
+  it("never resumes another tab's reset, for another mobile, on this tab's check", async () => {
+    const { client, signedIn } = authClient()
+    signedIn.value = true
+    expect(await sessionProvedBy(client, "user-1", "+255712345123")).toBe(true)
+    expect(await sessionProvedBy(client, "user-1", "+255799111222")).toBe(false)
+    expect(await confirmResetSession(client, "user-1", "+255799111222")).toEqual({ ok: false, error: "wrong-number" })
+    signedIn.value = false
+    expect(await sessionProvedBy(client, "user-1", "+255712345123")).toBe(false)
   })
 
   it("ends the session at once for a login that isn't an agent's, or a switched-off agent", async () => {
@@ -130,6 +140,15 @@ describe("saving the new password", () => {
     expect(await saveResetPassword(off.client, "new-password", "user-1")).toEqual({ ok: false, error: "switched-off" })
     expect(off.auth.updateUser).not.toHaveBeenCalled()
   })
+
+  it("keeps the session through an outage of the agent check, so the same form saves once it's back", async () => {
+    const { client, auth, signedIn } = authClient({ agentError: { message: "connection reset" } })
+    signedIn.value = true
+    expect(await saveResetPassword(client, "new-password", "user-1")).toEqual({ ok: false, error: "unavailable" })
+    expect(auth.signOut).not.toHaveBeenCalled()
+    expect(signedIn.value).toBe(true)
+    expect(auth.updateUser).not.toHaveBeenCalled()
+  })
 })
 
 describe("the Send SMS hook's choice", () => {
@@ -156,9 +175,51 @@ describe("the Send SMS hook's choice", () => {
   it("texts nothing for a phone change, whoever asks", async () => {
     const { client, rpc } = hookClient("agent-1")
     const send = vi.fn()
-    expect(await sendAuthSms(client, send, request({ phone_change: "255799111222" }), resetSms)).toEqual({ ok: false, error: "phone-change" })
+    expect(await sendAuthSms(client, send, request({ new_phone: "255799111222" }), resetSms)).toEqual({ ok: false, error: "phone-change" })
     expect(send).not.toHaveBeenCalled()
     expect(rpc).not.toHaveBeenCalled()
+  })
+
+  it("texts nothing when Auth's destination isn't the login's own mobile", async () => {
+    const { client, rpc } = hookClient("agent-1")
+    const send = vi.fn()
+    const elsewhere = { user: { id: LOGIN, phone: "255712345123" }, sms: { otp: "739204", phone: "255799111222" } }
+    expect(await sendAuthSms(client, send, elsewhere, resetSms)).toEqual({ ok: false, error: "phone-change" })
+    const own = { user: { id: LOGIN, phone: "255712345123" }, sms: { otp: "739204", phone: "255712345123" } }
+    expect(await sendAuthSms(client, vi.fn(async () => ({ ok: true as const, data: { requestId: "r1" } })), own, resetSms)).toEqual({ ok: true, data: { sendId: "send-1" } })
+    expect(send).not.toHaveBeenCalled()
+    expect(rpc).toHaveBeenCalledTimes(3)
+  })
+
+  it("sends nothing once the hook has stopped waiting before the place was reserved", async () => {
+    const { client, rpc } = hookClient("agent-1")
+    const send = vi.fn()
+    const gate = { reserved: false, abandoned: true }
+    expect(await sendAuthSms(client, send, request({}), resetSms, gate)).toEqual({ ok: false, error: { kind: "unavailable" } })
+    expect(rpc).not.toHaveBeenCalledWith("reserve_sms", expect.anything())
+    expect(send).not.toHaveBeenCalled()
+  })
+
+  it("records a send abandoned during its reservation as not sent, and marks one that went ahead", async () => {
+    const gate = { reserved: false, abandoned: false }
+    const rpc = vi.fn(async (fn: string) => {
+      if (fn === "auth_sms_agent") return { data: "agent-1", error: null }
+      if (fn === "reserve_sms") {
+        gate.abandoned = true
+        return { data: { outcome: "reserved", send_id: "send-1" }, error: null }
+      }
+      return { data: null, error: null }
+    })
+    const send = vi.fn()
+    expect(await sendAuthSms({ rpc } as unknown as SupabaseClient, send, request({}), resetSms, gate)).toEqual({ ok: false, error: { kind: "unavailable" } })
+    expect(send).not.toHaveBeenCalled()
+    expect(rpc).toHaveBeenCalledWith("record_sms", { send_id: "send-1", result: "provider_error", provider_request_id: null, error_code: "abandoned" })
+    expect(gate.reserved).toBe(false)
+
+    const going = { reserved: false, abandoned: false }
+    const { client } = hookClient("agent-1")
+    await sendAuthSms(client, vi.fn(async () => ({ ok: true as const, data: { requestId: "r1" } })), request({}), resetSms, going)
+    expect(going.reserved).toBe(true)
   })
 
   it("texts nothing to a login with no agent who can use the pages now", async () => {

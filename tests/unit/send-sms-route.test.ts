@@ -59,14 +59,33 @@ describe("the Send SMS hook's answers", () => {
     expect((await POST(signed(BODY))).status).toBe(200)
   })
 
-  it("answers 200 when the whole send runs past 4 seconds, and lets it finish", async () => {
+  it("answers 200 when a send already with Beem runs past 3.5 seconds, and lets it finish", async () => {
     vi.useFakeTimers()
     let finish: (value: unknown) => void = () => {}
-    sendAuthSms.mockReturnValueOnce(new Promise((resolve) => (finish = resolve)))
+    sendAuthSms.mockImplementationOnce((_client, _send, _request, _words, gate: { reserved: boolean }) => {
+      gate.reserved = true
+      return new Promise((resolve) => (finish = resolve))
+    })
     const answering = POST(signed(BODY))
     await vi.advanceTimersByTimeAsync(4_100)
     expect((await answering).status).toBe(200)
     finish({ ok: true, data: { sendId: "s1" } })
+    vi.useRealTimers()
+  })
+
+  it("answers 400 and abandons a send with no place reserved by 3.5 seconds, so Supabase keeps the earlier number", async () => {
+    vi.useFakeTimers()
+    let finish: (value: unknown) => void = () => {}
+    let seen: { reserved: boolean; abandoned: boolean } | undefined
+    sendAuthSms.mockImplementationOnce((_client, _send, _request, _words, gate: { reserved: boolean; abandoned: boolean }) => {
+      seen = gate
+      return new Promise((resolve) => (finish = resolve))
+    })
+    const answering = POST(signed(BODY))
+    await vi.advanceTimersByTimeAsync(4_100)
+    expect((await answering).status).toBe(400)
+    expect(seen?.abandoned).toBe(true)
+    finish({ ok: false, error: { kind: "mobile-limited" } })
     vi.useRealTimers()
   })
 

@@ -88,9 +88,27 @@ export async function checkResetNumber(
   return agentOnly(supabase, data.user.id)
 }
 
-// F2 again, after "unconfirmed": the same login, still signed in here.
-export async function confirmResetSession(supabase: SupabaseClient, provenUserId: string): Promise<Result<{ userId: string }, SmsResetCheckError> | Unconfirmed> {
-  if ((await verifiedUserId(supabase)) !== provenUserId) return { ok: false, error: "wrong-number" }
+// Whether this browser is signed in as `provenUserId` by the number for
+// `phone`: another tab's reset, for another mobile, never counts.
+export async function sessionProvedBy(supabase: SupabaseClient, provenUserId: string, phone: string): Promise<boolean> {
+  try {
+    const { data, error } = await supabase.auth.getClaims()
+    if (error || !data) return false
+    return data.claims.sub === provenUserId && data.claims.phone === withoutPlus(phone)
+  } catch (error) {
+    console.error("Reset SMS: could not check the session token", error)
+    return false
+  }
+}
+
+// F2 again, after "unconfirmed": the same login, still signed in here by
+// this mobile's number.
+export async function confirmResetSession(
+  supabase: SupabaseClient,
+  provenUserId: string,
+  phone: string,
+): Promise<Result<{ userId: string }, SmsResetCheckError> | Unconfirmed> {
+  if (!(await sessionProvedBy(supabase, provenUserId, phone))) return { ok: false, error: "wrong-number" }
   return agentOnly(supabase, provenUserId)
 }
 
@@ -115,10 +133,12 @@ export async function saveResetPassword(
   if (!provenUserId) return { ok: false, error: "signed-out" }
   if ((await verifiedUserId(supabase)) !== provenUserId) return { ok: false, error: "signed-out" }
 
-  // Rechecked here: the agent may have been switched off since F2.
+  // Rechecked here: the agent may have been switched off since F2. An
+  // outage keeps the session, so the same form can be sent again.
   const agent = await getAgentUser(supabase)
   if (!agent.ok) {
     if (agent.error === "signed-out") return { ok: false, error: "signed-out" }
+    if (agent.error === "unavailable") return { ok: false, error: "unavailable" }
     await supabase.auth.signOut({ scope: "local" })
     return { ok: false, error: agent.error === "not-agent" ? "no-account" : agent.error }
   }

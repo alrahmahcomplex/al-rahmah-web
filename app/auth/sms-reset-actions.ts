@@ -6,13 +6,14 @@ import { after } from "next/server"
 
 import { normalizeTanzanianMobile } from "@/lib/phone"
 import { checkPublicFormLimit } from "@/lib/rate-limit"
-import { currentSessionKind, verifiedUserId } from "@/lib/services/auth-session"
+import { currentSessionKind } from "@/lib/services/auth-session"
 import { HOME } from "@/lib/services/sign-in"
 import {
   checkResetNumber,
   confirmResetSession,
   requestResetSms,
   saveResetPassword,
+  sessionProvedBy,
   type SmsResetCheckError,
   type SmsResetSaveError,
 } from "@/lib/services/sms-reset"
@@ -91,12 +92,14 @@ export async function checkSmsReset(rawPhone: string, code: string, captchaToken
   })
   if (!human.ok) return { error: "check-failed" }
 
-  // A right number already spent here, with only the agent check missing
-  // (an outage): finish it on the session it gave, with no second number.
+  // A right number already spent here for this same mobile, with only the
+  // agent check missing (an outage): finish it on the session it gave, with
+  // no second number. A reset in another tab, for another mobile, doesn't
+  // count: that check meets the signed-in guard below.
   const jar = await cookies()
   const pending = jar.get(PROVEN_COOKIE)?.value
   const supabase = await createClient()
-  if (pending && (await verifiedUserId(supabase)) === pending) return finish(await confirmResetSession(supabase, pending))
+  if (pending && (await sessionProvedBy(supabase, pending, phone))) return finish(await confirmResetSession(supabase, pending, phone))
 
   const signedIn = await signedInAlready()
   if (signedIn === null) return { error: "unavailable" }

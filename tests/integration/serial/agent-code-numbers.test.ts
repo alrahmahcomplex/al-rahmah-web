@@ -2,13 +2,15 @@ import { randomInt, randomUUID } from "node:crypto"
 import { Client } from "pg"
 import { describe, expect, test } from "vitest"
 
-import { inRolledBackTransaction, secretClient } from "../../support/db"
+import { actAsStaff, inRolledBackTransaction, secretClient } from "../../support/db"
+import { MANAGER } from "../../support/fixtures"
 
 // Discount codes in the v38 format (#404), held to ABC-123 (#462): three
-// letters from the name, a hyphen, and the next number after the last
-// generated code (ABC-123, then XYZ-124), from 001 to 999 and round again.
-// The numbers come from the sequence agent_code_numbers, so creations at the
-// same moment get different numbers without waiting for each other.
+// letters from the name, a hyphen, and the next number after the highest any
+// agent code holds (#521): ABC-123, then XYZ-124, from 001 to 999 and round
+// again. The numbers come from the sequence agent_code_numbers, which every
+// saved code moves past its own number, so creations at the same moment get
+// different numbers without waiting for each other.
 //
 // A sequence's position is not rolled back with a transaction, so a test that
 // moves it puts it back afterwards (`atNumber`). That is safe only while no
@@ -61,21 +63,52 @@ async function counter(sql: Client) {
 
 const setCounter = (sql: Client, n: number) => sql.query("select setval('public.agent_code_numbers', $1, true)", [n])
 
-// Runs `work` in a rolled-back transaction with the sequence's last number
-// set to `n`, then puts the sequence back where it was.
-async function atNumber<T>(n: number, work: (sql: Client) => Promise<T>): Promise<T> {
+// Runs `work` with the sequence's last number set to `n`, then puts the
+// sequence back where it was.
+async function withCounter<T>(n: number, work: () => Promise<T>): Promise<T> {
   const keeper = new Client({ connectionString: process.env.SUPABASE_DB_URL })
   await keeper.connect()
   const was = await position(keeper)
   try {
-    return await inRolledBackTransaction(async (sql) => {
-      await setCounter(sql, n)
-      return work(sql)
-    })
+    await setCounter(keeper, n)
+    return await work()
   } finally {
     await keeper.query("select setval('public.agent_code_numbers', $1, $2)", [was.last_value, was.is_called])
     await keeper.end()
   }
+}
+
+// The same, inside a rolled-back transaction.
+const atNumber = <T>(n: number, work: (sql: Client) => Promise<T>): Promise<T> => withCounter(n, () => inRolledBackTransaction(work))
+
+// Runs one statement past every trigger, so a code it saves doesn't move the
+// sequence: as if stored before #521, or after the sequence went past 999.
+async function pastTriggers(sql: Client, query: string, params: unknown[] = []) {
+  await sql.query("set local session_replication_role = replica")
+  try {
+    return await sql.query<{ id: string }>(query, params)
+  } finally {
+    await sql.query("set local session_replication_role = origin")
+  }
+}
+
+// The Manager's import, confirmed as the check screen saw it: each row's
+// expected verdict is its verdict now.
+async function confirmImport(sql: Client, rows: { code: string; full_name: string }[]) {
+  const sent = rows.map((row, i) => ({ sheet_row: i + 2, phone: null, whatsapp: null, email: null, ...row }))
+  const { rows: checked } = await sql.query<{ rows: unknown }>(
+    `select jsonb_agg(e.value || jsonb_build_object('expected', v.verdict)) as rows
+     from jsonb_array_elements($1::jsonb) e
+     join public.agent_import_verdicts($1::jsonb) v on v.sheet_row = (e.value ->> 'sheet_row')::integer`,
+    [JSON.stringify(sent)],
+  )
+  await actAsStaff(sql, MANAGER.id)
+  const { rows: answer } = await sql.query<{ answer: { outcome: string; created: number } }>(
+    "select public.confirm_agent_import('agents-521.csv', $2, $1::jsonb) as answer",
+    [JSON.stringify(checked[0].rows), sent.length],
+  )
+  await sql.query("reset role")
+  return answer[0].answer
 }
 
 describe("the Discount code format", () => {
@@ -157,10 +190,11 @@ describe("the Discount code format", () => {
     })
   })
 
-  test("a typed code takes no number; a generated code another record holds is skipped", async () => {
+  test("past 999 a typed code no longer moves the sequence; a generated code another record holds is skipped", async () => {
     const n = farNumber()
     await atNumber(n, async (sql) => {
-      // Codes staff typed, or an import carried, with higher numbers.
+      // Codes staff typed, or an import carried, with higher numbers than the
+      // sequence's wrapped one: the sequence is already past them.
       expect(await create(sql, "ZAWADI XENIA QUINN", `ZXQ-${digits(n + 1)}`)).toBe(`ZXQ-${digits(n + 1)}`)
       expect(await create(sql, "BAKARI ALI JUMA", `BAJ-${digits(n + 3)}`)).toBe(`BAJ-${digits(n + 3)}`)
       expect(await counter(sql)).toBe(n)
@@ -178,8 +212,9 @@ describe("the Discount code format", () => {
   test("a long run of taken codes is passed over", async () => {
     await atNumber(100, async (sql) => {
       await sql.query("select public.set_audit_actor('system')")
-      // 150 typed codes in a row, ZXQ-101 to ZXQ-250, none of which moves the sequence.
-      const planted = await sql.query(
+      // 150 codes in a row, ZXQ-101 to ZXQ-250, none of which moved the sequence.
+      const planted = await pastTriggers(
+        sql,
         `insert into public.marketing_agents (full_name, phone, code)
          select 'Taken Run', '+2556' || lpad((k + $1::int)::text, 8, '0'), 'ZXQ-' || (100 + k)
          from generate_series(1, 150) k`,
@@ -284,29 +319,84 @@ describe("the Discount code format", () => {
   })
 })
 
-describe("the last number", () => {
-  test("is the number in the newest record's code shaped like a generated one, retired records included", async () => {
-    await inRolledBackTransaction(async (sql) => {
-      await sql.query("select public.set_audit_actor('system')")
-      // Records stored before codes were held to ABC-123 (#462), planted past
-      // the triggers that hold new codes to it.
-      await sql.query("set local session_replication_role = replica")
-      const insert = (code: string, at: string) =>
-        sql.query<{ id: string }>(
-          "insert into public.marketing_agents (full_name, phone, code, registered_at) values ('Last Number', $1, $2, $3) returning id",
-          [phone(), code, at],
-        )
-      await insert("MAK-042", "2999-01-01")
-      // Newer, but not in the generated shape: four letters, or no number.
-      await insert("ABCD-999", "2999-01-02")
-      await insert("MAMA.SALMA", "2999-01-03")
-      expect(Number((await sql.query("select public.last_agent_code_number() as n")).rows[0].n)).toBe(42)
-
-      const retired = await insert("RE-0077", "2999-01-04")
-      await sql.query("select public.record_agent_status_change($1, 'retired', 'Test: retired', null)", [retired.rows[0].id])
-      expect(Number((await sql.query("select public.last_agent_code_number() as n")).rows[0].n)).toBe(77)
+describe("the next number comes after the highest any agent code holds (#521)", () => {
+  test("an import moves the sequence: with QVW-150 imported, the next sign-up gets XYZ-151", async () => {
+    await atNumber(140, async (sql) => {
+      // The highest row first: the lower code after it leaves the sequence.
+      const imported = await confirmImport(sql, [
+        { code: "QVW-150", full_name: "QUDRA VUAI WEMA" },
+        { code: "ZXQ-120", full_name: "ZAWADI XENIA QUINN" },
+      ])
+      expect(imported).toMatchObject({ outcome: "imported", created: 2 })
+      expect(await counter(sql)).toBe(150)
+      expect(await signUp(sql, "XAVIER YUSUF ZUBERI")).toMatchObject({ outcome: "registered", code: "XYZ-151" })
     })
   })
+
+  test("a code the Manager types moves the sequence past it; a lower one leaves it", async () => {
+    await atNumber(400, async (sql) => {
+      expect(await create(sql, "ZAWADI XENIA QUINN", "ZXQ-450")).toBe("ZXQ-450")
+      expect(await counter(sql)).toBe(450)
+      expect(await create(sql, "BAKARI ALI JUMA")).toBe("BAJ-451")
+      expect(await create(sql, "QUDRA VUAI WEMA", "QVW-420")).toBe("QVW-420")
+      expect(await counter(sql)).toBe(451)
+      expect(await signUp(sql, "XAVIER YUSUF ZUBERI")).toMatchObject({ outcome: "registered", code: "XYZ-452" })
+    })
+  })
+
+  test("the one-time fix counts retired records, and only codes in the ABC-123 shape", async () => {
+    await atNumber(400, async (sql) => {
+      await sql.query("select public.set_audit_actor('system')")
+      // Only this test's records, as if the system held nothing else.
+      await pastTriggers(sql, "delete from public.marketing_agents")
+      const insert = (code: string) =>
+        pastTriggers(sql, "insert into public.marketing_agents (full_name, phone, code) values ('Highest Number', $1, $2) returning id", [phone(), code])
+      await insert("ZXQ-460")
+      // Older shapes have no number here.
+      await insert("RE-0990")
+      await insert("ABCD-999")
+      const retired = await insert("QVW-470")
+      await sql.query("select public.record_agent_status_change($1, 'retired', 'Test: retired', null)", [retired.rows[0].id])
+      expect(Number((await sql.query("select public.highest_agent_code_number() as n")).rows[0].n)).toBe(470)
+
+      // What the migration runs, then the next sign-up.
+      await sql.query("select public.move_agent_code_numbers_to(public.highest_agent_code_number())")
+      expect(await counter(sql)).toBe(470)
+      expect(await signUp(sql, "XAVIER YUSUF ZUBERI")).toMatchObject({ outcome: "registered", code: "XYZ-471" })
+
+      // It never moves the sequence back.
+      await sql.query("select public.move_agent_code_numbers_to(10)")
+      expect(await counter(sql)).toBe(471)
+    })
+  })
+
+  test("a sign-up during an import gets its number at once, after the import's codes", async () => {
+    const open = async () => {
+      const sql = new Client({ connectionString: process.env.SUPABASE_DB_URL })
+      await sql.connect()
+      // A wait on the import fails the test instead of passing late.
+      await sql.query("set statement_timeout = '5s'")
+      await sql.query("begin")
+      return sql
+    }
+    await withCounter(600, async () => {
+      const importing = await open()
+      const signing = await open()
+      try {
+        // The import is still open, holding its locks, when the agent signs up.
+        expect(await confirmImport(importing, [{ code: "QVW-650", full_name: "QUDRA VUAI WEMA" }])).toMatchObject({ outcome: "imported" })
+        expect(await signUp(signing, "XAVIER YUSUF ZUBERI")).toMatchObject({ outcome: "registered", code: "XYZ-651" })
+      } finally {
+        await importing.query("rollback").catch(() => {})
+        await signing.query("rollback").catch(() => {})
+        await importing.end()
+        await signing.end()
+      }
+    })
+  })
+})
+
+describe("a code's number", () => {
 
   test("reads a code's number only when it has the generated shape", async () => {
     await inRolledBackTransaction(async (sql) => {
@@ -329,6 +419,14 @@ describe("the last number", () => {
         { role: "authenticated", allowed: false },
         { role: "service_role", allowed: false },
       ])
+      // Nor call what moves it.
+      const callable = await sql.query(
+        `select f, r.role
+         from unnest(array['public.highest_agent_code_number()', 'public.move_agent_code_numbers_to(bigint)', 'public.move_agent_code_numbers()']) as f,
+              unnest(array['anon', 'authenticated', 'service_role']) as r(role)
+         where has_function_privilege(r.role, f, 'EXECUTE')`,
+      )
+      expect(callable.rows).toEqual([])
       // Nor PUBLIC, which every role inherits: no grant to it is left.
       const toPublic = await sql.query(
         `select count(*)::int as n

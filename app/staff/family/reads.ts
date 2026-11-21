@@ -105,10 +105,14 @@ export async function readFamily(leadIds: readonly string[], permissions: readon
     groups.map(async ({ contactId, members }): Promise<FamilyCustodian> => {
       const editable = mayEdit && members.every((m) => m.s.open)
       const children = editable ? await listContactChildren(await createClient(), contactId) : null
+      // A student moved to another custodian between the two reads would be shown here but missed by the
+      // correction's check: then the custodian is not offered for change until the page is read again.
+      const listed = children?.ok ? new Set(children.data.map((c) => c.id)) : null
+      const whole = listed !== null && members.every((m) => listed.has(m.s.lead.id))
       return {
         contactId,
         members: members.map((m) => m.s.lead.id),
-        children: children?.ok ? children.data.map((c) => ({ id: c.id, studentName: c.studentName, admissionNumber: c.admissionNumber })) : null,
+        children: whole && children?.ok ? children.data.map((c) => ({ id: c.id, studentName: c.studentName, admissionNumber: c.admissionNumber })) : null,
       }
     }),
   )

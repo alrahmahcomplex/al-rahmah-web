@@ -44,7 +44,10 @@ const digits = (value: string) => value.replace(/\D/g, "")
 const cleanPart = (part: string) => part.trim().replace(/\s+/g, " ").toUpperCase()
 const same = (a: string, b: string) => cleanPart(a) === cleanPart(b)
 
-export function CustodianSheet({ custodian, open, onOpenChange }: { custodian: CustodianView; open: boolean; onOpenChange: (open: boolean) => void }) {
+export function CustodianSheet({ custodian: shown, open, onOpenChange }: { custodian: CustodianView; open: boolean; onOpenChange: (open: boolean) => void }) {
+  // The custodian as they were when Change opened it. A page refresh while the sheet is open (another
+  // card's save) must not turn a field left alone into a write, or change the children the save expects.
+  const [custodian] = useState(shown)
   const first = custodian.members[0]
   // One relationship for every student here, or the students hold different ones and keep them.
   const shared = custodian.members.every(

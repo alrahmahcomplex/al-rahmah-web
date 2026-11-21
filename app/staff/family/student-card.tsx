@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useState, useTransition } from "react"
+import { useRef, useState, useTransition } from "react"
 
 import { Icon } from "@/components/icons"
 import { Avatar, Button, KeyValueList, StatusChip, Tag, TextLink, toast, type KeyValueItem } from "@/components/kit"
@@ -52,7 +52,10 @@ export function StudentCard({ student, canEdit }: { student: StudentCardData; ca
   const { lead } = student
   const router = useRouter()
   const [editing, setEditing] = useState<Editing>(null)
-  const [session, setSession] = useState(0)
+  // Each sheet's edit session. Change mounts only that sheet afresh, so opening another sheet never
+  // replaces a name sheet whose father flow is still saving.
+  const [session, setSession] = useState({ name: 0, class: 0, board: 0, school: 0 })
+  const nameBusyRef = useRef(false)
   const [registering, startRegister] = useTransition()
   const details: StudentDetails = {
     leadId: lead.id,
@@ -68,7 +71,8 @@ export function StudentCard({ student, canEdit }: { student: StudentCardData; ca
         aria-label={`Change ${label} of ${lead.studentName}`}
         onClick={() => {
           // A new edit session: the sheet mounts again and starts from the record as it is now.
-          setSession((n) => n + 1)
+          // A name sheet still saving (its father flow included) opens again as it is instead.
+          if (!(what === "name" && nameBusyRef.current)) setSession((n) => ({ ...n, [what]: n[what] + 1 }))
           setEditing(what)
         }}
       >
@@ -137,7 +141,8 @@ export function StudentCard({ student, canEdit }: { student: StudentCardData; ca
       {canEdit && (
         <>
           <NameSheet
-            key={`name-${session}`}
+            key={session.name}
+            busyRef={nameBusyRef}
             leadId={lead.id}
             studentName={lead.studentName}
             father={student.father}
@@ -145,9 +150,9 @@ export function StudentCard({ student, canEdit }: { student: StudentCardData; ca
             compareWith={student.compareWith}
             {...sheetOpen("name")}
           />
-          <ClassSheet key={`class-${session}`} details={details} {...sheetOpen("class")} />
-          <BoardingSheet key={`board-${session}`} details={details} {...sheetOpen("board")} />
-          {asked && <SchoolSheet key={`school-${session}`} leadId={lead.id} studentName={lead.studentName} school={student.previousSchool} {...sheetOpen("school")} />}
+          <ClassSheet key={session.class} details={details} {...sheetOpen("class")} />
+          <BoardingSheet key={session.board} details={details} {...sheetOpen("board")} />
+          {asked && <SchoolSheet key={session.school} leadId={lead.id} studentName={lead.studentName} school={student.previousSchool} {...sheetOpen("school")} />}
         </>
       )}
     </section>

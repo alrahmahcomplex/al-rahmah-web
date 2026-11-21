@@ -47,17 +47,34 @@ export function studentNameOf(first: string, fatherFirst: string, fatherLast: st
   return [first, fatherFirst, fatherLast].map((part) => part.trim().replace(/\s+/g, " ").toUpperCase()).join(" ")
 }
 
+export type NameParts = { firstName: string; fatherFirst: string; fatherMiddle: string; fatherLast: string }
+
 /**
- * The student's own name: the stored name less the father's first and last
- * names at its end, or its first word when the name was not built that way.
+ * The name boxes for a stored student and father: the student's own name and
+ * the father's three. The student's name ends with the father's first name
+ * and his last name, so the father's last name is the longest run of his
+ * last words that the student's name ends with, after his first name. That
+ * keeps a last name of two words ("DE SOUZA") whole. A name not built that
+ * way gives its first word, and the father's first word, middle words and
+ * last word.
  */
-export function ownName(studentName: string, fatherFullName: string | null): string {
+export function nameParts(studentName: string, fatherFullName: string | null): NameParts {
   const name = words(studentName)
   const father = words(fatherFullName)
-  const tail = father.length >= 2 ? [father[0], father[father.length - 1]] : []
-  const ends =
-    tail.length === 2 && name.length > 2 && name.slice(-2).every((word, i) => word.toLowerCase() === tail[i].toLowerCase())
-  return ends ? name.slice(0, -2).join(" ") : (name[0] ?? "")
+  const same = (a: string[], b: string[]) => a.length === b.length && a.every((word, i) => word.toLowerCase() === b[i].toLowerCase())
+  // k: how many of the father's last words are his last name. At least one word stays for his middle name when he has three or more.
+  for (let k = Math.max(1, father.length - 2); k >= 1 && father.length >= 2; k--) {
+    const tail = [father[0], ...father.slice(-k)]
+    if (name.length > tail.length && same(name.slice(-tail.length), tail)) {
+      return { firstName: name.slice(0, -tail.length).join(" "), fatherFirst: father[0], fatherMiddle: father.slice(1, -k).join(" "), fatherLast: father.slice(-k).join(" ") }
+    }
+  }
+  return {
+    firstName: name[0] ?? "",
+    fatherFirst: father[0] ?? "",
+    fatherMiddle: father.length > 2 ? father.slice(1, -1).join(" ") : "",
+    fatherLast: father.length > 1 ? father[father.length - 1] : "",
+  }
 }
 
 /** Groups students by the custodian they sit on, in the order the students come. */

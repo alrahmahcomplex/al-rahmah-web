@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { byCustodian, familyHref, familyTitle, ownName, parseFamilyIds, studentNameOf } from "@/app/staff/family/model"
+import { byCustodian, familyHref, familyTitle, nameParts, parseFamilyIds, studentNameOf } from "@/app/staff/family/model"
 
 // The Family page's address and words (#512).
 
@@ -59,12 +59,23 @@ describe("the student's name", () => {
     expect(studentNameOf(" neema ", "juma", "mrisho")).toBe("NEEMA JUMA MRISHO")
   })
 
-  it("gives back the student's own name, also when it has two words", () => {
-    expect(ownName("NEEMA JUMA MRISHO", "JUMA SALIM MRISHO")).toBe("NEEMA")
-    expect(ownName("MARY ANNE JUMA MRISHO", "JUMA SALIM MRISHO")).toBe("MARY ANNE")
-    // A name not built from the father's: its first word.
-    expect(ownName("AMINA HASSANI", null)).toBe("AMINA")
-    expect(ownName("AMINA HASSANI ALI", "JUMA SALIM MRISHO")).toBe("AMINA")
+  it("gives back the boxes the stored names were built from", () => {
+    expect(nameParts("NEEMA JUMA MRISHO", "JUMA SALIM MRISHO")).toEqual({ firstName: "NEEMA", fatherFirst: "JUMA", fatherMiddle: "SALIM", fatherLast: "MRISHO" })
+    expect(nameParts("MARY ANNE JUMA MRISHO", "JUMA SALIM MRISHO")).toMatchObject({ firstName: "MARY ANNE", fatherLast: "MRISHO" })
+  })
+
+  it("keeps a last name of two words whole, so a change to the student's own name keeps it", () => {
+    const parts = nameParts("NEEMA JUMA DE SOUZA", "JUMA SALIM DE SOUZA")
+    expect(parts).toEqual({ firstName: "NEEMA", fatherFirst: "JUMA", fatherMiddle: "SALIM", fatherLast: "DE SOUZA" })
+    expect(studentNameOf("AMINA", parts.fatherFirst, parts.fatherLast)).toBe("AMINA JUMA DE SOUZA")
+    // Built with only the last word: the stored student name says so.
+    expect(nameParts("NEEMA JUMA SOUZA", "JUMA SALIM DE SOUZA")).toMatchObject({ fatherMiddle: "SALIM DE", fatherLast: "SOUZA" })
+  })
+
+  it("falls back to first words for a name not built from the father's", () => {
+    expect(nameParts("AMINA HASSANI", null)).toEqual({ firstName: "AMINA", fatherFirst: "", fatherMiddle: "", fatherLast: "" })
+    expect(nameParts("AMINA HASSANI ALI", "JUMA SALIM MRISHO")).toEqual({ firstName: "AMINA", fatherFirst: "JUMA", fatherMiddle: "SALIM", fatherLast: "MRISHO" })
+    expect(nameParts("AMINA JUMA MRISHO", "JUMA MRISHO")).toEqual({ firstName: "AMINA", fatherFirst: "JUMA", fatherMiddle: "", fatherLast: "MRISHO" })
   })
 })
 

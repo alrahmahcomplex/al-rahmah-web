@@ -77,7 +77,8 @@ export function BoardingSheet({ details, open, onOpenChange }: { details: Studen
     <Sheet
       open={open}
       onOpenChange={(next) => {
-        if (pending) return
+        // From the pick until its save ends, the sheet stays: the save always finishes in this sheet.
+        if (pending || choosing.current) return
         if (next) {
           setPicked(details.dayOrBoarding)
           setProblem(null)

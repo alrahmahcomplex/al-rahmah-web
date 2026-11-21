@@ -1,14 +1,14 @@
 "use client"
 
-import { useId, useRef, useState } from "react"
+import { useEffect, useId, useRef, useState, type RefObject } from "react"
 
 import { StudentNameBoxes, type StudentName } from "@/components/guided-form/names"
 import { Button, FieldError, Sheet, toast } from "@/components/kit"
 
 import { useFatherNameFlow } from "../applicants/[id]/father-flow"
-import { clean, norm, partsOf } from "../applicants/[id]/father-school"
+import { clean, norm } from "../applicants/[id]/father-school"
 import type { SiblingPerson } from "../applicants/[id]/sibling-read"
-import { ownName, studentNameOf } from "./model"
+import { nameParts, studentNameOf } from "./model"
 import { saveStudent, useSheetSave } from "./saving"
 
 // Change the name (#512, prototype v54): the student's own name and the
@@ -38,7 +38,10 @@ export function NameSheet({
   compareWith,
   open,
   onOpenChange,
+  busyRef,
 }: {
+  // Set while a save runs, so the card does not remount the sheet under it.
+  busyRef: RefObject<boolean>
   leadId: string
   studentName: string
   father: string | null
@@ -47,7 +50,7 @@ export function NameSheet({
   open: boolean
   onOpenChange: (open: boolean) => void
 }) {
-  const [name, setName] = useState<StudentName>(() => ({ firstName: ownName(studentName, father), ...partsOf(father) }))
+  const [name, setName] = useState<StudentName>(() => nameParts(studentName, father))
   const [touched, setTouched] = useState(false)
   const [bad, setBad] = useState<string | null>(null)
   const { pending: renaming, problem, setProblem, run } = useSheetSave()
@@ -62,10 +65,8 @@ export function NameSheet({
     if (!typed) return
     const typedFather = [typed.ff, typed.fm, typed.fl].join(" ")
     const words = wordsOf(savedFather)
-    const built =
-      norm(savedFather) === norm(typedFather)
-        ? studentNameOf(typed.first, typed.ff, typed.fl)
-        : studentNameOf(typed.first, words[0] ?? "", words.at(-1) ?? "")
+    const asTyped = norm(savedFather) === norm(typedFather)
+    const built = asTyped ? studentNameOf(typed.first, typed.ff, typed.fl) : studentNameOf(typed.first, words[0] ?? "", words.at(-1) ?? "")
     onOpenChange(false)
     if (norm(built) === norm(studentName)) {
       if (message) toast(message)
@@ -78,7 +79,8 @@ export function NameSheet({
         if (message) toast(message === PLAIN ? "Name saved. The sibling check runs again." : message)
       },
       (reason) => {
-        // The father's name is on the record now; the draft stays, so Save tries the student's name alone.
+        // The father's name is on the record now. The draft takes the spelling saved, so Save tries the student's name alone.
+        if (!asTyped) setName((n) => ({ ...n, fatherFirst: words[0] ?? "", fatherMiddle: words.slice(1, -1).join(" "), fatherLast: words.at(-1) ?? "" }))
         setProblem(`The father’s name was saved, but the student’s name was not. ${reason}`)
         onOpenChange(true)
       },
@@ -99,6 +101,9 @@ export function NameSheet({
     onAsk: () => onOpenChange(false),
   })
   const pending = renaming || flow.pending
+  useEffect(() => {
+    busyRef.current = pending
+  }, [busyRef, pending])
 
   function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()

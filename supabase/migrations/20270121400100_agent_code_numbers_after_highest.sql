@@ -30,12 +30,17 @@
 -- No lock is waited for:
 --
 -- - While a record is being saved, its number is held with a transaction
---   advisory lock (`agent-code-number:<n>`) that a creation only tries
---   (pg_try_advisory_xact_lock). The trigger hold_agent_code_number takes it
---   for every saved code. A number another creation, an import or the
---   Manager is saving right now is passed over, so creations at the same
---   moment never share a number, and a sign-up never waits on an import.
---   After the lock, a creation looks again for a record saved meanwhile.
+--   advisory lock (`agent-code-number:<n>`). A generated code's creation
+--   only tries it (pg_try_advisory_xact_lock): a number another creation, an
+--   import or the Manager is saving right now is passed over, so creations
+--   at the same moment never share a number, and a sign-up never waits on an
+--   import. After the lock, a creation looks again for a record saved
+--   meanwhile.
+-- - The trigger hold_agent_code_number takes the lock for every saved code.
+--   A generated code already holds it. A typed or imported code waits for
+--   it while a sign-up is saving that number, so no generated code can take
+--   a number a typed code is being saved with; a sign-up with a typed code
+--   may wait that way on an import saving the same number.
 -- - A creation checks a number's code before trying its lock, so it holds
 --   only a number it will use.
 -- - A code an open import or creation is still saving isn't visible yet, so
@@ -44,16 +49,16 @@
 --   numbers repeat early; once those creations finish every number is held
 --   anyway.
 --
--- The sequence agent_code_numbers is no longer used. It stays until a later
--- migration, so a creation still running the old function never fails.
--- last_agent_code_number, which seeded it once, is dropped.
+-- The sequence agent_code_numbers no longer hands out numbers. Its position
+-- stays at the last number the old function took, and a creation starts
+-- above it too, so it never meets a number a call still running the old
+-- function is saving. It stays until a later migration, so such a call never
+-- fails. last_agent_code_number, which seeded it once, is dropped.
 --
 -- Supabase runs these statements one by one, outside a transaction. The
 -- functions are created and revoked in one block, so no client role can call
--- them in between. The trigger goes in before create_agent_record changes:
--- creating it waits for creations that have already saved a record under the
--- old function, and every record saved after it holds its number, so the new
--- function passes over a number the old one is still saving.
+-- them in between. The trigger goes in before create_agent_record changes,
+-- so every record saved from then on holds its number.
 
 do $migration$
 begin
@@ -72,9 +77,9 @@ begin
     revoke execute on function public.highest_agent_code_number() from public, anon, authenticated, service_role;
 
     -- The number a code holds while its record is being saved, for
-    -- create_agent_record to pass over. Never waits: a generated code's
-    -- creation already holds it, and a typed code keeps its number whoever
-    -- holds it.
+    -- create_agent_record to pass over. A generated code's creation already
+    -- holds it, so this returns at once; a typed or imported code waits for
+    -- a creation saving the same number to finish.
     create function public.hold_agent_code_number()
     returns trigger
     language plpgsql
@@ -83,7 +88,7 @@ begin
     as $$
     begin
         if public.is_agent_code_shape(new.code) then
-            perform pg_try_advisory_xact_lock(hashtextextended('agent-code-number:' || right(new.code, 3)::integer, 0));
+            perform pg_advisory_xact_lock(hashtextextended('agent-code-number:' || right(new.code, 3)::integer, 0));
         end if;
         return new;
     end;
@@ -129,6 +134,7 @@ declare
     candidate text;
     number integer;
     highest integer;
+    floor_number integer;
     holders bigint;
     every_number_held boolean := false;
     tried integer[] := '{}';
@@ -184,9 +190,12 @@ begin
         if draft.agent_code is not null then
             candidate := draft.agent_code;
         elsif not every_number_held then
-            -- No record holds the number: above the highest first, then the
+            -- No record holds the number: above the highest and the last
+            -- number the old function took first, then any between, then the
             -- lowest.
             highest := public.highest_agent_code_number();
+            select greatest(highest, case when s.is_called then s.last_value else s.last_value - 1 end) into floor_number
+            from public.agent_code_numbers s;
             select g into number
             from generate_series(1, 999) g
             where g <> all (tried)
@@ -194,7 +203,7 @@ begin
                   select right(a.code, 3)::integer from public.marketing_agents a
                   where public.is_agent_code_shape(a.code)
               )
-            order by g <= highest, g
+            order by g <= floor_number, g <= highest, g
             limit 1;
             if number is null then
                 every_number_held := true;
@@ -214,8 +223,12 @@ begin
             );
         else
             -- Every number held: the lowest whose code with these letters is
-            -- free, noting how many records hold it.
-            select g into number
+            -- free, and how many records hold it, read together.
+            select g, (
+                       select count(*) from public.marketing_agents a
+                       where case when public.is_agent_code_shape(a.code) then right(a.code, 3)::integer end = g
+                   )
+            into number, holders
             from generate_series(1, 999) g
             where g <> all (tried_again)
               and not public.agent_code_issued(prefix || '-' || lpad(g::text, 3, '0'))
@@ -229,8 +242,6 @@ begin
             if number is null then
                 raise exception 'no_free_code' using detail = prefix;
             end if;
-            select count(*) into holders from public.marketing_agents a
-            where case when public.is_agent_code_shape(a.code) then right(a.code, 3)::integer end = number;
             tried_again := tried_again || number;
             candidate := prefix || '-' || lpad(number::text, 3, '0');
             continue when not pg_try_advisory_xact_lock(hashtextextended('agent-code-number:' || number, 0));

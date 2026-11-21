@@ -384,6 +384,58 @@ describe("the next number comes after the highest any agent code holds (#521)", 
   })
 })
 
+describe("while the old function may still be running (the migration itself)", () => {
+  test("a creation starts above the last number the old function took, then takes the ones between", async () => {
+    // The sequence's position is not rolled back with a transaction: put it back.
+    const keeper = new Client({ connectionString: process.env.SUPABASE_DB_URL })
+    await keeper.connect()
+    const { rows: was } = await keeper.query<{ last_value: string; is_called: boolean }>("select last_value, is_called from public.agent_code_numbers")
+    try {
+      await keeper.query("select setval('public.agent_code_numbers', 152, true)")
+      await inRolledBackTransaction(async (sql) => {
+        await onlyTestAgents(sql)
+        await plant(sql, ["QQQ-150"])
+        // An old call may be saving 151 or 152 right now.
+        expect(await create(sql, "ZAWADI XENIA QUINN")).toBe("ZXQ-153")
+        // With the old function's last number at 999, the numbers above the
+        // highest held still come first, lowest of them first.
+        await keeper.query("select setval('public.agent_code_numbers', 999, true)")
+        expect(await create(sql, "ZAWADI XENIA QUINN")).toBe("ZXQ-154")
+      })
+    } finally {
+      await keeper.query("select setval('public.agent_code_numbers', $1, $2)", [was[0].last_value, was[0].is_called])
+      await keeper.end()
+    }
+  })
+})
+
+describe("a typed code and a sign-up saving the same number", () => {
+  test("the import waits for the sign-up, then holds the number, so a later sign-up can't take it", async () => {
+    const signing = await openTransaction()
+    const importing = await openTransaction()
+    const later = await openTransaction()
+    try {
+      const first = await signUp(signing, `Amina Bakari Held${randomUUID().slice(0, 4)}`)
+      expect(first.outcome).toBe("registered")
+      const held = numberOf(first.code)
+
+      // The import brings a code with the number the open sign-up holds.
+      const importDone = confirmImport(importing, [{ code: `QVW-${held}`, full_name: "QUDRA VUAI WEMA" }])
+      const stillWaiting = await Promise.race([importDone.then(() => false), new Promise((resolve) => setTimeout(() => resolve(true), 500))])
+      expect(stillWaiting).toBe(true)
+
+      // The sign-up gives up; the import goes on, holding the number while open.
+      await signing.query("rollback")
+      expect(await importDone).toMatchObject({ outcome: "imported" })
+      const second = await signUp(later, `Xavier Yusuf Held${randomUUID().slice(0, 4)}`)
+      expect(second.outcome).toBe("registered")
+      expect(numberOf(second.code)).not.toBe(held)
+    } finally {
+      await closeAll(signing, importing, later)
+    }
+  })
+})
+
 describe("a code's number", () => {
   test("reads a code's number only when it has the generated shape", async () => {
     await inRolledBackTransaction(async (sql) => {

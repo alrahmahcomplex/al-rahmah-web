@@ -138,6 +138,17 @@ describe("SchoolSheet", () => {
     expect(within(sheet()).getByRole("alert")).toHaveTextContent("Choose the country from the list.")
   })
 
+  it("a country search cancelled with Escape is not a change to the country (#511)", async () => {
+    render(<Sheet school={{ kind: "school", name: "Green Hills", type: "private", region: "Outside Tanzania" }} />)
+    fireEvent.click(within(sheet()).getByRole("radio", { name: "Public" }))
+    fireEvent.click(within(sheet()).getByRole("button", { name: "Show all countries" }))
+    const search = await screen.findByRole("combobox", { name: "Search countries" })
+    fireEvent.input(search, { target: { value: "uga" } })
+    fireEvent.keyDown(search, { key: "Escape" })
+    await save()
+    expect(actions.savePreviousSchool).toHaveBeenCalledWith("lead", { kind: "school", name: "Green Hills", type: "public", region: "Outside Tanzania" })
+  })
+
   it("saves private or public alone on an old school abroad with no country, keeping its name as stored (#511)", async () => {
     render(<Sheet school={{ kind: "school", name: "Green Hills", type: "private", region: "Outside Tanzania" }} />)
     fireEvent.click(within(sheet()).getByRole("radio", { name: "Public" }))

@@ -691,7 +691,7 @@ export function CustodianQuestion({
   const phoneRef = useRef<HTMLInputElement>(null)
   const focusTimer = useRef(0)
   // Each choice keeps its own numbers: the father's number never becomes someone else's, and back again.
-  const numbersOf = useRef<Partial<Record<"father" | "else", { phone: string; whatsapp: string }>>>({})
+  const numbersOf = useRef<Partial<Record<"father" | "else", { phone: string; whatsapp: string; rel: RelationshipChoice | null; desc: string }>>>({})
 
   useEffect(() => () => window.clearTimeout(focusTimer.current), [])
 
@@ -734,7 +734,7 @@ export function CustodianQuestion({
   function pickWho(next: string) {
     const chosen = next === "father" ? "father" : "else"
     const on = chosen === "father"
-    if (who && who !== chosen) numbersOf.current[who] = { phone, whatsapp }
+    if (who && who !== chosen) numbersOf.current[who] = { phone, whatsapp, rel, desc }
     setWho(chosen)
     setRel(null)
     setDesc("")
@@ -742,11 +742,16 @@ export function CustodianQuestion({
     setSame(null)
     setError("")
     // The form's number belongs to the form's answer: it comes back with it, and goes with the other.
-    const back = numbersOf.current[chosen] ?? formNumber(on)
+    const kept = numbersOf.current[chosen]
+    const back = kept ?? formNumber(on)
     setPhone(back.phone)
     setWhatsapp(back.whatsapp)
     setWaOpen(!!back.whatsapp)
-    if (prefill) {
+    // The relationship goes with the person too: back to a choice, staff's own answer comes back, not the form's.
+    if (kept) {
+      setRel(kept.rel)
+      setDesc(kept.desc)
+    } else if (prefill) {
       const r = on === formDad ? givenRelationship(prefill) : null
       setRel(r?.choice ?? null)
       setDesc(r?.description ?? "")

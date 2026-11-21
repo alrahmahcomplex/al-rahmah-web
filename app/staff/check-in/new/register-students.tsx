@@ -546,6 +546,9 @@ function RegisterForm({ staffId, today, years, defaultYear, fees, canLink, canEn
                 : `${s.school.name} · ${s.school.type === "private" ? "Private" : "Public"} · ${schoolWhere(s.school)}${legacy ? " · country not known yet" : ""}`,
           body: () => (
             <SchoolQuestion
+              // A new answer (Not known yet keeping the school included) opens the step afresh on it, so nothing
+              // typed before and left behind comes back.
+              key={JSON.stringify(s.school ?? null)}
               id={`rs-${sid}-school`}
               first={f}
               saved={prefillSchool}

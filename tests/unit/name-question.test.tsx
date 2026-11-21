@@ -274,6 +274,29 @@ describe("CustodianQuestion", () => {
     // Much typing: give a busy machine time.
   }, 15_000)
 
+  it("at check-in, back to Someone else brings staff's own relationship back, not the form's", async () => {
+    render(
+      <CustodianQuestion
+        {...base}
+        prefill={{
+          contact: { id: "c-form", fullName: "SAIDA OMARI HASSAN", phone: "+255755000222", whatsapp: null, children: [] },
+          relationship: "Mother",
+          description: null,
+        }}
+        onDone={() => {}}
+      />,
+    )
+    const mobile = screen.getByRole("textbox", { name: "Custodian’s mobile number" })
+    await userEvent.clear(mobile)
+    await userEvent.type(mobile, "0712345678")
+    await userEvent.click(screen.getByRole("radio", { name: "Guardian" }))
+    await userEvent.click(screen.getByRole("radio", { name: /The fathers*ALI OMARI HASSAN/ }))
+    await userEvent.click(screen.getByRole("radio", { name: /Someone elses*Mother, guardian/ }))
+    expect(screen.getByRole("textbox", { name: "Custodian’s mobile number" })).toHaveValue("0712345678")
+    expect(screen.getByRole("radio", { name: "Guardian" })).toBeChecked()
+    expect(screen.getByRole("radio", { name: "Mother" })).not.toBeChecked()
+  })
+
   it("opens on Someone else at check-in when the Admission form named a custodian", () => {
     render(
       <CustodianQuestion

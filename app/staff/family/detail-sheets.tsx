@@ -270,7 +270,13 @@ export function SchoolSheet({
           />
           <Reveal open={out}>
             {/* Typing in the country box counts as changing it, even when the text matches no country yet. */}
-            <div className="fam-form pt-1" onInput={() => setCountryTouched(true)}>
+            <div
+              className="fam-form pt-1"
+              // The list's search box sends its typing here too, through the portal: only the country box counts.
+              onInput={(e) => {
+                if (e.target instanceof HTMLElement && e.target.id === `${id}-country-field`) setCountryTouched(true)
+              }}
+            >
               <p className="fam-q" id={`${id}-country`}>
                 Which country is the school in?
               </p>

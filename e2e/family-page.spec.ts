@@ -101,15 +101,29 @@ test("staff change a student's name, class and custodian on one page", async ({ 
   await expect(page.getByRole("status").filter({ hasText: "Class changed to STD 6." })).toBeVisible()
   await expect(answer(page, newName, "Class")).toHaveText("STD 6")
 
-  // The custodian's mobile number, once for both of the mother's children.
+  // The custodian: a number typed and closed without saving is gone when the sheet opens again.
   const custodians = page.getByRole("region", { name: "Custodians" })
-  await custodians.getByRole("button", { name: `Change the custodian MWANAIDI SALIM ${family.last}` }).click()
+  const changeMother = custodians.getByRole("button", { name: `Change the custodian MWANAIDI SALIM ${family.last}` })
   const custodianSheet = page.getByRole("dialog", { name: "Change the custodian" })
+  await changeMother.click()
+  const before = await custodianSheet.getByLabel("Mobile number", { exact: true }).inputValue()
+  await custodianSheet.getByLabel("Mobile number", { exact: true }).fill(mobile())
+  await custodianSheet.getByRole("button", { name: "Close" }).click()
+  await changeMother.click()
+  await expect(custodianSheet.getByLabel("Mobile number", { exact: true })).toHaveValue(before)
+
+  // A new number and relationship, saved once for both of the mother's children.
   const number = mobile()
   await custodianSheet.getByLabel("Mobile number", { exact: true }).fill(number)
+  await custodianSheet.locator("label").filter({ has: page.getByRole("radio", { name: "Other", exact: true }) }).click()
+  await custodianSheet.getByLabel("How they are related to the students").fill("AUNT")
   await custodianSheet.getByRole("button", { name: "Save" }).click()
   await expect(page.getByRole("status").filter({ hasText: "Custodian saved." })).toBeVisible()
   await expect(custodians).toContainText(number.slice(1))
+  // One relationship for both children: the card shows it once, not child by child.
+  await expect(custodians).toContainText(`MWANAIDI SALIM ${family.last}· AUNT`)
+  // The relative's child keeps their father as custodian.
+  await expect(custodians).toContainText(`RASHIDI KOMBO ${family.otherLast}· Father`)
 
   // The changes are on each student's own record.
   await page.goto(`/staff/applicants/${family.ids[0]}`)
@@ -130,6 +144,22 @@ test("a father's name changed on the page renames the student", async ({ page })
   const renamed = name.replace(family.otherLast, newLast)
   await expect(answer(page, renamed, "Father")).toHaveText(`RASHIDI SALIM ${newLast}`)
   await expect(answer(page, renamed, "Full name")).toHaveText(renamed)
+})
+
+test("a refused rename keeps the sheet open with what was typed", async ({ page }) => {
+  const family = await registerFamily()
+  await open(page, ADMISSIONS, family.href)
+
+  // The second child given the first child's name, on the same custodian: a duplicate.
+  const [first, second] = family.names
+  await card(page, second).getByRole("button", { name: `Change the name of ${second}` }).click()
+  const sheet = page.getByRole("dialog", { name: "Change the name" })
+  await sheet.getByPlaceholder("Student’s name").fill(first.split(" ")[0])
+  await sheet.getByRole("button", { name: "Save" }).click()
+  await expect(sheet.getByRole("alert")).toContainText("would make the student a duplicate")
+  await expect(sheet.getByPlaceholder("Student’s name")).toHaveValue(first.split(" ")[0])
+  await sheet.getByRole("button", { name: "Close" }).click()
+  await expect(answer(page, second, "Full name")).toHaveText(second)
 })
 
 test("Register for interview puts one student on the list and leaves the others", async ({ page }) => {
@@ -157,6 +187,8 @@ test("an address naming a student the page can't show is not found", async ({ pa
   const family = await registerFamily()
   await open(page, ADMISSIONS, `/staff/family?students=${family.ids[0]},00000000-0000-4000-8000-000000000000`)
   await expect(page.getByRole("heading", { name: "This page does not exist" })).toBeVisible()
+  // Nothing of the family the staff member could read is shown either.
+  await expect(card(page, family.names[0])).toHaveCount(0)
 
   await page.goto(`/staff/family?students=${family.ids[0]}`)
   await expect(page.getByRole("heading", { name: "This page does not exist" })).toBeVisible()

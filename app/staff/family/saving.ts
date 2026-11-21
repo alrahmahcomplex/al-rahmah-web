@@ -29,16 +29,10 @@ export type StudentDetails = {
   dayOrBoarding: DayOrBoarding
 }
 
-/** One student's name, class or Day or boarding, with the rest sent as they are (the record's Edit student). */
-export async function saveStudent(details: StudentDetails, change: Partial<Omit<StudentDetails, "leadId">>): Promise<CorrectionOutcome> {
-  const next = { ...details, ...change }
+/** One student's name, class or Day or boarding. Only that answer is sent, so one read earlier never overwrites a newer change to the others. */
+export async function saveStudent(leadId: string, change: { studentName?: string; className?: LeadClass; dayOrBoarding?: DayOrBoarding }): Promise<CorrectionOutcome> {
   try {
-    return await correctStudent(details.leadId, {
-      fullName: next.studentName,
-      className: next.className,
-      enrollmentYear: next.enrollmentYear,
-      dayOrBoarding: next.dayOrBoarding,
-    })
+    return await correctStudent(leadId, { fullName: change.studentName, className: change.className, dayOrBoarding: change.dayOrBoarding })
   } catch {
     return { status: "refused", field: null, message: LOST }
   }
@@ -49,11 +43,12 @@ export function useSheetSave() {
   const router = useRouter()
   const [problem, setProblem] = useState<string | null>(null)
   const [pending, startTransition] = useTransition()
-  function run(save: () => Promise<CorrectionOutcome>, done: () => void) {
+  // `refused` replaces showing the reason in the sheet, for a caller that says more.
+  function run(save: () => Promise<CorrectionOutcome>, done: () => void, refused?: (reason: string) => void) {
     setProblem(null)
     startTransition(async () => {
       const outcome = await save()
-      if (outcome.status !== "saved") return setProblem(refusalText(outcome))
+      if (outcome.status !== "saved") return refused ? refused(refusalText(outcome)) : setProblem(refusalText(outcome))
       done()
       router.refresh()
     })

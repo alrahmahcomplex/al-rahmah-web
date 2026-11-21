@@ -16,7 +16,7 @@ import { CustodianSheet, type CustodianView } from "./custodian-sheet"
 export type CustodianCardData = Omit<CustodianView, "members" | "children"> & {
   members: (CustodianView["members"][number] & { firstName: string })[]
   // Null when it may not be changed here.
-  children: string[] | null
+  children: CustodianView["children"] | null
 }
 
 const said = (m: { relationship: Relationship; relationshipDescription: string | null }) =>
@@ -30,6 +30,8 @@ function relationshipLine(members: CustodianCardData["members"]) {
 
 export function CustodiansCard({ custodians, broughtBy }: { custodians: CustodianCardData[]; broughtBy: string[] }) {
   const [editing, setEditing] = useState<string | null>(null)
+  // Each Change mounts the sheet afresh, so it starts from the custodian as they are now.
+  const [session, setSession] = useState(0)
   return (
     <Card title="Custodians" className="fam-side">
       {custodians.map((c) => (
@@ -39,7 +41,10 @@ export function CustodiansCard({ custodians, broughtBy }: { custodians: Custodia
             <b>{c.fullName}</b>
             <span>· {relationshipLine(c.members)}</span>
             {c.children && (
-              <TextLink aria-label={`Change the custodian ${c.fullName}`} onClick={() => setEditing(c.contactId)}>
+              <TextLink aria-label={`Change the custodian ${c.fullName}`} onClick={() => {
+                  setSession((n) => n + 1)
+                  setEditing(c.contactId)
+                }}>
                 Change
               </TextLink>
             )}
@@ -54,6 +59,7 @@ export function CustodiansCard({ custodians, broughtBy }: { custodians: Custodia
           </div>
           {c.children && (
             <CustodianSheet
+              key={session}
               custodian={{ ...c, children: c.children }}
               open={editing === c.contactId}
               onOpenChange={(open) => setEditing(open ? c.contactId : null)}

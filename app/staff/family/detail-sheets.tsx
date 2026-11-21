@@ -1,6 +1,6 @@
 "use client"
 
-import { useId, useState } from "react"
+import { useId, useRef, useState } from "react"
 
 import { Button, ChipButtons, ChoiceTiles, ClassPicker, Field, FieldError, Note, Sheet, toast } from "@/components/kit"
 import type { LeadPreviousSchool, PreviousSchoolType } from "@/lib/services/lead-details"
@@ -12,12 +12,15 @@ import { LOST, saveStudent, useSheetSave, type StudentDetails } from "./saving"
 
 // The Family page's sheets for one answer each (#512, prototype v54): the
 // class, Day or boarding and the previous school. Each saves through the
-// lead record's own action.
+// lead record's own action. The card mounts each sheet afresh for every edit,
+// so a sheet starts from the record as it is now.
 
 const PICK_MS = 240
 
 export function ClassSheet({ details, open, onOpenChange }: { details: StudentDetails; open: boolean; onOpenChange: (open: boolean) => void }) {
   const { problem, setProblem, pending, run } = useSheetSave()
+  // The first tap wins until its save ends.
+  const choosing = useRef(false)
   return (
     <Sheet
       open={open}
@@ -38,13 +41,18 @@ export function ClassSheet({ details, open, onOpenChange }: { details: StudentDe
           picked={details.className}
           defaultLevel={1}
           onPick={(cls: LeadClass) => {
-            if (pending) return
+            if (pending || choosing.current) return
             if (cls === details.className) return onOpenChange(false)
+            choosing.current = true
             run(
-              () => saveStudent(details, { className: cls }),
+              () => saveStudent(details.leadId, { className: cls }),
               () => {
                 onOpenChange(false)
                 toast(`Class changed to ${cls}. The fee is worked out again.`)
+              },
+              (reason) => {
+                choosing.current = false
+                setProblem(reason)
               },
             )
           }}
@@ -62,6 +70,8 @@ export function ClassSheet({ details, open, onOpenChange }: { details: StudentDe
 export function BoardingSheet({ details, open, onOpenChange }: { details: StudentDetails; open: boolean; onOpenChange: (open: boolean) => void }) {
   const { problem, setProblem, pending, run } = useSheetSave()
   const [picked, setPicked] = useState<DayOrBoarding>(details.dayOrBoarding)
+  // The first pick wins: a second tap before its save ends is ignored, so two quick taps never save twice.
+  const choosing = useRef(false)
   const id = useId()
   return (
     <Sheet
@@ -89,15 +99,22 @@ export function BoardingSheet({ details, open, onOpenChange }: { details: Studen
             options={DAY_OR_BOARDING.map((value) => ({ value, label: value }))}
             value={picked}
             onChange={(value) => {
+              if (choosing.current || pending) return
+              choosing.current = true
               const next = value as DayOrBoarding
               setPicked(next)
               window.setTimeout(() => {
                 if (next === details.dayOrBoarding) return onOpenChange(false)
                 run(
-                  () => saveStudent(details, { dayOrBoarding: next }),
+                  () => saveStudent(details.leadId, { dayOrBoarding: next }),
                   () => {
                     onOpenChange(false)
                     toast("Saved. The fee is worked out again.")
+                  },
+                  (reason) => {
+                    // Refused: the sheet stays, and another pick may try again.
+                    choosing.current = false
+                    setProblem(reason)
                   },
                 )
               }, PICK_MS)
@@ -143,7 +160,8 @@ export function SchoolSheet({
     event.preventDefault()
     if (pending) return
     const n = name.trim().replace(/\s+/g, " ").toUpperCase()
-    if (n.length < 3) return setProblem("Type the school’s name.")
+    // The record's rule: two letters or more.
+    if (n.length < 2) return setProblem("Type the school’s name.")
     if (!type) return setProblem("Choose private or public.")
     if (!region) return setProblem("Choose the region from the list.")
     run(

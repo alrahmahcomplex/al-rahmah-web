@@ -40,10 +40,11 @@ export type FamilyCustodian = {
   contactId: string
   // The students on this page who sit on the custodian, in the page's order.
   members: string[]
-  // Every lead on the custodian, closed ones too, for the correction's
-  // warning check. Null when they could not be listed or the staff member
-  // may not edit: the custodian is then not offered for change.
-  children: string[] | null
+  // Every lead on the custodian, closed ones too: a change reaches them all,
+  // so the sheet names those not on this page and sends every id for the
+  // correction's check. Null when they could not be listed or the staff
+  // member may not edit: the custodian is then not offered for change.
+  children: { id: string; studentName: string; admissionNumber: string }[] | null
 }
 
 export type Family =
@@ -107,7 +108,7 @@ export async function readFamily(leadIds: readonly string[], permissions: readon
       return {
         contactId,
         members: members.map((m) => m.s.lead.id),
-        children: children?.ok ? children.data.map((c) => c.id) : null,
+        children: children?.ok ? children.data.map((c) => ({ id: c.id, studentName: c.studentName, admissionNumber: c.admissionNumber })) : null,
       }
     }),
   )

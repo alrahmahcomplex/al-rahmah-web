@@ -52,6 +52,7 @@ export function StudentCard({ student, canEdit }: { student: StudentCardData; ca
   const { lead } = student
   const router = useRouter()
   const [editing, setEditing] = useState<Editing>(null)
+  const [session, setSession] = useState(0)
   const [registering, startRegister] = useTransition()
   const details: StudentDetails = {
     leadId: lead.id,
@@ -63,7 +64,14 @@ export function StudentCard({ student, canEdit }: { student: StudentCardData; ca
   const asked = !NO_SCHOOL_ASKED.includes(lead.className)
   const change = (what: Exclude<Editing, null>, label: string) =>
     canEdit ? (
-      <TextLink aria-label={`Change ${label} of ${lead.studentName}`} onClick={() => setEditing(what)}>
+      <TextLink
+        aria-label={`Change ${label} of ${lead.studentName}`}
+        onClick={() => {
+          // A new edit session: the sheet mounts again and starts from the record as it is now.
+          setSession((n) => n + 1)
+          setEditing(what)
+        }}
+      >
         Change
       </TextLink>
     ) : undefined
@@ -128,10 +136,18 @@ export function StudentCard({ student, canEdit }: { student: StudentCardData; ca
       )}
       {canEdit && (
         <>
-          <NameSheet details={details} father={student.father} enrolled={lead.status === "Enrolled"} compareWith={student.compareWith} {...sheetOpen("name")} />
-          <ClassSheet details={details} {...sheetOpen("class")} />
-          <BoardingSheet details={details} {...sheetOpen("board")} />
-          {asked && <SchoolSheet leadId={lead.id} studentName={lead.studentName} school={student.previousSchool} {...sheetOpen("school")} />}
+          <NameSheet
+            key={`name-${session}`}
+            leadId={lead.id}
+            studentName={lead.studentName}
+            father={student.father}
+            enrolled={lead.status === "Enrolled"}
+            compareWith={student.compareWith}
+            {...sheetOpen("name")}
+          />
+          <ClassSheet key={`class-${session}`} details={details} {...sheetOpen("class")} />
+          <BoardingSheet key={`board-${session}`} details={details} {...sheetOpen("board")} />
+          {asked && <SchoolSheet key={`school-${session}`} leadId={lead.id} studentName={lead.studentName} school={student.previousSchool} {...sheetOpen("school")} />}
         </>
       )}
     </section>

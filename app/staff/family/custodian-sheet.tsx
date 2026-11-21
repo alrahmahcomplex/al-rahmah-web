@@ -3,8 +3,8 @@
 import { useId, useState } from "react"
 
 import { PersonNameBoxes, type PersonName } from "@/components/guided-form/names"
-import { Button, ChoiceTiles, Field, FieldError, Sheet, toast } from "@/components/kit"
-import type { Relationship } from "@/lib/services/leads"
+import { Button, ChoiceTiles, Field, FieldError, Note, Sheet, toast } from "@/components/kit"
+import type { ContactChanges, Relationship } from "@/lib/services/leads"
 
 import { correctContact } from "../applicants/[id]/actions"
 import type { CorrectionOutcome } from "../applicants/[id]/correction-outcome"
@@ -12,10 +12,19 @@ import { personParts } from "../check-in/[id]/model"
 import { LOST, useSheetSave } from "./saving"
 
 // Change the custodian (#512, prototype v54): their name, relationship to the
-// students and mobile numbers, through the record's own contact correction.
-// The relationship is kept on each child (#312), so the sheet saves it once
-// for each student on this page who sits on the custodian. When the father
-// is the custodian, only his numbers change here: his name is the father's.
+// students and mobile numbers, in one save through the record's own contact
+// correction. Only what changed is sent, so the sheet never puts back a value
+// someone else changed since the page was read.
+//
+// The relationship is kept on each child (#312). The correction changes it on
+// the child named and on every child of this custodian that held the same
+// one, as the record does, so it is offered only when the students here all
+// hold one relationship. Like the record, the sheet names the custodian's
+// other children, outside this page, that the save also reaches. When the
+// father is the custodian, only his numbers change here (prototype v54).
+//
+// The card mounts the sheet afresh for each Change, so it starts from the
+// custodian as they are now.
 
 const NAME_LABELS = { first: "First name", middle: "Middle name", last: "Last name" }
 const RELATIONSHIPS = ["Mother", "Guardian", "Other"] as const
@@ -27,8 +36,8 @@ export type CustodianView = {
   whatsapp: string | null
   // The students on the page on this custodian, each with its own relationship.
   members: { leadId: string; relationship: Relationship; relationshipDescription: string | null }[]
-  // Every lead on the custodian, for the correction's check.
-  children: string[]
+  // Every lead on the custodian, closed ones too.
+  children: { id: string; studentName: string; admissionNumber: string }[]
 }
 
 const digits = (value: string) => value.replace(/\D/g, "")
@@ -49,49 +58,42 @@ export function CustodianSheet({ custodian, open, onOpenChange }: { custodian: C
   const [whatsapp, setWhatsapp] = useState(custodian.whatsapp ?? "")
   const { problem, setProblem, pending, run } = useSheetSave()
   const id = useId()
-
-  function reset() {
-    setName(personParts(custodian.fullName))
-    setRelationship(first.relationship)
-    setDescription(first.relationshipDescription ?? "")
-    setPhone(custodian.phone)
-    setWhatsapp(custodian.whatsapp ?? "")
-    setProblem(null)
-  }
+  const onPage = new Set(custodian.members.map((m) => m.leadId))
+  const others = custodian.children.filter((c) => !onPage.has(c.id))
 
   function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (pending) return
     const parts = [name.firstName, name.middleName, name.lastName].map(cleanPart)
     const fullName = parts.filter(Boolean).join(" ")
+    const nameChanged = !father && !same(fullName, custodian.fullName)
     // A name kept as it is saves as it is, however many names it has.
-    if (!father && !same(fullName, custodian.fullName) && parts.some((p) => p === "")) {
-      return setProblem("Type all three of the custodian’s names.")
-    }
+    if (nameChanged && parts.some((p) => p === "")) return setProblem("Type all three of the custodian’s names.")
     if (shared && !father && relationship === "Other" && description.trim() === "") return setProblem("Say how they are related to the students.")
     if (digits(phone).length < 10) return setProblem("Type the mobile number in full, for example 0712 345 678.")
     if (whatsapp.trim() && digits(whatsapp).length < 10) return setProblem("Type the WhatsApp number in full, or leave it empty.")
 
-    const contact = {
-      fullName: father || same(fullName, custodian.fullName) ? custodian.fullName : fullName,
-      phone: phone.trim(),
-      whatsapp: whatsapp.trim() === "" ? null : whatsapp.trim(),
+    const desc = relationship === "Other" ? description.trim() : null
+    const changes: ContactChanges = {
+      ...(nameChanged ? { fullName } : {}),
+      ...(shared && !father && (relationship !== first.relationship || (desc ?? "") !== (first.relationshipDescription ?? ""))
+        ? { relationship, relationshipDescription: desc }
+        : {}),
+      ...(phone.trim() !== custodian.phone ? { phone: phone.trim() } : {}),
+      ...(whatsapp.trim() !== (custodian.whatsapp ?? "") ? { whatsapp: whatsapp.trim() === "" ? null : whatsapp.trim() } : {}),
+    }
+    if (Object.keys(changes).length === 0) {
+      onOpenChange(false)
+      toast("Nothing changed.")
+      return
     }
     run(
-      async () => {
-        // The first save changes the custodian; each later one only its student's relationship.
-        for (const m of custodian.members) {
-          const rel = shared ? relationship : m.relationship
-          const desc = shared ? (relationship === "Other" ? description.trim() : null) : m.relationshipDescription
-          let outcome: CorrectionOutcome
-          try {
-            outcome = await correctContact(custodian.contactId, { ...contact, relationship: rel, relationshipDescription: desc }, custodian.children, m.leadId)
-          } catch {
-            outcome = { status: "refused", field: null, message: LOST }
-          }
-          if (outcome.status !== "saved") return outcome
+      async (): Promise<CorrectionOutcome> => {
+        try {
+          return await correctContact(custodian.contactId, changes, custodian.children.map((c) => c.id), first.leadId)
+        } catch {
+          return { status: "refused", field: null, message: LOST }
         }
-        return { status: "saved" }
       },
       () => {
         onOpenChange(false)
@@ -103,11 +105,7 @@ export function CustodianSheet({ custodian, open, onOpenChange }: { custodian: C
   return (
     <Sheet
       open={open}
-      onOpenChange={(next) => {
-        if (pending) return
-        if (next) reset()
-        onOpenChange(next)
-      }}
+      onOpenChange={(next) => !pending && onOpenChange(next)}
       placement="centre"
       title="Change the custodian"
       hint={father ? `The father, ${custodian.fullName}, is the custodian.` : "Their name, relationship and mobile number."}
@@ -187,6 +185,20 @@ export function CustodianSheet({ custodian, open, onOpenChange }: { custodian: C
             }}
           />
         </fieldset>
+        {others.length > 0 && (
+          // The record's warning (lead-editors.tsx, ContactForm), for the children outside this page.
+          <Note role="note" className="fam-left">
+            <span className="block">
+              This custodian is shared with {others.length === 1 ? "another child" : `${others.length} other children`}. Saving changes their
+              details too:
+            </span>
+            {others.map((c) => (
+              <span key={c.id} className="block">
+                {c.studentName} <span className="kit-num">{c.admissionNumber}</span>
+              </span>
+            ))}
+          </Note>
+        )}
         <FieldError id={`${id}-error`} message={problem ?? undefined} />
       </form>
     </Sheet>

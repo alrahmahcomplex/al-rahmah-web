@@ -20,10 +20,8 @@ export type SmsSender = (to: string, message: string) => Promise<Result<{ reques
 // ---------------------------------------------------------------------------
 // The senders. Beem Africa's send API (docs.beem.africa) with the school's
 // sender name, keys from unprefixed variables so Next.js never ships them to
-// a browser. Without the keys, Previews, CI and local runs get a fake that
-// sends nothing and logs the message, so no test spends the school's bundle;
-// Production without them refuses every send, so a missing key shows up as
-// failed sends in the log instead of messages that silently never left.
+// a browser. Local runs and CI ask for a fake that sends nothing and logs the
+// message (smsSender below), so no test spends the school's bundle.
 // ---------------------------------------------------------------------------
 
 const BEEM_SEND_URL = "https://apisms.beem.africa/v1/send"
@@ -59,10 +57,18 @@ export function beemSender(
       if (response.ok) return { ok: false, error: "unreadable_answer" }
       answer = null
     }
-    // Beem answers 100, "Message Submitted Successfully", with the request's id.
-    if (response.ok && answer?.code === 100 && answer.request_id !== undefined) {
-      return { ok: true, data: { requestId: String(answer.request_id) } }
+    // Beem answers 100, "Message Submitted Successfully", with the request's
+    // id. Anything short of all three is not proof the message was taken.
+    const requestId = answer?.request_id
+    if (
+      response.ok &&
+      answer?.successful !== false &&
+      answer?.code === 100 &&
+      ((typeof requestId === "number" && Number.isFinite(requestId)) || (typeof requestId === "string" && requestId.trim() !== ""))
+    ) {
+      return { ok: true, data: { requestId: String(requestId) } }
     }
+    if (response.ok && answer?.code === 100) return { ok: false, error: "unreadable_answer" }
     if (answer?.code !== undefined) return { ok: false, error: `beem_${answer.code}` }
     return { ok: false, error: `http_${response.status}` }
   }
@@ -78,16 +84,48 @@ export function fakeSender(log: (line: string) => void = console.info): SmsSende
   }
 }
 
+// Beem with all three keys. The fake only where it is asked for by name
+// (SMS_FAKE=1: .env.example for local runs, CI's test jobs), and never in
+// Production. Anything else, a deployment that lost a key included, refuses
+// every send, so a missing key shows up as failed sends in the log rather
+// than as numbers that silently never left.
 export function smsSender(env: Record<string, string | undefined> = process.env): SmsSender {
   const apiKey = env.BEEM_API_KEY
   const secretKey = env.BEEM_SECRET_KEY
   const senderId = env.BEEM_SENDER_ID
   if (apiKey && secretKey && senderId) return beemSender({ apiKey, secretKey, senderId })
-  if (env.VERCEL_ENV === "production") {
-    console.error("BEEM_API_KEY, BEEM_SECRET_KEY and BEEM_SENDER_ID must be set in Production to send SMS.")
-    return async () => ({ ok: false, error: "beem_keys_missing" })
+  if (env.SMS_FAKE === "1" && env.VERCEL_ENV !== "production") return fakeSender()
+  console.error("BEEM_API_KEY, BEEM_SECRET_KEY and BEEM_SENDER_ID must be set to send SMS (or SMS_FAKE=1 outside Production).")
+  return async () => ({ ok: false, error: "beem_keys_missing" })
+}
+
+// ---------------------------------------------------------------------------
+// One SMS, one place in the budget: a message must fit one GSM-7 segment,
+// 160 characters, with the extension characters counting two. Anything else
+// would cost more than one SMS (or go as UCS-2 at 70), so it is refused
+// before anything is reserved.
+// ---------------------------------------------------------------------------
+
+const GSM7_BASIC = new Set(
+  "@£$¥èéùìòÇ\nØø\rÅåΔ_ΦΓΛΩΠΨΣΘΞÆæßÉ !\"#¤%&'()*+,-./0123456789:;<=>?¡ABCDEFGHIJKLMNOPQRSTUVWXYZÄÖÑÜ§¿abcdefghijklmnopqrstuvwxyzäöñüà",
+)
+const GSM7_EXTENSION = new Set("\f^{}\\[~]|€")
+const ONE_SEGMENT = 160
+
+// The message's length in GSM-7 septets, or null if it needs another encoding.
+export function gsm7Length(message: string): number | null {
+  let length = 0
+  for (const char of message) {
+    if (GSM7_BASIC.has(char)) length += 1
+    else if (GSM7_EXTENSION.has(char)) length += 2
+    else return null
   }
-  return fakeSender()
+  return length
+}
+
+export function fitsOneSms(message: string): boolean {
+  const length = gsm7Length(message)
+  return length !== null && length > 0 && length <= ONE_SEGMENT && message.trim() !== ""
 }
 
 // ---------------------------------------------------------------------------
@@ -111,7 +149,7 @@ export async function sendSms(
   sms: { kind: SmsKind; to: string; agentId?: string | null; message: string },
 ): Promise<Result<{ sendId: string }, SmsError>> {
   const mobile = normalizeTanzanianMobile(sms.to)
-  if (!mobile || sms.message.trim() === "") return { ok: false, error: { kind: "invalid" } }
+  if (!mobile || !fitsOneSms(sms.message)) return { ok: false, error: { kind: "invalid" } }
 
   const reserved = await supabase.rpc("reserve_sms", { kind: sms.kind, to_phone: mobile, agent_id: sms.agentId ?? null })
   if (reserved.error) {

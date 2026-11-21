@@ -75,9 +75,15 @@ describe("the owner's name rule", () => {
     ["Amina Khamis Bakari", "A. Khamis Bakari", false],
     ["Amina Khamis Bakari", "Amina Bakari", false],
     ["Amina Khamis Bakari", "Asha Khamis Bakari", false],
-    // Each record name takes a different typed name.
+    // Each record name takes a different typed name: with three typed names,
+    // the second Ali can't reuse the first.
     ["Ali Ali Omari", "Ali Omari", false],
+    ["Ali Ali Omari", "Ali Juma Omari", false],
     ["Ali Ali Omari", "Ali Omari Ali", true],
+    // Pairing tries every way: Juma takes the first typed name it fits
+    // (Jumaa), which leaves Jumaa with Jumu, two typos off; only Juma-Jumu
+    // with Jumaa-Jumaa pairs them all.
+    ["Juma Jumaa", "Jumaa Jumu", true],
     // A record with two names ignores a third typed name.
     ["Amina Bakari", "Amina Khamis Bakari", true],
   ])("%s against %s: %s", async (onRecord, typed, expected) => {
@@ -181,6 +187,51 @@ describe("the SMS budget and limits", () => {
     expect((await sendSms(secretClient(), sender(log), { kind: "courtesy", to, message: "x" })).ok).toBe(true)
     expect(log).toHaveLength(4)
     expect((await sends(to)).map((s) => s.result)).toEqual(["sent", "sent", "sent", "mobile_limited", "sent"])
+  })
+
+  test("a mobile gets at most 5 confirmation numbers a day, even spread over hours", async () => {
+    await inRolledBackTransaction(async (sql) => {
+      await sql.query(`select set_config('request.jwt.claims', '{"role":"service_role"}', true)`)
+      // Today's sends, all more than an hour old, so only the day's limit can
+      // refuse: five for one mobile, four for another.
+      const [full, room] = [mobile(), mobile()]
+      for (const [to, count] of [[full, 5], [room, 4]] as const) {
+        await sql.query(
+          `insert into public.sms_sends (kind, to_phone, tz_day, result, created_at, finished_at)
+           select 'self_confirm', $1, (now() at time zone 'Africa/Dar_es_Salaam')::date, 'sent', now() - interval '2 hours', now()
+           from generate_series(1, $2)`,
+          [to, count],
+        )
+      }
+      const reserve = async (kind: string, to: string) =>
+        (await sql.query<{ r: { outcome: string } }>("select public.reserve_sms($1, $2) as r", [kind, to])).rows[0].r.outcome
+      expect(await reserve("self_confirm", full)).toBe("mobile_limited")
+      expect(await reserve("courtesy", full)).toBe("reserved")
+      expect(await reserve("reset", room)).toBe("reserved")
+      expect(await reserve("reset", room)).toBe("mobile_limited")
+    })
+  })
+
+  test("reservations for one mobile at once never pass its limit", async () => {
+    const to = mobile()
+    for (let i = 0; i < 2; i += 1) expect((await sendSms(secretClient(), sender(), { kind: "self_confirm", to, message: "x" })).ok).toBe(true)
+    const answers = await Promise.all(
+      Array.from({ length: 4 }, () => secretClient().rpc("reserve_sms", { kind: "self_confirm", to_phone: to })),
+    )
+    const outcomes = answers.map((a) => (a.data as { outcome: string }).outcome)
+    expect(outcomes.filter((o) => o === "reserved")).toHaveLength(1)
+    expect(outcomes.filter((o) => o === "mobile_limited")).toHaveLength(3)
+  })
+
+  test("a message longer than one SMS is refused before anything is reserved", async () => {
+    const to = mobile()
+    const log: string[] = []
+    expect(await sendSms(secretClient(), sender(log), { kind: "courtesy", to, message: "a".repeat(161) })).toEqual({
+      ok: false,
+      error: { kind: "invalid" },
+    })
+    expect(log).toEqual([])
+    expect(await sends(to)).toEqual([])
   })
 
   test("a failed send still counts against the mobile's limit", async () => {

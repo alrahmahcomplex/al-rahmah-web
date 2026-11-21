@@ -2,7 +2,29 @@ import { describe, expect, test, vi } from "vitest"
 
 vi.mock("server-only", () => ({}))
 
-import { beemSender, fakeSender, smsSender } from "@/lib/services/sms"
+import { beemSender, fakeSender, fitsOneSms, gsm7Length, smsSender } from "@/lib/services/sms"
+
+describe("one SMS, one segment", () => {
+  test("160 plain characters fit; 161 don't", () => {
+    expect(fitsOneSms("a".repeat(160))).toBe(true)
+    expect(fitsOneSms("a".repeat(161))).toBe(false)
+  })
+
+  test("extension characters count two, and anything outside GSM-7 doesn't fit", () => {
+    expect(gsm7Length("€[]")).toBe(6)
+    expect(fitsOneSms(`${"a".repeat(158)}€`)).toBe(true)
+    expect(fitsOneSms(`${"a".repeat(159)}€`)).toBe(false)
+    expect(gsm7Length("Si wewe’")).toBeNull()
+    expect(fitsOneSms("Namba ✓")).toBe(false)
+    expect(fitsOneSms("   ")).toBe(false)
+  })
+
+  test("the owner's courtesy SMS fits", () => {
+    expect(
+      fitsOneSms("Akaunti yako ya Al-Rahmah imefunguliwa kwa amina.k@mfano.com. Si wewe? Piga ofisi 0777 000 111."),
+    ).toBe(true)
+  })
+})
 
 const KEYS = { apiKey: "key-1", secretKey: "secret-1", senderId: "AL-RAHMAH" }
 
@@ -58,18 +80,33 @@ describe("beemSender", () => {
   })
 })
 
+describe("Beem's answer must prove the message was taken", () => {
+  test.each([
+    ["no request id", { successful: true, code: 100, request_id: null }],
+    ["an empty request id", { successful: true, code: 100, request_id: " " }],
+    ["successful false", { successful: false, code: 100, request_id: 12 }],
+  ])("code 100 with %s is not a send", async (_case, body) => {
+    const send = beemSender(KEYS, answering(200, body) as unknown as typeof fetch)
+    await expect(send("255712345123", "x")).resolves.toEqual({ ok: false, error: "unreadable_answer" })
+  })
+})
+
 describe("smsSender", () => {
-  test("without the keys outside Production, the fake sends nothing and logs it", async () => {
+  test("the fake sends nothing and logs it", async () => {
     const lines: string[] = []
     const send = fakeSender((line) => lines.push(line))
     await expect(send("255712345123", "Namba yako ni 482913")).resolves.toEqual({ ok: true, data: { requestId: "fake-1" } })
     expect(lines).toEqual(["[fake SMS 1] to 255712345123: Namba yako ni 482913"])
   })
 
-  test("without the keys in Production, every send fails", async () => {
+  test("without the keys it refuses every send unless the fake is asked for, and never fakes in Production", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
-    const send = smsSender({ VERCEL_ENV: "production" })
-    await expect(send("255712345123", "x")).resolves.toEqual({ ok: false, error: "beem_keys_missing" })
+    const info = vi.spyOn(console, "info").mockImplementation(() => {})
+    for (const env of [{}, { VERCEL_ENV: "preview" }, { VERCEL_ENV: "production" }, { SMS_FAKE: "1", VERCEL_ENV: "production" }, { SMS_FAKE: "true" }]) {
+      await expect(smsSender(env)("255712345123", "x")).resolves.toEqual({ ok: false, error: "beem_keys_missing" })
+    }
+    await expect(smsSender({ SMS_FAKE: "1" })("255712345123", "x")).resolves.toEqual({ ok: true, data: { requestId: "fake-1" } })
+    expect(info).toHaveBeenCalledTimes(1)
   })
 
   test("with all three keys it sends through Beem", async () => {

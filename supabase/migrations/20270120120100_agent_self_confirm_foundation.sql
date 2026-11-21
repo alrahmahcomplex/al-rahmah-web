@@ -229,7 +229,10 @@ set search_path = ''
 as $$
 declare
     settings public.sms_settings;
-    day date := (now() at time zone 'Africa/Dar_es_Salaam')::date;
+    -- Read after the lock below, so the clock and the day are those of the
+    -- moment this reservation holds it.
+    at_time timestamptz;
+    day date;
     mobile text := public.normalize_phone(reserve_sms.to_phone);
     spent integer;
     made uuid;
@@ -242,35 +245,38 @@ begin
         raise exception 'invalid';
     end if;
 
-    -- One reservation at a time for the day, so two at once can't both take
-    -- the last place.
-    perform pg_advisory_xact_lock(hashtextextended('sms-day:' || day::text, 0));
+    -- One reservation at a time, whatever the day: two at once can't both
+    -- take the budget's last place or a mobile's last one, even either side
+    -- of midnight, where the hour's window spans two days.
+    perform pg_advisory_xact_lock(hashtextextended('sms-reservations', 0));
+    at_time := clock_timestamp();
+    day := (at_time at time zone 'Africa/Dar_es_Salaam')::date;
     select * into settings from public.sms_settings;
 
     select count(*) into spent
     from public.sms_sends s
     where s.tz_day = day and s.result in ('reserved', 'sent', 'provider_error');
     if spent >= settings.daily_budget then
-        insert into public.sms_sends (kind, to_phone, agent_id, tz_day, result)
-        values (reserve_sms.kind, mobile, reserve_sms.agent_id, day, 'budget_reached');
+        insert into public.sms_sends (kind, to_phone, agent_id, tz_day, result, created_at)
+        values (reserve_sms.kind, mobile, reserve_sms.agent_id, day, 'budget_reached', at_time);
         return jsonb_build_object('outcome', 'budget_reached');
     end if;
 
     if reserve_sms.kind <> 'courtesy' and (
         (select count(*) from public.sms_sends s
          where s.to_phone = mobile and s.kind <> 'courtesy' and s.result in ('reserved', 'sent', 'provider_error')
-           and s.created_at > now() - interval '1 hour') >= settings.per_mobile_hour
+           and s.created_at > at_time - interval '1 hour') >= settings.per_mobile_hour
         or (select count(*) from public.sms_sends s
             where s.to_phone = mobile and s.kind <> 'courtesy' and s.result in ('reserved', 'sent', 'provider_error')
               and s.tz_day = day) >= settings.per_mobile_day
     ) then
-        insert into public.sms_sends (kind, to_phone, agent_id, tz_day, result)
-        values (reserve_sms.kind, mobile, reserve_sms.agent_id, day, 'mobile_limited');
+        insert into public.sms_sends (kind, to_phone, agent_id, tz_day, result, created_at)
+        values (reserve_sms.kind, mobile, reserve_sms.agent_id, day, 'mobile_limited', at_time);
         return jsonb_build_object('outcome', 'mobile_limited');
     end if;
 
-    insert into public.sms_sends (kind, to_phone, agent_id, tz_day, result)
-    values (reserve_sms.kind, mobile, reserve_sms.agent_id, day, 'reserved')
+    insert into public.sms_sends (kind, to_phone, agent_id, tz_day, result, created_at)
+    values (reserve_sms.kind, mobile, reserve_sms.agent_id, day, 'reserved', at_time)
     returning id into made;
     return jsonb_build_object('outcome', 'reserved', 'send_id', made);
 end;

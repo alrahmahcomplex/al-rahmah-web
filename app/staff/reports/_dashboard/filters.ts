@@ -2,13 +2,17 @@ import { formatDate } from "@/lib/school-calendar"
 import { PERIOD_KINDS, type DashboardFilters, type Period, type PeriodKind } from "@/lib/services/dashboard"
 
 // Each dashboard panel keeps its own filters in the page address, under its
-// own key: `visited=week:2026-09-21` and `visited_year=2027`. The address
-// carries only period kinds, dates and years. Anything missing or unreadable
-// falls back to All time and All years.
+// own key: `visited=week:2026-09-21` and `visited_year=2027` (or `all` for
+// All years). The address carries only period kinds, dates and years. Anything
+// missing or unreadable falls back to All time and the current admission year.
 
 type SearchParams = { [key: string]: string | string[] | undefined }
 
-export const ALL_TIME: DashboardFilters = { period: { kind: "all" }, enrollmentYear: null }
+export const ALL_YEARS_PARAM = "all"
+
+export function defaultPanelFilters(defaultYear: number): DashboardFilters {
+  return { period: { kind: "all" }, enrollmentYear: defaultYear }
+}
 
 function first(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value
@@ -39,27 +43,36 @@ function parseYear(value: string | undefined): number | null {
   return year >= 2000 && year <= 2100 ? year : null
 }
 
+// `all` selects every year; a valid four-digit year selects that intake;
+// anything missing or unreadable falls back to `defaultYear`.
+function parsePanelYear(value: string | undefined, defaultYear: number): number | null {
+  if (value === ALL_YEARS_PARAM) return null
+  return parseYear(value) ?? defaultYear
+}
+
 // The filters the address gives one panel.
-export function parsePanelFilters(params: SearchParams, key: string): DashboardFilters {
-  return { period: parsePeriod(first(params[key])), enrollmentYear: parseYear(first(params[`${key}_year`])) }
+export function parsePanelFilters(params: SearchParams, key: string, defaultYear: number): DashboardFilters {
+  return { period: parsePeriod(first(params[key])), enrollmentYear: parsePanelYear(first(params[`${key}_year`]), defaultYear) }
 }
 
 // The Reports page's address with one panel's filters changed and every other
-// panel's left as they are. Defaults are left out.
-export function panelHref(current: URLSearchParams, key: string, filters: DashboardFilters): string {
+// panel's left as they are. Defaults are left out; All years is written as
+// `all` because leaving the year out means `defaultYear`.
+export function panelHref(current: URLSearchParams, key: string, filters: DashboardFilters, defaultYear: number): string {
   const params = new URLSearchParams(current)
   const { period, enrollmentYear } = filters
   if (period.kind === "all") params.delete(key)
   else params.set(key, `${period.kind}:${period.anchor}`)
-  if (enrollmentYear === null) params.delete(`${key}_year`)
+  if (enrollmentYear === defaultYear) params.delete(`${key}_year`)
+  else if (enrollmentYear === null) params.set(`${key}_year`, ALL_YEARS_PARAM)
   else params.set(`${key}_year`, String(enrollmentYear))
   const encoded = params.toString()
   return encoded ? `/staff/reports?${encoded}` : "/staff/reports"
 }
 
 // Seats by class takes only an Enrollment year, under its own key. Null when
-// it is missing or unreadable, which opens the latest year with a Fee
-// schedule.
+// it is missing or unreadable, which opens the default seats year (the latest
+// year with a Fee schedule up to the current admission year).
 export const SEATS_YEAR_KEY = "seats_year"
 
 export function parseSeatsYear(params: SearchParams): number | null {
@@ -123,6 +136,6 @@ export function filtersKey({ period, enrollmentYear }: DashboardFilters): string
   return `${period.kind}:${period.kind === "all" ? "" : period.anchor}:${enrollmentYear ?? ""}`
 }
 
-export function isFiltered(filters: DashboardFilters): boolean {
-  return filters.period.kind !== "all" || filters.enrollmentYear !== null
+export function isFiltered(filters: DashboardFilters, defaultYear: number): boolean {
+  return filters.period.kind !== "all" || filters.enrollmentYear !== defaultYear
 }

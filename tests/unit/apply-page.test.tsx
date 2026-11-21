@@ -1017,14 +1017,14 @@ describe("the admission years of a cached copy", { timeout: 30_000 }, () => {
   afterEach(() => vi.useRealTimers())
 
   it.each([
-    // 23:59 on 31 December in Tanzania (UTC+3): this year and next, from April.
+    // 23:59 on 31 December in Tanzania (UTC+3): this year and next, from 1 June.
     ["2026-12-31T20:59:00Z", 2027],
-    // Midnight on 1 January: the new year and the one after; before April.
+    // Midnight on 1 January: the new year and the one after; before 1 June.
     ["2026-12-31T21:00:00Z", 2027],
-    // 23:59 on 31 March: still before April.
-    ["2027-03-31T20:59:00Z", 2027],
-    // Midnight on 1 April: next year's intake.
-    ["2027-03-31T21:00:00Z", 2028],
+    // 23:59 on 31 May: still before 1 June.
+    ["2027-05-31T20:59:00Z", 2027],
+    // Midnight on 1 June: next year's intake.
+    ["2027-05-31T21:00:00Z", 2028],
   ])("at %s a copy built on 30 December sends year %i by default", async (now, expected) => {
     vi.useFakeTimers({ toFake: ["Date"] })
     vi.setSystemTime(new Date(now))
@@ -1041,8 +1041,8 @@ describe("the admission years of a cached copy", { timeout: 30_000 }, () => {
   it.each([
     ["2026-12-31T20:59:00Z", [2026, 2027]],
     ["2026-12-31T21:00:00Z", [2027, 2028]],
-    ["2027-03-31T20:59:00Z", [2027, 2028]],
-    ["2027-03-31T21:00:00Z", [2027, 2028]],
+    ["2027-05-31T20:59:00Z", [2027, 2028]],
+    ["2027-05-31T21:00:00Z", [2027, 2028]],
   ])("at %s a copy built on 30 December offers the years %j", async (now, offered) => {
     vi.useFakeTimers({ toFake: ["Date"] })
     vi.setSystemTime(new Date(now))

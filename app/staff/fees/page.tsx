@@ -2,7 +2,7 @@ import type { Metadata } from "next"
 import { redirect } from "next/navigation"
 
 import { Button, Card, EmptyState, Field, FieldError, ListRow, Note, PageHeader, pageTitle } from "@/components/kit"
-import { formatDate, tanzaniaToday } from "@/lib/school-calendar"
+import { currentAdmissionYear, formatDate } from "@/lib/school-calendar"
 import { listFeeSchedules } from "@/lib/services/fees"
 import { createClient } from "@/utils/supabase/server"
 
@@ -45,7 +45,7 @@ export default async function FeeSchedulesPage({ searchParams }: { searchParams:
   }
 
   const schedules = await listFeeSchedules(await createClient())
-  const nextYear = Number(tanzaniaToday().slice(0, 4)) + 1
+  const defaultYear = currentAdmissionYear()
   const yearRefused = requested !== undefined && newYear === null
 
   return (
@@ -95,7 +95,7 @@ export default async function FeeSchedulesPage({ searchParams }: { searchParams:
                   inputMode="numeric"
                   required
                   pattern="\d{4}"
-                  defaultValue={String(nextYear)}
+                  defaultValue={String(defaultYear)}
                   className="fs-money"
                   invalid={yearRefused}
                   aria-describedby="new-schedule-year-error"

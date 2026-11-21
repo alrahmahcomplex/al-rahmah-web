@@ -316,7 +316,7 @@ export function AdmissionFormSteps({
   // first one not answered. Runs once, after hydration: the page is the same
   // for every visitor, so the tab's storage, the address's `ref` and the
   // remembered code are read here, and the years are worked out again in
-  // case the copy was built before 1 January or 1 April.
+  // case the copy was built before 1 January or 1 June.
   useEffect(() => {
     const calendar = browserCalendar()
     const { years } = calendar

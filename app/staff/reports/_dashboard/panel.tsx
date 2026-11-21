@@ -5,7 +5,7 @@ import { Card } from "@/components/kit"
 import type { DashboardFilters } from "@/lib/services/dashboard"
 import { cn } from "@/lib/utils"
 
-import { ALL_TIME, isFiltered, panelHref, periodLabel } from "./filters"
+import { defaultPanelFilters, isFiltered, panelHref, periodLabel } from "./filters"
 import { PanelFilter } from "./panel-filter"
 
 // The head of a dashboard card: its title (which names the card), the line
@@ -40,12 +40,13 @@ export function PanelHead({
 }
 
 // One dashboard panel: its title, the period and intake it shows, its filter,
-// and a one-click way back to All time and All years. Every dashboard panel,
-// tile or table, is one of these.
+// and a one-click way back to All time and the current admission year. Every
+// dashboard panel, tile or table, is one of these.
 export function DashboardPanel({
   panelKey,
   title,
   filters,
+  defaultYear,
   enrollmentYears,
   searchParams,
   className,
@@ -54,6 +55,7 @@ export function DashboardPanel({
   panelKey: string
   title: string
   filters: DashboardFilters
+  defaultYear: number
   enrollmentYears: number[]
   // The whole page's query, so clearing this panel leaves the others alone.
   searchParams: URLSearchParams
@@ -75,12 +77,12 @@ export function DashboardPanel({
             {filters.enrollmentYear === null ? "All years" : `Enrollment year ${filters.enrollmentYear}`}
           </>
         }
-        filter={<PanelFilter panelKey={panelKey} title={title} filters={filters} enrollmentYears={enrollmentYears} />}
+        filter={<PanelFilter panelKey={panelKey} title={title} filters={filters} defaultYear={defaultYear} enrollmentYears={enrollmentYears} />}
       />
       {children}
-      {isFiltered(filters) && (
-        <Link href={panelHref(searchParams, panelKey, ALL_TIME)} scroll={false} className="rp-link">
-          Show all time and all years
+      {isFiltered(filters, defaultYear) && (
+        <Link href={panelHref(searchParams, panelKey, defaultPanelFilters(defaultYear), defaultYear)} scroll={false} className="rp-link">
+          Show all time for {defaultYear}
         </Link>
       )}
     </Card>

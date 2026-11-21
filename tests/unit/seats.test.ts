@@ -4,7 +4,9 @@ import { navFor, STAFF_NAV } from "@/app/staff/navigation"
 import { defaultSeatsYear } from "@/app/staff/seats/format"
 
 describe("defaultSeatsYear", () => {
-  it("opens the latest year with a schedule up to next year, the one admissions are for", () => {
+  it("opens the latest year with a schedule up to the current admission year", () => {
+    expect(defaultSeatsYear([2026, 2027, 2028], "2026-05-31")).toBe(2026)
+    expect(defaultSeatsYear([2026, 2027, 2028], "2026-06-01")).toBe(2027)
     expect(defaultSeatsYear([2026, 2027, 2028], "2026-10-06")).toBe(2027)
     expect(defaultSeatsYear([2025, 2027], "2026-10-06")).toBe(2027)
     expect(defaultSeatsYear([2024, 2025], "2026-10-06")).toBe(2025)

@@ -42,7 +42,7 @@ vi.mock("@/lib/services/referral", () => ({
 
 import { checkDiscountCode, submitAdmissionForm } from "@/app/apply/actions"
 import { admissionYears } from "@/lib/admission-form"
-import { tanzaniaToday } from "@/lib/school-calendar"
+import { currentAdmissionYear } from "@/lib/school-calendar"
 
 const [thisYear] = admissionYears()
 const KEY = "3f2b7c1e-8d4a-4b6f-9a0e-1c2d3e4f5a6b"
@@ -137,7 +137,7 @@ describe("sending the Admission form", () => {
       status: "invalid",
       field: "enrollment_year",
       child: 0,
-      calendar: { years, defaultYear: Number(tanzaniaToday().slice(5, 7)) < 4 ? years[0] : years[1] },
+      calendar: { years, defaultYear: currentAdmissionYear() },
     })
     expect(stubs.save).not.toHaveBeenCalled()
   })

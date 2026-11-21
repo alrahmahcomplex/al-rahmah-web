@@ -1,6 +1,7 @@
 import type { FatherName, PersonName, StudentName } from "@/components/guided-form"
 import { fatherNameMatch, normalizeFatherName, type FatherNameMatch } from "@/lib/father-name"
 import type { LastNameFrom } from "@/lib/names"
+import { currentAdmissionYear } from "@/lib/school-calendar"
 import { BAND_CLASSES, FEE_BANDS, type FeeBand } from "@/lib/services/fees"
 import type {
   DayOrBoarding,
@@ -403,9 +404,10 @@ export function withoutStudent(a: Answers, key: number): Answers {
 // Years and fees.
 // ---------------------------------------------------------------------------
 
-/** The coming intake, as on the Admission form: this year before April, next year from April, in Tanzania time. */
+/** The coming intake, as on the Admission form: the current admission year, in Tanzania time. */
 export function comingIntake(years: readonly [number, number], tanzaniaDate: string): number {
-  return Number(tanzaniaDate.slice(5, 7)) < 4 ? years[0] : years[1]
+  const admissionYear = currentAdmissionYear(tanzaniaDate)
+  return years.includes(admissionYear) ? admissionYear : admissionYear < years[0] ? years[0] : years[1]
 }
 
 /** The year a student joins: theirs once picked, else the student before's, else the coming intake (as the Admission form). */

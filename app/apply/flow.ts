@@ -1,6 +1,7 @@
 import { childrenProblems, MAX_CHILDREN, parentProblems, type AdmissionChild, type AdmissionParent, type FieldProblem, type FormField } from "@/lib/admission-form"
 import { namePart, personFullName, studentFullName, type PersonNameParts, type StudentNameParts } from "@/lib/names"
 import { normalizeDiscountCode } from "@/lib/referral-link"
+import { currentAdmissionYear } from "@/lib/school-calendar"
 
 import type { ChildDraft, ParentDraft } from "./draft"
 
@@ -185,10 +186,10 @@ export function yearOf(children: readonly ChildDraft[], index: number, defaultYe
   return defaultYear
 }
 
-/** The coming intake: this year before April, next year from April, in Tanzania time. */
+/** The coming intake: the current admission year, in Tanzania time (clamped to `years`). */
 export function defaultYear(years: readonly [number, number], tanzaniaDate: string): number {
-  const month = Number(tanzaniaDate.slice(5, 7))
-  return month < 4 ? years[0] : years[1]
+  const admissionYear = currentAdmissionYear(tanzaniaDate)
+  return years.includes(admissionYear) ? admissionYear : admissionYear < years[0] ? years[0] : years[1]
 }
 
 /** The student's own name, for the questions that name them. */

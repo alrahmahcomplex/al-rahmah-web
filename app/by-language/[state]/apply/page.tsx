@@ -25,7 +25,7 @@ import { tanzaniaToday } from "@/lib/school-calendar"
 //   remembers for 30 days are read by the form in the browser, after it loads.
 // - The admission years here are the build's. The form works them out again
 //   in the browser as it opens, and takes the server's from a refusal, so a
-//   copy built before 1 January or 1 April still offers the right years.
+//   copy built before 1 January or 1 June still offers the right years.
 // - Switching language changes the form in place (components/page-language.tsx).
 
 type Props = { params: Promise<{ state: string }> }

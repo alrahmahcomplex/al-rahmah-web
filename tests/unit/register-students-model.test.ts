@@ -73,9 +73,12 @@ const onFileFee = (more: Partial<OnFileFee> = {}): OnFileFee => ({
 })
 
 describe("the year a student joins", () => {
-  test("is the coming intake: this year before April, next year from April", () => {
-    expect(comingIntake([2026, 2027], "2026-03-31")).toBe(2026)
-    expect(comingIntake([2026, 2027], "2026-04-01")).toBe(2027)
+  test("is the current admission year: this year before 1 June, next year from 1 June", () => {
+    expect(comingIntake([2026, 2027], "2026-04-01")).toBe(2026)
+    expect(comingIntake([2026, 2027], "2026-05-31")).toBe(2026)
+    expect(comingIntake([2026, 2027], "2026-06-01")).toBe(2027)
+    expect(comingIntake([2026, 2027], "2026-12-31")).toBe(2027)
+    expect(comingIntake([2027, 2028], "2027-01-01")).toBe(2027)
   })
 
   test("is the student's own once picked, else the student before's", () => {

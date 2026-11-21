@@ -1,16 +1,14 @@
-import { render, screen } from "@testing-library/react"
+import { render, screen, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { describe, expect, it, vi } from "vitest"
 
-vi.mock("@/app/staff/check-in/new/actions", () => ({ findCustodianFamily: vi.fn() }))
+vi.mock("@/app/staff/check-in/new/actions", () => ({ findCustodianFamily: vi.fn().mockResolvedValue({ status: "none" }) }))
 vi.mock("@/app/staff/check-in/new/code-actions", () => ({ listCodesToPick: vi.fn() }))
 vi.mock("@/app/staff/applicants/[id]/referral-actions", () => ({ lookUpReferralCode: vi.fn() }))
 
-import { NameQuestion, SchoolQuestion } from "@/app/staff/check-in/new/questions"
+import { CustodianQuestion, NameQuestion, SchoolQuestion } from "@/app/staff/check-in/new/questions"
 
-// The student's name question keeps the last-name choice it was given (#511):
-// check-in prefills a name ending with the father's middle name, and saving
-// the question unchanged must not rename the student.
+// The student's name, previous school, and custodian questions (#511, PR 2).
 
 const PREFILL = { firstName: "YUSUF", fatherFirst: "ALI", fatherMiddle: "OMARI", fatherLast: "HASSAN", lastNameFrom: "father_middle" as const }
 
@@ -33,19 +31,40 @@ describe("NameQuestion", () => {
     expect(onDone).toHaveBeenCalledWith({ ...PREFILL, firstName: "YUSUFU" })
   })
 
-  it("starts with the father's last name for a new student", async () => {
+  it("starts with the father's last name and lets staff pick his middle name", async () => {
     const onDone = vi.fn()
     render(<NameQuestion id="n" next={false} saved={{ ...PREFILL, lastNameFrom: undefined }} onDone={onDone} />)
     expect(screen.getByText("YUSUF ALI HASSAN")).toBeInTheDocument()
+    const group = screen.getByRole("radiogroup", { name: "Student’s last name" })
+    expect(within(group).getByRole("radio", { name: /Father’s last name\s*HASSAN/ })).toBeChecked()
+    await userEvent.click(within(group).getByRole("radio", { name: /Father’s middle name\s*OMARI/ }))
+    expect(screen.getByText("YUSUF ALI OMARI")).toBeInTheDocument()
     await userEvent.click(screen.getByRole("button", { name: /Continue/ }))
-    expect(onDone).toHaveBeenCalledWith({ ...PREFILL, lastNameFrom: "father_last" })
+    expect(onDone).toHaveBeenCalledWith(PREFILL)
   })
 })
 
-// The school question asks no country yet (#511): confirming a school saved
-// with one must not drop it.
 describe("SchoolQuestion", () => {
   const ABROAD = { name: "EXAMPLE SCHOOL ABROAD", type: "private" as const, region: "Outside Tanzania", country: "Kenya" }
+
+  it("types the school name in capitals and takes a region and country with type-ahead", async () => {
+    const onDone = vi.fn()
+    render(<SchoolQuestion id="s" first="YUSUF" onDone={onDone} onNotKnown={() => {}} />)
+    await userEvent.type(screen.getByRole("textbox", { name: "School name" }), "green hills academy")
+    expect(screen.getByRole("textbox", { name: "School name" })).toHaveValue("GREEN HILLS ACADEMY")
+    await userEvent.click(screen.getByRole("radio", { name: "Private" }))
+    const region = screen.getByRole("combobox", { name: "Region" })
+    await userEvent.type(region, "out")
+    await userEvent.tab()
+    expect(region).toHaveValue("Outside Tanzania (Other Country)")
+    const country = screen.getByRole("combobox", { name: "Country" })
+    expect(country).toHaveFocus()
+    await userEvent.type(country, "ken")
+    await userEvent.keyboard("{Enter}")
+    expect(country).toHaveValue("Kenya")
+    await userEvent.click(screen.getByRole("button", { name: /Continue/ }))
+    expect(onDone).toHaveBeenCalledWith({ name: "GREEN HILLS ACADEMY", type: "private", region: "Outside Tanzania", country: "Kenya" })
+  })
 
   it("keeps the saved country when the same school is confirmed unchanged", async () => {
     const onDone = vi.fn()
@@ -57,15 +76,86 @@ describe("SchoolQuestion", () => {
   it("drops the country when the region changes to one in Tanzania", async () => {
     const onDone = vi.fn()
     render(<SchoolQuestion id="s" first="YUSUF" saved={ABROAD} onDone={onDone} onNotKnown={() => {}} />)
-    await userEvent.click(screen.getByText("Pwani"))
+    const region = screen.getByRole("combobox", { name: "Region" })
+    await userEvent.clear(region)
+    await userEvent.type(region, "pw")
+    await userEvent.keyboard("{Enter}")
     await userEvent.click(screen.getByRole("button", { name: /Continue/ }))
     expect(onDone).toHaveBeenCalledWith({ name: ABROAD.name, type: "private", region: "Pwani" })
   })
 
-  it("sends no country for a school that had none", async () => {
+  it("prompts for the country on an old Outside Tanzania school that has none", async () => {
     const onDone = vi.fn()
-    render(<SchoolQuestion id="s" first="YUSUF" saved={{ name: ABROAD.name, type: "private", region: "Outside Tanzania" }} onDone={onDone} onNotKnown={() => {}} />)
+    render(
+      <SchoolQuestion
+        id="s"
+        first="YUSUF"
+        saved={{ name: ABROAD.name, type: "private", region: "Outside Tanzania" }}
+        needsCountry
+        onDone={onDone}
+        onNotKnown={() => {}}
+      />,
+    )
+    expect(screen.getByText(/no country saved yet/i)).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: /Continue/ }).closest("[inert]")).not.toBeNull()
+    const country = screen.getByRole("combobox", { name: "Country" })
+    await userEvent.type(country, "uga")
+    await userEvent.keyboard("{Enter}")
     await userEvent.click(screen.getByRole("button", { name: /Continue/ }))
-    expect(onDone).toHaveBeenCalledWith({ name: ABROAD.name, type: "private", region: "Outside Tanzania" })
+    expect(onDone).toHaveBeenCalledWith({ name: ABROAD.name, type: "private", region: "Outside Tanzania", country: "Uganda" })
+  })
+})
+
+describe("CustodianQuestion", () => {
+  const base = { id: "c1", names: "YUSUF", father: "ALI OMARI HASSAN", first: null, canCheck: false, otherFather: null }
+
+  it("starts with two big choices and reveals only the father's phone when The father is picked", async () => {
+    const onDone = vi.fn()
+    render(<CustodianQuestion {...base} onDone={onDone} />)
+    expect(screen.getByRole("textbox", { name: "Custodian’s mobile number" }).closest("[inert]")).not.toBeNull()
+    await userEvent.click(screen.getByRole("radio", { name: /The father\s*ALI OMARI HASSAN/ }))
+    const phone = screen.getByRole("textbox", { name: "Custodian’s mobile number" })
+    expect(phone.closest("[inert]")).toBeNull()
+    await userEvent.type(phone, "0712345678")
+    await userEvent.click(screen.getByRole("button", { name: /Continue/ }))
+    expect(onDone).toHaveBeenCalledWith({ kind: "father", phone: "0712345678", whatsapp: "", contact: undefined })
+  })
+
+  it("shows name boxes and mobile, then relationship when Someone else is picked", async () => {
+    const onDone = vi.fn()
+    render(<CustodianQuestion {...base} onDone={onDone} />)
+    await userEvent.click(screen.getByRole("radio", { name: /Someone else\s*Mother, guardian/ }))
+    const firstName = screen.getByRole("textbox", { name: "First name" })
+    expect(firstName.closest("[inert]")).toBeNull()
+    await userEvent.type(firstName, "saida")
+    await userEvent.type(screen.getByRole("textbox", { name: "Middle name" }), "omari")
+    await userEvent.type(screen.getByRole("textbox", { name: "Last name" }), "hassan")
+    await userEvent.type(screen.getByRole("textbox", { name: "Custodian’s mobile number" }), "0712345678")
+    await userEvent.click(screen.getByRole("radio", { name: "Mother" }))
+    await userEvent.click(screen.getByRole("button", { name: /Continue/ }))
+    expect(onDone).toHaveBeenCalledWith({
+      kind: "new",
+      name: { firstName: "SAIDA", middleName: "OMARI", lastName: "HASSAN" },
+      phone: "0712345678",
+      whatsapp: "",
+      relationship: "Mother",
+      description: "",
+    })
+  })
+
+  it("opens on Someone else at check-in when the Admission form named a custodian", () => {
+    render(
+      <CustodianQuestion
+        {...base}
+        prefill={{
+          contact: { id: "c-form", fullName: "SAIDA OMARI HASSAN", phone: "+255755000222", whatsapp: null, children: [] },
+          relationship: "Mother",
+          description: null,
+        }}
+        onDone={() => {}}
+      />,
+    )
+    expect(screen.getByRole("radio", { name: /Someone else\s*Mother, guardian/ })).toBeChecked()
+    expect(screen.getByRole("radio", { name: "Mother" })).toBeChecked()
   })
 })

@@ -132,10 +132,16 @@ describe("Register students", () => {
     expect(await register([student(), bad])).toMatchObject({ ok: false, error: { kind: "invalid", field: "last_name_from", student: 2 } })
   })
 
-  test("a school Outside Tanzania takes its country from the list, stored in the list's spelling", async () => {
+  test("a school Outside Tanzania requires a country from the list, stored in the list's spelling", async () => {
     const outside = { name: "EXAMPLE SCHOOL ABROAD", type: "private", region: "Outside Tanzania" } as const
-    // Left out, for now: today's screens send none, and staff must still be able to save.
-    expect(await registered(student({ previousSchool: outside }))).toMatchObject({ previous_school_region: "Outside Tanzania", previous_school_country: null })
+    expect(await register([student({ previousSchool: outside })])).toMatchObject({
+      ok: false,
+      error: { kind: "invalid", field: "previous_school_country", student: 1 },
+    })
+    expect(await register([student({ previousSchool: { ...outside, country: "   " } })])).toMatchObject({
+      ok: false,
+      error: { kind: "invalid", field: "previous_school_country", student: 1 },
+    })
     expect(await register([student({ previousSchool: { ...outside, country: "Atlantis" } })])).toMatchObject({
       ok: false,
       error: { kind: "invalid", field: "previous_school_country", student: 1 },
@@ -239,7 +245,7 @@ describe("check-in of an Admission form family", () => {
     })
   })
 
-  test("a school Outside Tanzania on file with no country still checks in, given again or kept", async () => {
+  test("a school Outside Tanzania on file with no country is refused at check-in until a country is given", async () => {
     const kids = [parts(), parts()]
     const sent = await submitAdmissionForm(secretClient(), {
       submissionKey: randomUUID(),
@@ -255,22 +261,75 @@ describe("check-in of an Admission form family", () => {
         [rows.map((r) => r.id)],
       ),
     )
-    const done = await completeAdmissionVisit(await signedIn(ADMISSIONS), {
+    const client = await signedIn(ADMISSIONS)
+    const person = [{ firstName: word(), middleName: word(), lastName: word(), phone: phone() }]
+
+    // Sent again without a country: refused, naming student 1.
+    expect(
+      await completeAdmissionVisit(client, {
+        visitDate: yesterday,
+        people: person,
+        students: [
+          {
+            leadId: rows[0].id,
+            ...kids[0],
+            gender: "Girl",
+            custodian: { person: 1, relationship: "Mother" },
+            previousSchool: { name: "EXAMPLE SCHOOL ABROAD", type: "private", region: "Outside Tanzania" },
+          },
+          {
+            leadId: rows[1].id,
+            ...kids[1],
+            gender: "Boy",
+            custodian: { person: 1, relationship: "Mother" },
+            previousSchool: { name: "EXAMPLE SCHOOL ABROAD", type: "private", region: "Outside Tanzania", country: "Kenya" },
+          },
+        ],
+      }),
+    ).toMatchObject({ ok: false, error: { kind: "invalid", field: "previous_school_country", student: 1 } })
+
+    // Omitted while stored as Outside Tanzania with no country: refused, naming student 2.
+    expect(
+      await completeAdmissionVisit(client, {
+        visitDate: yesterday,
+        people: person,
+        students: [
+          {
+            leadId: rows[0].id,
+            ...kids[0],
+            gender: "Girl",
+            custodian: { person: 1, relationship: "Mother" },
+            previousSchool: { name: "EXAMPLE SCHOOL ABROAD", type: "private", region: "Outside Tanzania", country: "Kenya" },
+          },
+          { leadId: rows[1].id, ...kids[1], gender: "Boy", custodian: { person: 1, relationship: "Mother" } },
+        ],
+      }),
+    ).toMatchObject({ ok: false, error: { kind: "invalid", field: "previous_school_country", student: 2 } })
+
+    // With countries supplied (or Not known yet), check-in completes.
+    const done = await completeAdmissionVisit(client, {
       visitDate: yesterday,
-      people: [{ firstName: word(), middleName: word(), lastName: word(), phone: phone() }],
+      people: person,
       students: [
         {
           leadId: rows[0].id,
           ...kids[0],
           gender: "Girl",
           custodian: { person: 1, relationship: "Mother" },
-          previousSchool: { name: "EXAMPLE SCHOOL ABROAD", type: "private", region: "Outside Tanzania" },
+          previousSchool: { name: "EXAMPLE SCHOOL ABROAD", type: "private", region: "Outside Tanzania", country: "Kenya" },
         },
-        { leadId: rows[1].id, ...kids[1], gender: "Boy", custodian: { person: 1, relationship: "Mother" } },
+        {
+          leadId: rows[1].id,
+          ...kids[1],
+          gender: "Boy",
+          custodian: { person: 1, relationship: "Mother" },
+          previousSchool: { notKnown: true },
+        },
       ],
     })
     if (!done.ok || done.data.kind !== "completed") throw new Error(JSON.stringify(done))
-    for (const r of rows) expect(await rowOf(r.id)).toMatchObject({ previous_school_region: "Outside Tanzania", previous_school_country: null })
+    expect(await rowOf(rows[0].id)).toMatchObject({ previous_school_region: "Outside Tanzania", previous_school_country: "Kenya" })
+    expect(await rowOf(rows[1].id)).toMatchObject({ previous_school_region: null, previous_school_country: null })
   })
 })
 

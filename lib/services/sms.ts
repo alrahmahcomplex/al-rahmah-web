@@ -49,10 +49,14 @@ export function beemSender(
       return { ok: false, error: (error as { name?: unknown } | null)?.name === "TimeoutError" ? "timeout" : "network" }
     }
 
+    // The timeout covers reading the answer too: Beem may have taken the
+    // message, so the log must say timeout, not the status line's 200.
     let answer: BeemAnswer | null = null
     try {
       answer = (await response.json()) as BeemAnswer
-    } catch {
+    } catch (error) {
+      if ((error as { name?: unknown } | null)?.name === "TimeoutError") return { ok: false, error: "timeout" }
+      if (response.ok) return { ok: false, error: "unreadable_answer" }
       answer = null
     }
     // Beem answers 100, "Message Submitted Successfully", with the request's id.

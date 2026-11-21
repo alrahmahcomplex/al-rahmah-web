@@ -40,6 +40,15 @@ describe("beemSender", () => {
     await expect(send("255712345123", "x")).resolves.toEqual({ ok: false, error: "http_502" })
   })
 
+  test("a timeout while reading Beem's answer is a timeout, not the 200 already received", async () => {
+    const slowBody = vi.fn(async () => ({ ok: true, status: 200, json: async () => { throw new DOMException("timed out", "TimeoutError") } }))
+    const send = beemSender(KEYS, slowBody as unknown as typeof fetch)
+    await expect(send("255712345123", "x")).resolves.toEqual({ ok: false, error: "timeout" })
+
+    const garbled = beemSender(KEYS, answering(200, "not json") as unknown as typeof fetch)
+    await expect(garbled("255712345123", "x")).resolves.toEqual({ ok: false, error: "unreadable_answer" })
+  })
+
   test("a network failure and a timeout are told apart", async () => {
     const down = beemSender(KEYS, vi.fn(async () => { throw new TypeError("fetch failed") }) as unknown as typeof fetch)
     await expect(down("255712345123", "x")).resolves.toEqual({ ok: false, error: "network" })

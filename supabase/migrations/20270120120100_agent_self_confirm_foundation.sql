@@ -173,6 +173,11 @@ create trigger refuse_delete
     for each row
     execute function public.refuse_delete();
 
+create trigger refuse_truncate
+    before truncate on public.sms_settings
+    for each statement
+    execute function public.refuse_delete();
+
 do $$
 begin
     perform public.set_audit_actor('system');

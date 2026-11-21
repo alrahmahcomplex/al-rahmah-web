@@ -72,7 +72,7 @@ async function another(page: Page) {
 
 async function fatherCustodian(page: Page, number: string) {
   const step = open(page)
-  await step.getByRole("switch", { name: "The father is the custodian" }).click()
+  await pick(page, /^The father/)
   await step.getByRole("textbox", { name: "Custodian’s mobile number" }).fill(number)
   await go(page, "Continue").click()
 }
@@ -123,6 +123,7 @@ test.describe("registering a family", () => {
     await expect(page.getByRole("heading", { name: `Who is the custodian of ${neema} and ${hamisi}?` })).toBeVisible()
     await fatherCustodian(page, phone())
     await expect(page.getByRole("heading", { name: `Who is the custodian of ${zawadi}?` })).toBeVisible()
+    await pick(page, /^Someone else\s+Mother, guardian/)
     await pick(page, new RegExp(`^${dad.join(" ")}`))
     await pick(page, "Uncle")
     await go(page, "Continue").click()
@@ -182,12 +183,11 @@ test.describe("registering a family", () => {
     await go(page, "No, go to custodians").click()
     // Their mother: the father can't be the custodian of both.
     const step = open(page)
-    await step.getByRole("textbox", { name: "Custodian’s mobile number" }).fill(phone())
-    // The name boxes unfold once the number is checked against families on file.
-    await expect(step.locator(".kit-rv[data-open]").getByRole("textbox", { name: "First name" })).toBeVisible()
+    await pick(page, /^Someone else/)
     await step.getByRole("textbox", { name: "First name" }).fill("mwajuma")
     await step.getByRole("textbox", { name: "Middle name" }).fill("said")
     await step.getByRole("textbox", { name: "Last name" }).fill("kombo")
+    await step.getByRole("textbox", { name: "Custodian’s mobile number" }).fill(phone())
     await pick(page, "Mother")
     await go(page, "Continue").click()
     await pick(page, /^Someone else/)
@@ -219,11 +219,11 @@ test.describe("registering a family", () => {
     await requestWithNote(page.getByRole("dialog", { name: "The fathers’ names don’t match" }))
     await go(page, "No, go to custodians").click()
     const first = open(page)
-    await first.getByRole("textbox", { name: "Custodian’s mobile number" }).fill(number)
-    await expect(first.locator(".kit-rv[data-open]").getByRole("textbox", { name: "First name" })).toBeVisible()
+    await pick(page, /^Someone else/)
     await first.getByRole("textbox", { name: "First name" }).fill(mum[0])
     await first.getByRole("textbox", { name: "Middle name" }).fill(mum[1])
     await first.getByRole("textbox", { name: "Last name" }).fill(mum[2])
+    await first.getByRole("textbox", { name: "Custodian’s mobile number" }).fill(number)
     await pick(page, "Mother")
     await go(page, "Continue").click()
     await pick(page, new RegExp(`^${mum.join(" ")}`))
@@ -231,10 +231,11 @@ test.describe("registering a family", () => {
     await expect(page.getByRole("heading", { name: "2 students registered" })).toBeVisible({ timeout: 15_000 })
 
     // A new child with B's father's name, under the same mother.
-    await page.getByRole("button", { name: "Register another family" }).click()
+    await page.getByRole("button", { name: "Register another student" }).click()
     await student(page, c, two, "FORM 1", "Day")
     await go(page, "No, go to custodians").click()
     const step = open(page)
+    await pick(page, /^Someone else/)
     await step.getByRole("textbox", { name: "Custodian’s mobile number" }).fill(number)
     await expect(step.getByText(`This number is on file for ${mum.join(" ")}`)).toBeVisible()
     await pick(page, "Same person", step)
@@ -292,11 +293,11 @@ test.describe("registering a family", () => {
     await expect(page.getByRole("heading", { name: "1 student registered" })).toBeVisible({ timeout: 15_000 })
 
     // The same student and number again: refused, and nothing new is made.
-    await page.getByRole("button", { name: "Register another family" }).click()
+    await page.getByRole("button", { name: "Register another student" }).click()
     await student(page, a, dad, "FORM 1", "Day")
     await go(page, "No, go to custodians").click()
     const step = open(page)
-    await step.getByRole("switch", { name: "The father is the custodian" }).click()
+    await pick(page, /^The father/)
     await step.getByRole("textbox", { name: "Custodian’s mobile number" }).fill(number)
     await expect(step.getByText(`This number is on file for ${dad.join(" ")}`)).toBeVisible()
     await pick(page, "Same person", step)
@@ -325,11 +326,11 @@ test.describe("registering a family", () => {
     await go(page, "Register 1 student").click()
     await expect(page.getByRole("heading", { name: "1 student registered" })).toBeVisible({ timeout: 15_000 })
 
-    await page.getByRole("button", { name: "Register another family" }).click()
+    await page.getByRole("button", { name: "Register another student" }).click()
     await student(page, later, dad, "FORM 1", "Day")
     await go(page, "No, go to custodians").click()
     const step = open(page)
-    await step.getByRole("switch", { name: "The father is the custodian" }).click()
+    await pick(page, /^The father/)
     await step.getByRole("textbox", { name: "Custodian’s mobile number" }).fill(number)
     await expect(step.getByText(`This number is on file for ${dad.join(" ")}`)).toBeVisible()
     await pick(page, "Same person", step)
@@ -389,6 +390,7 @@ test.describe("answers that depend on others", () => {
     await pick(page, /^Not a sibling/)
     await go(page, "No, go to custodians").click()
     await fatherCustodian(page, phone())
+    await pick(page, /^Someone else\s+Mother, guardian/)
     await pick(page, new RegExp(`^${one.join(" ")}`))
     await pick(page, "Uncle")
     await go(page, "Continue").click()
@@ -397,15 +399,15 @@ test.describe("answers that depend on others", () => {
     // The first custodian becomes someone else: B's answer named the old one, so B is asked again.
     await page.getByRole("button", { name: new RegExp(`^Change Custodian of ${a}$`) }).click()
     const step = open(page)
-    await step.getByRole("switch", { name: "The father is the custodian" }).click()
-    await step.getByRole("textbox", { name: "Custodian’s mobile number" }).fill(phone())
-    await expect(step.locator(".kit-rv[data-open]").getByRole("textbox", { name: "First name" })).toBeVisible()
+    await pick(page, /^Someone else/)
     await step.getByRole("textbox", { name: "First name" }).fill("mwajuma")
     await step.getByRole("textbox", { name: "Middle name" }).fill("said")
     await step.getByRole("textbox", { name: "Last name" }).fill("kombo")
+    await step.getByRole("textbox", { name: "Custodian’s mobile number" }).fill(phone())
     await pick(page, "Mother")
     await go(page, "Continue").click()
     await expect(open(page).getByRole("heading", { name: `Who is the custodian of ${b}?` })).toBeVisible()
+    await pick(page, /^Someone else\s+Mother, guardian/)
     await expect(open(page).getByRole("radio", { name: /^MWAJUMA SAID KOMBO/ })).toBeAttached()
   })
 })
@@ -419,14 +421,105 @@ test.describe("starting over", () => {
 
     const a = word("AMANI")
     await student(page, a, father(), "FORM 1", "Day")
-    // Back replaces Start over from the second question.
-    await expect(page.getByRole("button", { name: "Start over" })).toBeHidden()
-    await page.getByRole("button", { name: new RegExp(`^Change Full name, ${a}`) }).click()
+    // From the second question on, Back takes the left slot and Start over sits after the section chip (#511).
+    await expect(page.getByRole("button", { name: "Back" })).toBeVisible()
     await page.getByRole("button", { name: "Start over" }).click()
     const sheet = page.getByRole("dialog", { name: "Start over?" })
     await sheet.getByRole("button", { name: "Yes, clear the form" }).click()
     await expect(page.getByText("The form has started over.")).toBeVisible()
     await expect(page.getByText(a)).toHaveCount(0)
+  })
+})
+
+test.describe("last-name choice, school abroad, and Register for interview (#511)", () => {
+  test.describe.configure({ timeout: 120_000 })
+
+  test("father's middle name, Outside Tanzania with country, and Register for interview sheet for two students", async ({ page }) => {
+    await signIn(page, ADMISSIONS)
+    await start(page)
+    const dad = father()
+    const [first, second] = [word("NEEMA"), word("HAMISI")]
+    const firstMiddleFull = `${first} ${dad[0]} ${dad[1]}`
+    const secondLastFull = full(second, dad)
+
+    // Student 1: father's middle name as last name, school Outside Tanzania in Kenya.
+    const s1 = open(page)
+    await s1.getByRole("textbox", { name: "Student’s name" }).fill(first)
+    await s1.getByRole("textbox", { name: "First name" }).fill(dad[0])
+    await s1.getByRole("textbox", { name: "Middle name" }).fill(dad[1])
+    await s1.getByRole("textbox", { name: "Last name" }).fill(dad[2])
+    await pick(page, new RegExp(`Father’s middle name\\s*${dad[1]}`))
+    await expect(s1.getByText(`Student’s full name: ${firstMiddleFull}`)).toBeVisible()
+    await go(page, "Continue").click()
+    await pick(page, "Girl")
+    await go(page, /FORM 1/).click()
+    await pick(page, "Day")
+    const school = open(page)
+    await school.getByRole("textbox", { name: "School name" }).fill("green hills academy")
+    await expect(school.getByRole("textbox", { name: "School name" })).toHaveValue("GREEN HILLS ACADEMY")
+    await pick(page, "Private")
+    await school.getByRole("combobox", { name: "Region" }).fill("out")
+    await school.getByRole("combobox", { name: "Region" }).press("Tab")
+    await expect(school.getByRole("combobox", { name: "Country" })).toBeFocused()
+    await school.getByRole("combobox", { name: "Country" }).fill("ken")
+    await school.getByRole("combobox", { name: "Country" }).press("Enter")
+    await go(page, "Continue").click()
+    await expect(page.getByText("GREEN HILLS ACADEMY · Private · Kenya")).toBeVisible()
+
+    // Student 2: father's last name (default), sibling of Student 1.
+    await another(page)
+    await student(page, second, dad, "FORM 1", "Day", "Boy")
+    await pick(page, new RegExp(`^Yes, sibling of ${firstMiddleFull}`))
+    await go(page, "No, go to custodians").click()
+    await fatherCustodian(page, phone())
+    await pick(page, new RegExp(`^${dad.join(" ")}`))
+    await finish(page, 2)
+
+    await expect(page.getByRole("heading", { name: "2 students registered" })).toBeVisible({ timeout: 15_000 })
+    const familyLink = page.getByRole("link", { name: "Open this family’s full record" })
+    await expect(familyLink).toBeVisible()
+    await expect(familyLink).toHaveAttribute("href", /^\/staff\/family\?students=[0-9a-f-]+,[0-9a-f-]+$/)
+
+    // Register for interview sheet: per-student buttons plus Register all for 2+ students.
+    await page.getByRole("button", { name: "Register for interview" }).click()
+    const sheet = page.getByRole("dialog", { name: "Register for interview" })
+    await expect(sheet.getByRole("button", { name: "Register all for interview" })).toBeVisible()
+    const rowButtons = sheet.getByRole("button", { name: "Register for interview" })
+    await expect(rowButtons).toHaveCount(2)
+
+    // Register student 1 alone, then Register all for the remaining student.
+    await rowButtons.first().click()
+    await expect(sheet.getByText("Registered for interview")).toHaveCount(1, { timeout: 10_000 })
+    await sheet.getByRole("button", { name: "Register all for interview" }).click()
+    await expect(sheet.getByText("Registered for interview")).toHaveCount(2, { timeout: 10_000 })
+    await expect(sheet.getByRole("button", { name: "Done" })).toBeVisible()
+    await sheet.getByRole("button", { name: "Done" }).click()
+    await expect(page.getByText("Registered for interview")).toHaveCount(2)
+
+    // Verify stored last_name_from and previous_school_country in DB.
+    const saved = await inRolledBackTransaction(async (sql) => {
+      const { rows } = await sql.query(
+        `select student_name, last_name_from::text, previous_school_name, previous_school_region, previous_school_country
+         from public.leads where student_name = any($1::text[])`,
+        [[firstMiddleFull, secondLastFull]],
+      )
+      return rows
+    })
+    expect(saved).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          student_name: firstMiddleFull,
+          last_name_from: "father_middle",
+          previous_school_name: "GREEN HILLS ACADEMY",
+          previous_school_region: "Outside Tanzania",
+          previous_school_country: "Kenya",
+        }),
+        expect.objectContaining({
+          student_name: secondLastFull,
+          last_name_from: "father_last",
+        }),
+      ]),
+    )
   })
 })
 

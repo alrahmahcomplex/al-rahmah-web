@@ -21,13 +21,6 @@
 .rs-year > .kit-link { margin-left: auto; }
 @media (max-width: 380px) { .rs-year { flex-wrap: wrap; justify-content: center; } .rs-year > .kit-link { margin-left: 0; } }
 
-/* "The father is the custodian": the switch in an outlined row. */
-.rs-swrow { padding: 14px 16px; border: var(--gf-stroke) solid var(--gf-line); border-radius: 20px; background: var(--gf-paper); text-align: left; transition: background var(--gf-t-med) var(--gf-ease-out), border-color var(--gf-t-med); }
-.rs-swrow:hover { background: var(--gf-chrome); --kit-quiet: var(--gf-quiet-on-tint); }
-.rs-swrow:has([data-checked]) { border-color: var(--gf-indigo); background: var(--gf-whisper); --kit-quiet: var(--gf-quiet-on-tint); }
-.rs-swrow .kit-tick-t > span { font-weight: 600; font-size: 16px; }
-.rs-swrow .kit-tick-t small { letter-spacing: 0.02em; overflow-wrap: anywhere; }
-
 /* Two fathers' names side by side. */
 .rs-cmp { display: grid; grid-template-columns: 1fr 1fr; border-radius: 20px; border: var(--gf-stroke) solid var(--gf-indigo); overflow: hidden; text-align: center; }
 .rs-cmp div { padding: 12px 10px; min-width: 0; }
@@ -39,3 +32,19 @@
 .rs-fees { margin: 0; text-align: left; font-size: 13.5px; }
 .rs-fees th b, .rs-fees td b { display: block; font-weight: 600; }
 .rs-fees small { display: block; color: var(--kit-quiet, var(--gf-quiet)); font-size: 12.5px; font-weight: 400; }
+
+/* End of the form and Register for interview sheet (#511, prototype v54-v55). */
+.rs-done-name { display: flex; flex-direction: column; align-items: flex-start; gap: 5px; min-width: 0; }
+.rs-done-two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.rs-done-two > :only-child { grid-column: 1 / -1; }
+.rs-done-two .kit-btn { min-height: 56px; height: auto; padding: 8px 14px; white-space: normal; line-height: 1.2; text-align: center; font-size: 16px; border-radius: 22px; }
+.rs-iv-list { display: flex; flex-direction: column; }
+.rs-iv-row { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 14px; padding: 12px 0; border-top: 1px solid var(--gf-mist); }
+.rs-iv-row:first-child { border-top: 0; padding-top: 2px; }
+.rs-iv-tx { flex: 1 1 180px; min-width: 0; display: flex; flex-direction: column; text-align: left; }
+.rs-iv-tx b { font: italic 800 17px/1.25 var(--font-exo), "Exo", sans-serif; color: var(--gf-indigo); overflow-wrap: anywhere; }
+.rs-iv-tx small { font-size: 13px; color: var(--kit-quiet, var(--gf-quiet)); }
+.rs-iv-act { flex: none; display: flex; }
+.rs-iv-chip { gap: 4px; }
+.rs-iv-chip svg { width: 14px; height: 14px; }
+.rs-iv-foot { display: flex; flex-direction: column; gap: 10px; width: 100%; }

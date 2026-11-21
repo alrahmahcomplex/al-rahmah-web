@@ -47,6 +47,7 @@ export default async function RegisterStudentsPage() {
         canLink={staff.permissions.includes("leads.edit")}
         canEnterCode={staff.permissions.includes("leads.edit")}
         canCheck={staff.permissions.includes("leads.view")}
+        canInterview={staff.permissions.includes("interviews.record")}
       />
     </div>
   )

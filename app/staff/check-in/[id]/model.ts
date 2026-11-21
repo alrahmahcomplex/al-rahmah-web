@@ -4,6 +4,7 @@ import type { CheckInStudent, RegistrationStudent, Relationship } from "@/lib/se
 
 import { fatherNameMatch } from "@/lib/father-name"
 import type { LastNameFrom } from "@/lib/names"
+import { OUTSIDE_TANZANIA } from "@/lib/places"
 
 import {
   fatherName,
@@ -14,6 +15,7 @@ import {
   type Custodian,
   type KnownContact,
   type RelationshipChoice,
+  type SchoolAnswer,
   type Student,
   type StudentNameAnswer,
 } from "../new/model"
@@ -30,6 +32,8 @@ export type GivenChild = {
   admissionNumber: string
   // The name parts the form's names split into, for the name question.
   prefill: StudentNameAnswer
+  // A school Outside Tanzania saved before the country list (#511): check-in opens it prefilled so staff pick the country.
+  prefillSchool?: Exclude<SchoolAnswer, { notKnown: true }>
   // Answered by the form: shown filled, "· from the Admission form".
   given: { name: boolean; gender: boolean }
   // Already in a sibling group: check-in keeps that link and asks nothing about it.
@@ -101,6 +105,8 @@ export function givenRelationship(c: GivenContact): { choice: RelationshipChoice
 function student(child: FormChild, key: number): { student: Student; given: GivenChild } {
   const { name, complete } = formName(child.studentName, child.fatherFullName, child.lastNameFrom)
   const asksSchool = !NO_SCHOOL_ASKED.includes(child.className)
+  const school = asksSchool && child.previousSchool ? child.previousSchool : undefined
+  const schoolNeedsCountry = !!school && !("notKnown" in school) && school.region === OUTSIDE_TANZANIA && !school.country
   return {
     student: {
       key,
@@ -109,9 +115,17 @@ function student(child: FormChild, key: number): { student: Student; given: Give
       className: child.className,
       year: child.enrollmentYear,
       board: child.dayOrBoarding,
-      ...(asksSchool && child.previousSchool ? { school: child.previousSchool } : {}),
+      ...(school && !schoolNeedsCountry ? { school } : {}),
     },
-    given: { key, leadId: child.leadId, admissionNumber: child.admissionNumber, prefill: name, given: { name: complete, gender: !!child.gender }, linked: child.linked },
+    given: {
+      key,
+      leadId: child.leadId,
+      admissionNumber: child.admissionNumber,
+      prefill: name,
+      ...(schoolNeedsCountry ? { prefillSchool: school } : {}),
+      given: { name: complete, gender: !!child.gender },
+      linked: child.linked,
+    },
   }
 }
 

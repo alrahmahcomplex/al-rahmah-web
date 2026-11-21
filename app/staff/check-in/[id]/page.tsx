@@ -80,6 +80,7 @@ export default async function CheckInFamilyPage({ params }: { params: Promise<{ 
           canLink
           canEnterCode={false}
           canCheck
+          canInterview={staff.permissions.includes("interviews.record")}
           checkIn={{
             family: children.map((c) => c.leadId).join(","),
             given: checkIn,

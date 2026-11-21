@@ -38,7 +38,7 @@ async function toCodeStep(page: Page) {
   await pick(page, "Day")
   await go(page, "Not known yet").click()
   await go(page, "No, go to custodians").click()
-  await open(page).getByRole("switch", { name: "The father is the custodian" }).click()
+  await pick(page, /^The father/)
   await open(page).getByRole("textbox", { name: "Custodian’s mobile number" }).fill(`07${String(randomInt(0, 100_000_000)).padStart(8, "0")}`)
   await go(page, "Continue").click()
   await pick(page, new RegExp(`^${f} ${m} ${l}`))

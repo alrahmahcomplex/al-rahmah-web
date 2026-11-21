@@ -44,7 +44,25 @@ export function familyTitle(students: readonly { studentName: string; fatherFull
 
 /** A student's full name from its parts: the student's own name, then the father's first and last names (20261223100100). */
 export function studentNameOf(first: string, fatherFirst: string, fatherLast: string): string {
-  return [first, fatherFirst, fatherLast].map((part) => part.trim().replace(/\s+/g, " ").toUpperCase()).join(" ")
+  return [first, fatherFirst, fatherLast]
+    .map((part) => part.trim().replace(/\s+/g, " ").toUpperCase())
+    .filter(Boolean)
+    .join(" ")
+}
+
+/**
+ * The stored student name with only the student's own name changed: the rest
+ * of the stored name is kept word for word, so a last name of two words, or
+ * a name the boxes can't split, is never cut short. `storedOwn` is the own
+ * name the boxes showed for the stored name. Null when the stored name does
+ * not start with it and go on after it; the name is then built from the boxes.
+ */
+export function withOwnName(storedName: string, storedOwn: string, first: string): string | null {
+  const stored = words(storedName)
+  const own = words(storedOwn)
+  const starts = own.length > 0 && own.length < stored.length && own.every((word, i) => word.toLowerCase() === stored[i].toLowerCase())
+  const typed = first.trim().replace(/\s+/g, " ").toUpperCase()
+  return starts && typed ? [typed, ...stored.slice(own.length)].join(" ") : null
 }
 
 export type NameParts = { firstName: string; fatherFirst: string; fatherMiddle: string; fatherLast: string }

@@ -24,11 +24,7 @@ export function ClassSheet({ details, open, onOpenChange }: { details: StudentDe
   return (
     <Sheet
       open={open}
-      onOpenChange={(next) => {
-        if (pending) return
-        if (next) setProblem(null)
-        onOpenChange(next)
-      }}
+      onOpenChange={(next) => !pending && onOpenChange(next)}
       placement="centre"
       title="Choose a class"
       hint={details.studentName}
@@ -79,10 +75,6 @@ export function BoardingSheet({ details, open, onOpenChange }: { details: Studen
       onOpenChange={(next) => {
         // From the pick until its save ends, the sheet stays: the save always finishes in this sheet.
         if (pending || choosing.current) return
-        if (next) {
-          setPicked(details.dayOrBoarding)
-          setProblem(null)
-        }
         onOpenChange(next)
       }}
       placement="centre"
@@ -184,17 +176,7 @@ export function SchoolSheet({
   return (
     <Sheet
       open={open}
-      onOpenChange={(next) => {
-        if (pending) return
-        if (next) {
-          setName(known?.name ?? "")
-          setType(known?.type ?? null)
-          setRegion(known?.region ?? null)
-          setFind("")
-          setProblem(null)
-        }
-        onOpenChange(next)
-      }}
+      onOpenChange={(next) => !pending && onOpenChange(next)}
       placement="centre"
       title="Previous school"
       hint={studentName}

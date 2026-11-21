@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useRef, useState, useTransition } from "react"
+import { useState, useTransition } from "react"
 
 import { Icon } from "@/components/icons"
 import { Avatar, Button, KeyValueList, StatusChip, Tag, TextLink, toast, type KeyValueItem } from "@/components/kit"
@@ -55,7 +55,8 @@ export function StudentCard({ student, canEdit }: { student: StudentCardData; ca
   // Each sheet's edit session. Change mounts only that sheet afresh, so opening another sheet never
   // replaces a name sheet whose father flow is still saving.
   const [session, setSession] = useState({ name: 0, class: 0, board: 0, school: 0 })
-  const nameBusyRef = useRef(false)
+  // While the name sheet saves (its father flow included), it keeps the card: no other sheet opens over it.
+  const [nameBusy, setNameBusy] = useState(false)
   const [registering, startRegister] = useTransition()
   const details: StudentDetails = {
     leadId: lead.id,
@@ -72,7 +73,11 @@ export function StudentCard({ student, canEdit }: { student: StudentCardData; ca
         onClick={() => {
           // A new edit session: the sheet mounts again and starts from the record as it is now.
           // A name sheet still saving (its father flow included) opens again as it is instead.
-          if (!(what === "name" && nameBusyRef.current)) setSession((n) => ({ ...n, [what]: n[what] + 1 }))
+          if (nameBusy) {
+            if (what === "name") setEditing("name")
+            return
+          }
+          setSession((n) => ({ ...n, [what]: n[what] + 1 }))
           setEditing(what)
         }}
       >
@@ -81,7 +86,8 @@ export function StudentCard({ student, canEdit }: { student: StudentCardData; ca
     ) : undefined
   const sheetOpen = (what: Exclude<Editing, null>) => ({
     open: editing === what,
-    onOpenChange: (open: boolean) => setEditing(open ? what : null),
+    // A sheet opens or closes only itself: a late close never shuts another sheet, and a late reopen never covers one.
+    onOpenChange: (open: boolean) => setEditing((now) => (open ? (now === null || now === what ? what : now) : now === what ? null : now)),
   })
 
   const rows: KeyValueItem[] = [
@@ -141,8 +147,8 @@ export function StudentCard({ student, canEdit }: { student: StudentCardData; ca
       {canEdit && (
         <>
           <NameSheet
-            key={session.name}
-            busyRef={nameBusyRef}
+            key={`name-${session.name}`}
+            onBusy={setNameBusy}
             leadId={lead.id}
             studentName={lead.studentName}
             father={student.father}
@@ -150,9 +156,9 @@ export function StudentCard({ student, canEdit }: { student: StudentCardData; ca
             compareWith={student.compareWith}
             {...sheetOpen("name")}
           />
-          <ClassSheet key={session.class} details={details} {...sheetOpen("class")} />
-          <BoardingSheet key={session.board} details={details} {...sheetOpen("board")} />
-          {asked && <SchoolSheet key={session.school} leadId={lead.id} studentName={lead.studentName} school={student.previousSchool} {...sheetOpen("school")} />}
+          <ClassSheet key={`class-${session.class}`} details={details} {...sheetOpen("class")} />
+          <BoardingSheet key={`board-${session.board}`} details={details} {...sheetOpen("board")} />
+          {asked && <SchoolSheet key={`school-${session.school}`} leadId={lead.id} studentName={lead.studentName} school={student.previousSchool} {...sheetOpen("school")} />}
         </>
       )}
     </section>

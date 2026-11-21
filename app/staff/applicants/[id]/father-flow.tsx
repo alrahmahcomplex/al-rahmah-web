@@ -33,6 +33,8 @@ export type FatherSaved = {
   father: string
   // The toast for a plain save. Null when a sheet opens to say what changed.
   message: string | null
+  // When the desk chose the sibling's spelling: that sibling's own name, which shows how the father's name splits.
+  siblingStudentName?: string
 }
 
 export function useFatherNameFlow({
@@ -61,7 +63,13 @@ export function useFatherNameFlow({
   onRefused: (message: string) => void
   // "One name, or two?" opens: nothing is saved until it is answered.
   onAsk?: () => void
-}): { send: (name: string) => void; pending: boolean; sheets: ReactNode } {
+}): {
+  send: (name: string) => void
+  pending: boolean
+  sheets: ReactNode
+  // One of the flow's sheets is on screen.
+  showing: boolean
+} {
   const [flow, setFlow] = useState<Flow | null>(null)
   const [flowOpen, setFlowOpen] = useState(false)
   // The answer to "One name, or two?": the first one picked wins, and it is
@@ -86,7 +94,7 @@ export function useFatherNameFlow({
     setFlowOpen(true)
   }
 
-  function handle(outcome: FatherOutcome, saved: string) {
+  function handle(outcome: FatherOutcome, saved: string, siblingStudentName?: string) {
     switch (outcome.status) {
       case "refused":
         onRefused(outcome.message)
@@ -96,7 +104,7 @@ export function useFatherNameFlow({
         openFlow({ kind: "question", name: outcome.fatherFullName, sibling: outcome.sibling, holders: outcome.holders })
         return
       case "saved":
-        onSaved({ father: saved, message: outcome.message })
+        onSaved({ father: saved, message: outcome.message, siblingStudentName })
         refreshed()
         return
       case "different":
@@ -125,7 +133,8 @@ export function useFatherNameFlow({
       } catch {
         outcome = { status: "refused", message: LOST }
       }
-      handle(outcome, answer === "typo-theirs" && siblingFather ? siblingFather : name)
+      const theirs = answer === "typo-theirs" && siblingFather
+      handle(outcome, theirs ? siblingFather : name, theirs && flow?.kind === "question" ? flow.sibling.studentName : undefined)
     })
   }
 
@@ -135,7 +144,8 @@ export function useFatherNameFlow({
         <Sheet
           open={flowOpen}
           onOpenChange={(next) => {
-            if (pending) return
+            // Once an answer is picked it is saved: the sheet waits for it.
+            if (pending || picked.current !== null) return
             setFlowOpen(next)
             if (!next && picked.current === null) toast("Nothing saved. The father’s name is as it was.")
           }}
@@ -277,5 +287,5 @@ export function useFatherNameFlow({
     </>
   )
 
-  return { send: (name) => save(name, null, null), pending, sheets }
+  return { send: (name) => save(name, null, null), pending, sheets, showing: flow !== null && flowOpen }
 }

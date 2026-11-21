@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { byCustodian, familyHref, familyTitle, nameParts, parseFamilyIds, studentNameOf } from "@/app/staff/family/model"
+import { byCustodian, familyHref, familyTitle, nameParts, parseFamilyIds, studentNameOf, withOwnName } from "@/app/staff/family/model"
 
 // The Family page's address and words (#512).
 
@@ -57,6 +57,20 @@ describe("familyTitle", () => {
 describe("the student's name", () => {
   it("is built from the student's name and the father's first and last", () => {
     expect(studentNameOf(" neema ", "juma", "mrisho")).toBe("NEEMA JUMA MRISHO")
+  })
+
+  it("leaves out a part that is empty, with no stray spaces", () => {
+    expect(studentNameOf("AMINA", "", "")).toBe("AMINA")
+    expect(studentNameOf("AMINA", "ALI", "")).toBe("AMINA ALI")
+  })
+
+  it("changes only the student's own name, keeping the rest of the stored name word for word", () => {
+    expect(withOwnName("NEEMA JUMA DE SOUZA", "NEEMA", "amina")).toBe("AMINA JUMA DE SOUZA")
+    expect(withOwnName("MARY ANNE JUMA MRISHO", "MARY ANNE", "MARIA")).toBe("MARIA JUMA MRISHO")
+    // Nothing after the own name, an own name the stored name does not start with, or nothing typed: built from the boxes instead.
+    expect(withOwnName("AMINA", "AMINA", "ZAINA")).toBeNull()
+    expect(withOwnName("NEEMA JUMA MRISHO", "AMINA", "ZAINA")).toBeNull()
+    expect(withOwnName("NEEMA JUMA MRISHO", "NEEMA", " ")).toBeNull()
   })
 
   it("gives back the boxes the stored names were built from", () => {

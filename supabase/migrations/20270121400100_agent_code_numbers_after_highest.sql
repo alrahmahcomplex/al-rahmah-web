@@ -1,56 +1,59 @@
 -- Agent codes continue after the highest number in the system (#521, owner
 -- 2026-11-21).
 --
--- Until now the sequence agent_code_numbers was set once, from the newest
--- record's code (20261222100100), and nothing moved it: an imported code or
--- one the Manager typed kept its own number, and the next sign-up still got
--- a low one. Self-registered agents started again at 001 and repeated
--- numbers already held (SAH-002 and SMS-002 both exist; both stay).
+-- Until now a generated code took the next number from the sequence
+-- agent_code_numbers, which was set once from the newest record's code
+-- (20261222100100) and moved by nothing else: an imported code or one the
+-- Manager typed kept its own number, and the next sign-up still got a low
+-- one. Self-registered agents started again at 001 and repeated numbers
+-- already held (SAH-002 and SMS-002 both exist; both stay).
 --
--- The rule now, for a generated code (create_agent_record):
+-- create_agent_record now picks a generated code's number from the agent
+-- records themselves, every time:
 --
--- - Its number is one more than the highest number any agent record holds,
---   retired records included: imported, typed on Create agent, generated or
---   kept by Recreate. Only a code in the ABC-123 shape has a number, its
---   three digits; every agent code saved since 20261229100100 has that shape.
--- - Once 999 is held (lead, 2026-11-21), it takes the lowest number no agent
---   record holds, so one typed 999 never starts a run of repeats.
--- - Once every number is held, numbers repeat: it takes the lowest number
---   whose code with these letters is free, as 20261229100100's last resort
---   did, and with none left the creation is refused as `no_free_code`.
+-- - One more than the highest number any agent record holds, retired records
+--   included: imported, typed on Create agent, generated or kept by Recreate.
+--   Only a code in the ABC-123 shape has a number, its three digits; every
+--   agent code saved since 20261229100100 has that shape. An import or a
+--   typed code counts as soon as it is saved, so the next code is higher
+--   still, and the codes held today count from the first creation after this
+--   migration: nothing needs moving, and no stored code changes.
+-- - Once 999 is held (lead, 2026-11-21), the lowest number no agent record
+--   holds, so one typed 999 never starts a run of repeats.
+-- - Once every number is held, numbers repeat: the lowest number whose code
+--   with these letters is free, and with none left the creation is refused
+--   as `no_free_code`.
 -- - As before, a code a lead carries, or whose key a Promo code holds, is
---   passed over.
+--   passed over. When the only free numbers are ones these letters can't use
+--   that way, these letters repeat a number.
 --
 -- No lock is waited for:
 --
 -- - While a record is being saved, its number is held with a transaction
 --   advisory lock (`agent-code-number:<n>`) that a creation only tries
---   (pg_try_advisory_xact_lock). A number another creation, an import or the
+--   (pg_try_advisory_xact_lock). The trigger hold_agent_code_number takes it
+--   for every saved code. A number another creation, an import or the
 --   Manager is saving right now is passed over, so creations at the same
---   moment never share a number and a sign-up never waits on an import. A
---   creation checks a number's code before taking its lock, so it holds only
---   a number it will use.
--- - A code still being saved isn't visible to other creations, so the
---   sequence agent_code_numbers marks the highest number saved or being
---   saved, outside any transaction: every saved code moves it up to its own
---   number, never back and never past 999, by taking numbers (nextval). A
---   creation starts above it. Two moves at the same moment can take it one
---   past the highest number; a creation then still takes the numbers
---   between, before any lower one.
--- - If the only free numbers are ones other creations are saving right
---   then, numbers repeat early; once those creations finish every number is
---   held anyway.
+--   moment never share a number, and a sign-up never waits on an import.
+--   After the lock, a creation looks again for a record saved meanwhile.
+-- - A creation checks a number's code before trying its lock, so it holds
+--   only a number it will use.
+-- - A code an open import or creation is still saving isn't visible yet, so
+--   a sign-up at that moment may take a number below it, never the same one.
+-- - If the only free numbers are ones other creations are saving right then,
+--   numbers repeat early; once those creations finish every number is held
+--   anyway.
 --
--- Supabase runs these statements one by one, outside a transaction:
+-- The sequence agent_code_numbers is no longer used. It stays until a later
+-- migration, so a creation still running the old function never fails.
+-- last_agent_code_number, which seeded it once, is dropped.
 --
--- - Each function is created and revoked in one block, so no client role can
---   call it in between.
--- - create_agent_record is replaced before the triggers. It reads the highest
---   number saved itself, so from then on no code is generated below one, and
---   the one-time fix at the end only moves the sequence for creations still
---   open. No stored code changes.
--- - last_agent_code_number, which seeded the sequence once, is dropped:
---   highest_agent_code_number replaces it.
+-- Supabase runs these statements one by one, outside a transaction. The
+-- functions are created and revoked in one block, so no client role can call
+-- them in between. The trigger goes in before create_agent_record changes:
+-- creating it waits for creations that have already saved a record under the
+-- old function, and every record saved after it holds its number, so the new
+-- function passes over a number the old one is still saving.
 
 do $migration$
 begin
@@ -67,44 +70,6 @@ begin
         from public.marketing_agents a;
     $$;
     revoke execute on function public.highest_agent_code_number() from public, anon, authenticated, service_role;
-
-    -- Takes numbers from the sequence until the last one taken is at least
-    -- `code_number`, never past 999; a sequence already there is left alone.
-    -- The position is read again before each number, so two moves at once
-    -- stop as soon as either gets there.
-    create function public.move_agent_code_numbers_to(code_number bigint)
-    returns void
-    language plpgsql
-    security definer
-    set search_path = ''
-    as $$
-    declare
-        target bigint := least(move_agent_code_numbers_to.code_number, 999);
-    begin
-        -- The sequence's own position, not a snapshot: it shows every number
-        -- any session has taken, committed or not.
-        while (select case when s.is_called then s.last_value else s.last_value - 1 end
-               from public.agent_code_numbers s) < target loop
-            perform nextval('public.agent_code_numbers');
-        end loop;
-    end;
-    $$;
-    revoke execute on function public.move_agent_code_numbers_to(bigint) from public, anon, authenticated, service_role;
-
-    create function public.move_agent_code_numbers()
-    returns trigger
-    language plpgsql
-    security definer
-    set search_path = ''
-    as $$
-    begin
-        if public.is_agent_code_shape(new.code) then
-            perform public.move_agent_code_numbers_to(right(new.code, 3)::bigint);
-        end if;
-        return null;
-    end;
-    $$;
-    revoke execute on function public.move_agent_code_numbers() from public, anon, authenticated, service_role;
 
     -- The number a code holds while its record is being saved, for
     -- create_agent_record to pass over. Never waits: a generated code's
@@ -126,6 +91,11 @@ begin
     revoke execute on function public.hold_agent_code_number() from public, anon, authenticated, service_role;
 end;
 $migration$;
+
+-- Before the row, so the number is held before the row exists.
+create trigger hold_agent_code_number
+    before insert or update of code on public.marketing_agents
+    for each row execute function public.hold_agent_code_number();
 
 -- ---------------------------------------------------------------------------
 -- create_agent_record, as 20261229100200_agent_import_names_and_code.sql made
@@ -159,7 +129,7 @@ declare
     candidate text;
     number integer;
     highest integer;
-    start_at integer;
+    holders bigint;
     every_number_held boolean := false;
     tried integer[] := '{}';
     tried_again integer[] := '{}';
@@ -214,12 +184,9 @@ begin
         if draft.agent_code is not null then
             candidate := draft.agent_code;
         elsif not every_number_held then
-            -- No record holds the number: the numbers above the sequence's
-            -- mark first, then any between the highest saved and the mark,
-            -- then the lowest.
+            -- No record holds the number: above the highest first, then the
+            -- lowest.
             highest := public.highest_agent_code_number();
-            select greatest(highest, case when s.is_called then s.last_value else s.last_value - 1 end) + 1 into start_at
-            from public.agent_code_numbers s;
             select g into number
             from generate_series(1, 999) g
             where g <> all (tried)
@@ -227,7 +194,7 @@ begin
                   select right(a.code, 3)::integer from public.marketing_agents a
                   where public.is_agent_code_shape(a.code)
               )
-            order by case when g >= start_at then 0 when g > highest then 1 else 2 end, g
+            order by g <= highest, g
             limit 1;
             if number is null then
                 every_number_held := true;
@@ -246,7 +213,8 @@ begin
                 where case when public.is_agent_code_shape(a.code) then right(a.code, 3)::integer end = number
             );
         else
-            -- Every number held: the lowest whose code with these letters is free.
+            -- Every number held: the lowest whose code with these letters is
+            -- free, noting how many records hold it.
             select g into number
             from generate_series(1, 999) g
             where g <> all (tried_again)
@@ -261,9 +229,16 @@ begin
             if number is null then
                 raise exception 'no_free_code' using detail = prefix;
             end if;
+            select count(*) into holders from public.marketing_agents a
+            where case when public.is_agent_code_shape(a.code) then right(a.code, 3)::integer end = number;
             tried_again := tried_again || number;
             candidate := prefix || '-' || lpad(number::text, 3, '0');
             continue when not pg_try_advisory_xact_lock(hashtextextended('agent-code-number:' || number, 0));
+            -- Another creation saved it and finished before the lock came free.
+            continue when (
+                select count(*) from public.marketing_agents a
+                where case when public.is_agent_code_shape(a.code) then right(a.code, 3)::integer end = number
+            ) <> holders;
         end if;
         begin
             insert into public.marketing_agents (id, full_name, phone, whatsapp, email, code, status, approved_at, approved_by, user_id, import_batch_id)
@@ -300,19 +275,4 @@ begin
 end;
 $$;
 
--- Before the row, so the number is held before the row exists.
-create trigger hold_agent_code_number
-    before insert or update of code on public.marketing_agents
-    for each row execute function public.hold_agent_code_number();
-
--- After the row: a code refused by the unique index or another trigger never
--- moves the sequence. A creation that rolls back later leaves it moved; a
--- creation then still takes the numbers below the mark, before any lower one.
-create trigger move_agent_code_numbers
-    after insert or update of code on public.marketing_agents
-    for each row execute function public.move_agent_code_numbers();
-
 drop function public.last_agent_code_number();
-
--- The one-time fix: the sequence's mark at the highest number held today.
-select public.move_agent_code_numbers_to(public.highest_agent_code_number());

@@ -1,3 +1,4 @@
+import type { LastNameFrom } from "@/lib/names"
 import { MAX_STUDENTS_PER_FORM } from "@/lib/services/leads"
 import { list } from "@/lib/sibling-sentences"
 
@@ -35,8 +36,8 @@ const asWord = (word: string) => word.charAt(0).toUpperCase() + word.slice(1).to
  * "The Mrisho family" when every student's father has the same last name,
  * otherwise "The family of Neema, Hamisi and Zawadi" (owner, prototype v54).
  */
-export function familyTitle(students: readonly { studentName: string; fatherFullName: string | null }[]): string {
-  const lasts = new Set(students.map((s) => nameParts(s.studentName, s.fatherFullName).fatherLast.toLowerCase()))
+export function familyTitle(students: readonly { studentName: string; fatherFullName: string | null; lastNameFrom?: LastNameFrom | null }[]): string {
+  const lasts = new Set(students.map((s) => nameParts(s.studentName, s.fatherFullName, s.lastNameFrom).fatherLast.toLowerCase()))
   const [last] = lasts
   if (lasts.size === 1 && last) return `The ${last.split(" ").map(asWord).join(" ")} family`
   return `The family of ${list(students.map((s) => asWord(words(s.studentName)[0] ?? s.studentName)), "and")}`
@@ -69,22 +70,37 @@ export type NameParts = { firstName: string; fatherFirst: string; fatherMiddle: 
 
 /**
  * The name boxes for a stored student and father: the student's own name and
- * the father's three. The student's name ends with the father's first name
- * and his last name, so the father's last name is the longest run of his
- * last words that the student's name ends with, after his first name. That
- * keeps a last name of two words ("DE SOUZA") whole. A name not built that
+ * the father's three. With `father_middle`, the student's name ends with the
+ * father's first name and his middle name; otherwise it ends with his first
+ * name and his last name. Matching the longest run of words keeps a two-word
+ * last name ("DE SOUZA") or two-word middle name whole. A name not built that
  * way gives its first word, and the father's first word, middle words and
  * last word.
  */
-export function nameParts(studentName: string, fatherFullName: string | null): NameParts {
+export function nameParts(studentName: string, fatherFullName: string | null, lastNameFrom?: LastNameFrom | null): NameParts {
   const name = words(studentName)
   const father = words(fatherFullName)
   const same = (a: string[], b: string[]) => a.length === b.length && a.every((word, i) => word.toLowerCase() === b[i].toLowerCase())
-  // k: how many of the father's last words are his last name. At least one word stays for his middle name when he has three or more.
-  for (let k = Math.max(1, father.length - 2); k >= 1 && father.length >= 2; k--) {
-    const tail = [father[0], ...father.slice(-k)]
-    if (name.length > tail.length && same(name.slice(-tail.length), tail)) {
-      return { firstName: name.slice(0, -tail.length).join(" "), fatherFirst: father[0], fatherMiddle: father.slice(1, -k).join(" "), fatherLast: father.slice(-k).join(" ") }
+  if (lastNameFrom === "father_middle") {
+    // m: how many words after the father's first name are his middle name. At least one word stays for his last name.
+    for (let m = father.length - 2; m >= 1 && father.length >= 3; m--) {
+      const tail = [father[0], ...father.slice(1, 1 + m)]
+      if (name.length > tail.length && same(name.slice(-tail.length), tail)) {
+        return {
+          firstName: name.slice(0, -tail.length).join(" "),
+          fatherFirst: father[0],
+          fatherMiddle: father.slice(1, 1 + m).join(" "),
+          fatherLast: father.slice(1 + m).join(" "),
+        }
+      }
+    }
+  } else {
+    // k: how many of the father's last words are his last name. At least one word stays for his middle name when he has three or more.
+    for (let k = Math.max(1, father.length - 2); k >= 1 && father.length >= 2; k--) {
+      const tail = [father[0], ...father.slice(-k)]
+      if (name.length > tail.length && same(name.slice(-tail.length), tail)) {
+        return { firstName: name.slice(0, -tail.length).join(" "), fatherFirst: father[0], fatherMiddle: father.slice(1, -k).join(" "), fatherLast: father.slice(-k).join(" ") }
+      }
     }
   }
   return {

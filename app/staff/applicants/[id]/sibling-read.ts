@@ -1,5 +1,6 @@
 import "server-only"
 
+import type { LastNameFrom } from "@/lib/names"
 import type { Permission } from "@/lib/permissions"
 import { formatDate, tanzaniaToday } from "@/lib/school-calendar"
 import { getSiblingLeadFacts, type SiblingLeadFacts } from "@/lib/services/lead-details"
@@ -17,7 +18,7 @@ import { dayOf } from "./reopening-outcome"
 // (#310): every member with its fee chip and sentence, the Sibling request
 // that waits on the lead, and what the staff member may do about it.
 
-export type SiblingPerson = { leadId: string; firstName: string; studentName: string; father: string | null }
+export type SiblingPerson = { leadId: string; firstName: string; studentName: string; father: string | null; lastNameFrom?: LastNameFrom | null }
 
 export type PendingSiblingView = {
   requestId: string

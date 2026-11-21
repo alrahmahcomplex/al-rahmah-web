@@ -41,6 +41,12 @@ describe("familyTitle", () => {
         { studentName: "HAMISI JUMA DE SOUZA", fatherFullName: "JUMA SALIM DE SOUZA" },
       ]),
     ).toBe("The De Souza family")
+    expect(
+      familyTitle([
+        { studentName: "NEEMA JUMA SALIM", fatherFullName: "JUMA SALIM DE SOUZA", lastNameFrom: "father_middle" },
+        { studentName: "HAMISI JUMA SALIM", fatherFullName: "JUMA SALIM DE SOUZA", lastNameFrom: "father_middle" },
+      ]),
+    ).toBe("The De Souza family")
   })
 
   it("lists the students' first names when the last names differ or one is missing", () => {
@@ -90,6 +96,27 @@ describe("the student's name", () => {
     expect(studentNameOf("AMINA", parts.fatherFirst, parts.fatherLast)).toBe("AMINA JUMA DE SOUZA")
     // Built with only the last word: the stored student name says so.
     expect(nameParts("NEEMA JUMA SOUZA", "JUMA SALIM DE SOUZA")).toMatchObject({ fatherMiddle: "SALIM DE", fatherLast: "SOUZA" })
+  })
+
+  it("splits names built from the father's middle name, keeping multi-word own, middle and last names whole", () => {
+    expect(nameParts("NEEMA JUMA SALIM", "JUMA SALIM MRISHO", "father_middle")).toEqual({
+      firstName: "NEEMA",
+      fatherFirst: "JUMA",
+      fatherMiddle: "SALIM",
+      fatherLast: "MRISHO",
+    })
+    expect(nameParts("MARY ANNE JUMA SALIM", "JUMA SALIM DE SOUZA", "father_middle")).toEqual({
+      firstName: "MARY ANNE",
+      fatherFirst: "JUMA",
+      fatherMiddle: "SALIM",
+      fatherLast: "DE SOUZA",
+    })
+    expect(nameParts("NEEMA JUMA ABU BAKAR", "JUMA ABU BAKAR MRISHO", "father_middle")).toEqual({
+      firstName: "NEEMA",
+      fatherFirst: "JUMA",
+      fatherMiddle: "ABU BAKAR",
+      fatherLast: "MRISHO",
+    })
   })
 
   it("falls back to first words for a name not built from the father's", () => {

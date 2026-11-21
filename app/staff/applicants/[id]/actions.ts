@@ -2,7 +2,9 @@
 
 import { revalidatePath } from "next/cache"
 
+import { fatherFullName, LAST_NAME_FROM, type LastNameFrom } from "@/lib/names"
 import { tanzaniaToday } from "@/lib/school-calendar"
+import { getLeadFatherAndSchool } from "@/lib/services/lead-details"
 import {
   correctVisitDate,
   DAY_OR_BOARDING,
@@ -27,24 +29,44 @@ const REFUSED_INPUT: CorrectionOutcome = {
 }
 
 const isString = (value: unknown) => typeof value === "string"
+const cleanFather = (name: string | null) => (name ?? "").trim().replace(/\s+/g, " ").toUpperCase()
 
 // Server Actions take input from anyone who can post to them, so the shape is
 // checked here, and the database then checks the rules and the permission.
 
 // A field left out keeps its value, so a screen that changes one answer (the
 // Family page, #512) sends only that one and never overwrites the others with
-// what it read earlier. At least one field is sent.
+// what it read earlier. At least one field is sent. A last-name choice must
+// come inside `nameParts` with all four parts; sent without them it is refused.
+// `nameParts` also refuses stale father parts that no longer match the record,
+// so an own-name or last-name-choice save never undoes a concurrent father edit.
 export async function correctStudent(leadId: string, changes: LeadDetailsChanges): Promise<CorrectionOutcome> {
   const absent = (value: unknown) => value === undefined
+  const nonEmpty = (value: unknown): value is string => typeof value === "string" && value.trim() !== ""
+  const raw = changes && typeof changes === "object" ? (changes as Record<string, unknown>) : null
+  const parts = raw ? changes.nameParts : undefined
+  const partsValid =
+    parts === undefined ||
+    (parts !== null &&
+      typeof parts === "object" &&
+      nonEmpty(parts.firstName) &&
+      nonEmpty(parts.fatherFirst) &&
+      nonEmpty(parts.fatherMiddle) &&
+      nonEmpty(parts.fatherLast) &&
+      (LAST_NAME_FROM as readonly unknown[]).includes(parts.lastNameFrom))
   if (
     !isString(leadId) ||
-    !changes ||
-    typeof changes !== "object" ||
+    !raw ||
+    // A last-name choice without the four name parts is refused before the database.
+    !absent(raw.lastNameFrom) ||
+    !absent(raw.last_name_from) ||
+    !partsValid ||
+    (parts !== undefined && !absent(changes.fullName)) ||
     !(absent(changes.fullName) || isString(changes.fullName)) ||
     !(absent(changes.className) || (LEAD_CLASSES as readonly unknown[]).includes(changes.className)) ||
     !(absent(changes.enrollmentYear) || Number.isInteger(changes.enrollmentYear)) ||
     !(absent(changes.dayOrBoarding) || (DAY_OR_BOARDING as readonly unknown[]).includes(changes.dayOrBoarding)) ||
-    [changes.fullName, changes.className, changes.enrollmentYear, changes.dayOrBoarding].every(absent)
+    [changes.fullName, parts, changes.className, changes.enrollmentYear, changes.dayOrBoarding].every(absent)
   ) {
     return REFUSED_INPUT
   }
@@ -53,8 +75,31 @@ export async function correctStudent(leadId: string, changes: LeadDetailsChanges
   const allowed = await requirePermission(supabase, "leads.edit")
   if (!allowed.ok) return correctionOutcome({ kind: "forbidden" })
 
+  if (parts) {
+    const current = await getLeadFatherAndSchool(supabase, leadId)
+    if (!current.ok) return correctionOutcome({ kind: current.error })
+    if (cleanFather(current.data.fatherFullName) !== cleanFather(fatherFullName(parts))) {
+      return {
+        status: "refused",
+        field: null,
+        message: "The father’s name changed since you opened this form. Reload the page and try again.",
+      }
+    }
+  }
+
   const result = await updateLeadDetails(supabase, leadId, {
     fullName: changes.fullName,
+    ...(parts
+      ? {
+          nameParts: {
+            firstName: parts.firstName,
+            fatherFirst: parts.fatherFirst,
+            fatherMiddle: parts.fatherMiddle,
+            fatherLast: parts.fatherLast,
+            lastNameFrom: parts.lastNameFrom as LastNameFrom,
+          },
+        }
+      : {}),
     className: changes.className,
     enrollmentYear: changes.enrollmentYear,
     dayOrBoarding: changes.dayOrBoarding,

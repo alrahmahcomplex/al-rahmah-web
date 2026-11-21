@@ -6,12 +6,19 @@ import { after } from "next/server"
 
 import { normalizeTanzanianMobile } from "@/lib/phone"
 import { checkPublicFormLimit } from "@/lib/rate-limit"
-import { currentSessionKind } from "@/lib/services/auth-session"
+import { currentSessionKind, verifiedUserId } from "@/lib/services/auth-session"
 import { HOME } from "@/lib/services/sign-in"
-import { checkResetNumber, requestResetSms, saveResetPassword, type SmsResetCheckError, type SmsResetSaveError } from "@/lib/services/sms-reset"
+import {
+  checkResetNumber,
+  confirmResetSession,
+  requestResetSms,
+  saveResetPassword,
+  type SmsResetCheckError,
+  type SmsResetSaveError,
+} from "@/lib/services/sms-reset"
 import { verifyTurnstile } from "@/lib/turnstile"
 import { createClient } from "@/utils/supabase/server"
-import { sessionlessAuthClient } from "@/utils/supabase/sms"
+import { smsClient } from "@/utils/supabase/sms"
 
 // "Umesahau nenosiri?" by mobile (#503 slice 2b, F1 to F3). The page decides
 // email or mobile in the browser; every step here reads the number again.
@@ -34,25 +41,34 @@ async function signedInAlready(): Promise<boolean | null> {
   return session.ok ? session.data !== "none" : null
 }
 
-// F1, and "Tuma tena" on F2. Supabase checks the Turnstile token itself
-// (CAPTCHA protection on Auth), so it is passed on unchecked, as /auth does.
+// F1, and "Tuma tena" on F2. The app checks the Turnstile token itself and
+// asks Auth with the secret key, which Auth lets past its own CAPTCHA check,
+// so a junk token never reaches Auth or spends its per-address allowance.
 // The reply comes first and Auth is asked after it, as the email link goes
 // out after its reply: a number with an account waits for the SMS hook, and
-// the page must not take longer to answer for it. A token Supabase refuses
-// is logged; the person sends again after the countdown, with a fresh token.
+// the page must not take longer to answer for it.
 export async function requestSmsReset(rawPhone: string, captchaToken: string): Promise<{ status: SmsRequestStatus }> {
   const phone = normalizeTanzanianMobile(String(rawPhone))
   if (!phone) return { status: "invalid-login" }
   if (!captchaToken) return { status: "check-pending" }
+  const requestHeaders = await headers()
+  const human = await verifyTurnstile({
+    token: String(captchaToken),
+    action: "agent-link",
+    remoteIp: requestHeaders.get("x-real-ip"),
+    hostname: requestHeaders.get("host"),
+  })
+  if (!human.ok) return { status: "check-failed" }
   const signedIn = await signedInAlready()
   if (signedIn === null) return { status: "unavailable" }
   if (signedIn) return { status: "signed-in" }
-  if ((await checkPublicFormLimit({ headers: await headers(), key: "agent-reset", subject: phone })) === "limited") {
+  if ((await checkPublicFormLimit({ headers: requestHeaders, key: "agent-reset", subject: phone })) === "limited") {
     return { status: "rate-limited" }
   }
-  const token = String(captchaToken)
+  const supabase = smsClient()
+  if (!supabase) return { status: "unavailable" }
   after(async () => {
-    const sent = await requestResetSms(sessionlessAuthClient(), phone, token)
+    const sent = await requestResetSms(supabase, phone)
     if (!sent.ok) console.error(`Reset SMS: not asked (${sent.error})`)
   })
   return { status: "sent" }
@@ -74,22 +90,35 @@ export async function checkSmsReset(rawPhone: string, code: string, captchaToken
     hostname: requestHeaders.get("host"),
   })
   if (!human.ok) return { error: "check-failed" }
+
+  // A right number already spent here, with only the agent check missing
+  // (an outage): finish it on the session it gave, with no second number.
+  const jar = await cookies()
+  const pending = jar.get(PROVEN_COOKIE)?.value
+  const supabase = await createClient()
+  if (pending && (await verifiedUserId(supabase)) === pending) return finish(await confirmResetSession(supabase, pending))
+
   const signedIn = await signedInAlready()
   if (signedIn === null) return { error: "unavailable" }
   if (signedIn) return { error: "signed-in" }
   if ((await checkPublicFormLimit({ headers: requestHeaders, key: "agent-reset-check", subject: phone })) === "limited") {
     return { error: "rate-limited" }
   }
-  const checked = await checkResetNumber(await createClient(), phone, String(code))
-  if (!checked.ok) return { error: checked.error }
-  ;(await cookies()).set(PROVEN_COOKIE, checked.data.userId, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    path: "/auth",
-    maxAge: 60 * 60,
-  })
-  return { ok: true, proven: checked.data.userId }
+  return finish(await checkResetNumber(supabase, phone, String(code)))
+}
+
+// The cookie names the login the number proved, both when F2 is done and
+// when only its agent check is still to come.
+async function finish(checked: Awaited<ReturnType<typeof checkResetNumber>>): Promise<{ error: SmsCheckError } | { ok: true; proven: string }> {
+  const userId = checked.ok ? checked.data.userId : checked.error === "unconfirmed" ? checked.userId : null
+  const jar = await cookies()
+  if (userId) {
+    jar.set(PROVEN_COOKIE, userId, { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: "/auth", maxAge: 60 * 60 })
+  } else {
+    jar.delete({ name: PROVEN_COOKIE, path: "/auth" })
+  }
+  if (checked.ok) return { ok: true, proven: checked.data.userId }
+  return { error: checked.error === "unconfirmed" ? "unavailable" : checked.error }
 }
 
 export type SmsPasswordState = { error: SmsResetSaveError | "password-mismatch" } | null

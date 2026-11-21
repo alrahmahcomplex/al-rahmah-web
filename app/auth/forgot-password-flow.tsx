@@ -192,10 +192,11 @@ function SmsStep({
     boxes.current?.reset()
   }
 
-  function resend(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
+  // A button of its own, not the form's submit: Enter in a box that isn't
+  // full yet must not ask for a new number.
+  function resend() {
     if (resending || checking || left > 0) return
-    const token = String(new FormData(event.currentTarget).get("cf-turnstile-response") ?? "")
+    const token = form.current ? String(new FormData(form.current).get("cf-turnstile-response") ?? "") : ""
     if (!token) {
       setResendStatus(turnstile.current?.reveal() ? null : "check-pending")
       return
@@ -224,7 +225,7 @@ function SmsStep({
   return (
     <>
       <AuthHeading intro={sms.sent}>{sms.heading}</AuthHeading>
-      <form ref={form} onSubmit={resend} className="flex flex-col gap-3" noValidate>
+      <form ref={form} onSubmit={(event) => event.preventDefault()} className="flex flex-col gap-3" noValidate>
         <ConfirmationNumber ref={boxes} label={sms.number} digitLabel={sms.digit} onComplete={check} onSettled={settled} disabled={resending} autoFocus />
         {note && (
           <NoticeBox role="alert" tone="info">
@@ -252,7 +253,8 @@ function SmsStep({
         <div className="flex flex-col items-center">
           <TurnstileWidget ref={turnstile} action="agent-link" language={language} className="mb-3" />
           <button
-            type="submit"
+            type="button"
+            onClick={resend}
             disabled={resending || checking || left > 0}
             className="rounded-full px-4 py-2 text-[14px] font-semibold text-blue-600 underline-offset-2 enabled:hover:underline disabled:text-slate-400"
           >

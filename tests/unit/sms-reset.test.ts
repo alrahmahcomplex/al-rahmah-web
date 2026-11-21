@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest"
 vi.mock("server-only", () => ({}))
 
 import { sendAuthSms } from "@/lib/services/auth-sms"
-import { checkResetNumber, requestResetSms, saveResetPassword } from "@/lib/services/sms-reset"
+import { checkResetNumber, confirmResetSession, requestResetSms, saveResetPassword } from "@/lib/services/sms-reset"
 
 import { resetSms } from "@/app/api/auth/send-sms/words"
 import { fitsOneSms } from "@/lib/services/sms"
@@ -19,6 +19,7 @@ function authClient({
   verifyError = null as AuthError | null,
   agent = { state: "active", full_name: "Neema Simu Juma", code: "NSJ-101" } as Record<string, unknown> | null,
   updateError = null as AuthError | null,
+  agentError = null as { message: string } | null,
 } = {}) {
   const signedIn = { value: false }
   const auth = {
@@ -35,29 +36,24 @@ function authClient({
     }),
     updateUser: vi.fn(async () => ({ data: {}, error: updateError })),
   }
-  const rpc = vi.fn(() => ({ maybeSingle: vi.fn(async () => ({ data: agent, error: null })) }))
+  const rpc = vi.fn(() => ({ maybeSingle: vi.fn(async () => (agentError ? { data: null, error: agentError } : { data: agent, error: null })) }))
   return { client: { auth, rpc } as unknown as SupabaseClient, auth, signedIn }
 }
 
 describe("asking for a reset SMS", () => {
-  it("asks Supabase never to make a login, with the Turnstile token, as 255 and nine digits", async () => {
+  it("asks Supabase never to make a login, as 255 and nine digits (the app has checked the Turnstile token)", async () => {
     const { client, auth } = authClient()
-    expect(await requestResetSms(client, "+255712345123", "token")).toEqual({ ok: true, data: null })
-    expect(auth.signInWithOtp).toHaveBeenCalledWith({ phone: "255712345123", options: { shouldCreateUser: false, captchaToken: "token" } })
+    expect(await requestResetSms(client, "+255712345123")).toEqual({ ok: true, data: null })
+    expect(auth.signInWithOtp).toHaveBeenCalledWith({ phone: "255712345123", options: { shouldCreateUser: false } })
   })
 
   it.each(["otp_disabled", "signup_disabled", "user_not_found", "over_sms_send_rate_limit", "sms_send_failed", "hook_timeout"])(
     "answers %s as sent, so the reply never tells whether the number has an account",
     async (code) => {
       const { client } = authClient({ otpError: { code, status: 422 } })
-      expect(await requestResetSms(client, "+255712345123", "token")).toEqual({ ok: true, data: null })
+      expect(await requestResetSms(client, "+255712345123")).toEqual({ ok: true, data: null })
     },
   )
-
-  it("says the security check failed when Supabase refuses the token", async () => {
-    const { client } = authClient({ otpError: { code: "captcha_failed", status: 400 } })
-    expect(await requestResetSms(client, "+255712345123", "token")).toEqual({ ok: false, error: "check-failed" })
-  })
 })
 
 describe("checking the number", () => {
@@ -78,6 +74,21 @@ describe("checking the number", () => {
   it("says too many tries when Supabase limits the checks", async () => {
     const { client } = authClient({ verifyError: { code: "over_request_rate_limit", status: 429 } })
     expect(await checkResetNumber(client, "+255712345123", "000000")).toEqual({ ok: false, error: "rate-limited" })
+  })
+
+  it("keeps the session when the agent check can't be read, so a retry needs no second number", async () => {
+    const { client, auth, signedIn } = authClient({ agentError: { message: "connection reset" } })
+    expect(await checkResetNumber(client, "+255712345123", "246810")).toEqual({ ok: false, error: "unconfirmed", userId: "user-1" })
+    expect(auth.signOut).not.toHaveBeenCalled()
+    expect(signedIn.value).toBe(true)
+  })
+
+  it("finishes an unconfirmed check on the same session, and on no other login", async () => {
+    const { client, auth, signedIn } = authClient()
+    signedIn.value = true
+    expect(await confirmResetSession(client, "user-1")).toEqual({ ok: true, data: { userId: "user-1" } })
+    expect(await confirmResetSession(client, "someone-else")).toEqual({ ok: false, error: "wrong-number" })
+    expect(auth.verifyOtp).not.toHaveBeenCalled()
   })
 
   it("ends the session at once for a login that isn't an agent's, or a switched-off agent", async () => {

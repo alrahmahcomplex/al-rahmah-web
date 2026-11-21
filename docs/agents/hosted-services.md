@@ -143,8 +143,10 @@ Supabase Auth makes, stores and expires the reset numbers. It hands every SMS to
 | `SEND_SMS_HOOK_SECRET` | Vercel, Production only, Sensitive | The hook screen's secret, `v1,whsec_…`. Without it, or with a wrong one, the route refuses every request (401) and no reset SMS goes out |
 | Phone provider | Authentication → Sign In / Providers → Phone | ON, with **Confirm phone ON** (off, Auth would set a requested phone at once). The hook takes every send, so the SMS provider's own settings are unused |
 | SMS OTP | Same screen | 6 digits, expiry 600 seconds |
-| Minimum interval per number | Authentication → Rate Limits (or the Phone screen) | 60 seconds, as the page's "Tuma tena" countdown |
+| Minimum interval per number | Authentication → Rate Limits (or the Phone screen) | 55 seconds: the page's "Tuma tena" countdown is 60 seconds and starts before Auth is asked |
 | SMS sent per hour | Authentication → Rate Limits | A project-wide cap above the expected resets; the app's own daily budget and per-mobile limits apply on top |
+| Token verifications | Authentication → Rate Limits | Raised from the default (150 per 5 minutes): every check comes from Vercel's addresses, as invite and reset links do. The app checks a Turnstile token before each one |
+| Test phone numbers | Authentication → Sign In / Providers → Phone | Empty. The repo's `auth.sms.test_otp` is local only; `config.toml` never reaches hosted |
 | Allow new users to sign up | Authentication → Sign In / Providers | OFF; check it again after turning the phone provider on |
 
 Locally, `supabase/config.toml` has the same shape, with a test secret (also in `.env.example`) and one test number, `255799000503`, which takes `246810` and is texted nothing (`auth.sms.test_otp`), for the browser test.

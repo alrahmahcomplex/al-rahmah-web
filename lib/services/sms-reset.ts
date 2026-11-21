@@ -18,7 +18,7 @@ import type { Result } from "./result"
 // F3: save the new password on that session, and only for the login F2
 //     proved: the browser may have signed in as someone else since.
 
-export type SmsResetRequestError = "check-failed" | "unavailable"
+export type SmsResetRequestError = "unavailable"
 
 // Auth refusals that depend on whether the number has a login, or on how
 // recently it was texted: all of them read as "sent", like a real send.
@@ -36,21 +36,19 @@ const SAME_AS_SENT = new Set([
   "unexpected_failure",
 ])
 
-export async function requestResetSms(
-  supabase: SupabaseClient,
-  phone: string,
-  captchaToken: string,
-): Promise<Result<null, SmsResetRequestError>> {
+// `supabase` holds the secret key, after the app has checked the Turnstile
+// token itself: Auth then skips its own CAPTCHA check, so a request with a
+// junk token never reaches Auth or counts against its per-address limits.
+export async function requestResetSms(supabase: SupabaseClient, phone: string): Promise<Result<null, SmsResetRequestError>> {
   let error: { code?: string; status?: number; message?: string } | null
   try {
     // shouldCreateUser: false, always: an unknown number never gets a login.
-    ;({ error } = await supabase.auth.signInWithOtp({ phone: withoutPlus(phone), options: { shouldCreateUser: false, captchaToken } }))
+    ;({ error } = await supabase.auth.signInWithOtp({ phone: withoutPlus(phone), options: { shouldCreateUser: false } }))
   } catch (thrown) {
     console.error("Reset SMS: Auth could not be reached", thrown)
     return { ok: false, error: "unavailable" }
   }
   if (!error) return { ok: true, data: null }
-  if (error.code === "captcha_failed") return { ok: false, error: "check-failed" }
   // Anything else Auth says still gets "sent": an answer that differs would
   // tell a stranger something about the number. Unexpected ones are logged.
   if (!error.code || !SAME_AS_SENT.has(error.code)) console.error("Reset SMS: unexpected answer from Auth", error)
@@ -59,7 +57,16 @@ export async function requestResetSms(
 
 export type SmsResetCheckError = "wrong-number" | "rate-limited" | "no-account" | Exclude<AgentAccessError, "not-agent"> | "unavailable"
 
-export async function checkResetNumber(supabase: SupabaseClient, phone: string, token: string): Promise<Result<{ userId: string }, SmsResetCheckError>> {
+// "unconfirmed": Auth took the number and signed this browser in, but the
+// agent check couldn't be read. The session is kept, so a retry needs no
+// second number (Auth has spent this one): see confirmResetSession.
+export type Unconfirmed = { ok: false; error: "unconfirmed"; userId: string }
+
+export async function checkResetNumber(
+  supabase: SupabaseClient,
+  phone: string,
+  token: string,
+): Promise<Result<{ userId: string }, SmsResetCheckError> | Unconfirmed> {
   if (!/^\d{6}$/.test(token)) return { ok: false, error: "wrong-number" }
   let answer: Awaited<ReturnType<SupabaseClient["auth"]["verifyOtp"]>>
   try {
@@ -78,13 +85,23 @@ export async function checkResetNumber(supabase: SupabaseClient, phone: string, 
     return { ok: false, error: "unavailable" }
   }
 
-  // Only an agent's login stays signed in. Staff logins carry no phone, but
-  // anyone else loses this browser's new session at once.
+  return agentOnly(supabase, data.user.id)
+}
+
+// F2 again, after "unconfirmed": the same login, still signed in here.
+export async function confirmResetSession(supabase: SupabaseClient, provenUserId: string): Promise<Result<{ userId: string }, SmsResetCheckError> | Unconfirmed> {
+  if ((await verifiedUserId(supabase)) !== provenUserId) return { ok: false, error: "wrong-number" }
+  return agentOnly(supabase, provenUserId)
+}
+
+// Only an agent's login stays signed in. Staff logins carry no phone, but
+// anyone else loses this browser's new session at once. An outage keeps it.
+async function agentOnly(supabase: SupabaseClient, userId: string): Promise<Result<{ userId: string }, SmsResetCheckError> | Unconfirmed> {
   const agent = await getAgentUser(supabase)
-  if (agent.ok) return { ok: true, data: { userId: data.user.id } }
+  if (agent.ok) return { ok: true, data: { userId } }
+  if (agent.error === "unavailable" || agent.error === "signed-out") return { ok: false, error: "unconfirmed", userId }
   await supabase.auth.signOut({ scope: "local" })
-  if (agent.error === "not-agent") return { ok: false, error: "no-account" }
-  return { ok: false, error: agent.error === "signed-out" ? "unavailable" : agent.error }
+  return { ok: false, error: agent.error === "not-agent" ? "no-account" : agent.error }
 }
 
 export type SmsResetSaveError = "password-too-short" | "signed-out" | "password-not-saved" | Exclude<AgentAccessError, "not-agent" | "signed-out"> | "no-account" | "unavailable"

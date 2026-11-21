@@ -18,13 +18,3 @@ export function smsClient(): SupabaseClient | null {
     auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
   })
 }
-
-// A publishable-key client that holds no session, for asking Auth to text a
-// reset number after the page has had its reply (#503): nothing it does
-// touches this browser's cookies.
-export function sessionlessAuthClient(): SupabaseClient {
-  const { url, publishableKey } = supabaseEnv()
-  return createClient(url, publishableKey, {
-    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
-  })
-}

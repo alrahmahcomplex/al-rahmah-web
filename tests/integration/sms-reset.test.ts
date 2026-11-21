@@ -127,7 +127,7 @@ describe("the Send SMS hook", () => {
 describe("resetting a password by SMS", () => {
   test("a number with no login gets the same answer as one with a login, and no login is made", async () => {
     const phone = mobile()
-    expect(await requestResetSms(anonClient(), phone, TEST_CAPTCHA_TOKEN)).toEqual({ ok: true, data: null })
+    expect(await requestResetSms(secretClient(), phone)).toEqual({ ok: true, data: null })
     const made = await asSystem(async (sql) => (await sql.query("select 1 from auth.users where phone = $1", [phone.slice(1)])).rowCount)
     expect(made).toBe(0)
   })
@@ -138,7 +138,7 @@ describe("resetting a password by SMS", () => {
     const agent = await agentWithMobileLogin(TEST_NUMBER)
     const browser = anonClient()
 
-    expect(await requestResetSms(browser, TEST_NUMBER, TEST_CAPTCHA_TOKEN)).toEqual({ ok: true, data: null })
+    expect(await requestResetSms(secretClient(), TEST_NUMBER)).toEqual({ ok: true, data: null })
     expect(await checkResetNumber(browser, TEST_NUMBER, "000000")).toEqual({ ok: false, error: "wrong-number" })
     const proven = await checkResetNumber(browser, TEST_NUMBER, TEST_CODE)
     expect(proven).toEqual({ ok: true, data: { userId: agent.userId } })

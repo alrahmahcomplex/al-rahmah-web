@@ -17,16 +17,17 @@ import { resetSms } from "./words"
 //   (a phone change, a login that isn't an agent's). Auth then tells the
 //   person what it tells everyone, and nothing is retried.
 // - 200 too when the send is slow: Supabase stores the number only after a
-//   200 within its 5-second hook timeout, so the whole send (lookup,
-//   reservation, Beem, log) gets 4 s. Past that the route answers 200 and
-//   the send finishes after the answer (after()), so a message Beem
-//   delivers late is still a number that works. Beem itself gets 3.5 s.
+//   200 within its 5-second hook timeout, which also covers the trip here
+//   and a cold start, so the whole send (lookup, reservation, Beem, log)
+//   gets 3.5 s. Past that the route answers 200 and the send finishes after
+//   the answer (after()), so a message Beem delivers late is still a number
+//   that works. Beem itself gets 3 s.
 // - 401 for a bad signature; 400 when the send failed (budget, limits, the
 //   provider). Never 429 or 503, which Supabase retries: a retry could text
 //   the same person twice.
 
-const BEEM_TIMEOUT_MS = 3_500
-const ANSWER_WITHIN_MS = 4_000
+const BEEM_TIMEOUT_MS = 3_000
+const ANSWER_WITHIN_MS = 3_500
 
 function failed(status: number, message: string): Response {
   return Response.json({ error: { http_code: status, message } }, { status })
@@ -64,7 +65,7 @@ export async function POST(request: Request): Promise<Response> {
   const sent = await Promise.race([sending, late])
   clearTimeout(timer)
   if (sent === "late") {
-    console.warn("Send SMS hook: still sending after 4 s; answered 200 so Supabase keeps the number")
+    console.warn("Send SMS hook: still sending after 3.5 s; answered 200 so Supabase keeps the number")
     return Response.json({})
   }
   if (sent.ok) return Response.json({})

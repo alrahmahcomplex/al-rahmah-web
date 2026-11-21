@@ -4,7 +4,7 @@ import { User } from "lucide-react"
 import { useActionState, useEffect, useRef, useState, useTransition, type FormEvent } from "react"
 
 import { ACCOUNT_COPY } from "@/app/discount-code/account-copy"
-import { AccountMessageView } from "@/app/discount-code/account-message"
+import { AccountMessageView, SignOutNotice } from "@/app/discount-code/account-message"
 import { requestPasswordLink } from "@/app/discount-code/link-request-actions"
 import { LINK_REQUEST_COPY, type LinkRequestStatus } from "@/app/discount-code/link-request-copy"
 import { AuthHeading } from "@/components/auth-card"
@@ -14,11 +14,10 @@ import { TurnstileWidget, type TurnstileWidgetHandle } from "@/components/turnst
 import type { Language } from "@/lib/language"
 import { MINIMUM_PASSWORD_LENGTH } from "@/lib/password"
 import { readSignInLogin } from "@/lib/phone"
-import type { SmsResetCheckError } from "@/lib/services/sms-reset"
 import { cn } from "@/lib/utils"
 
 import { LOGIN_COPY } from "./copy"
-import { checkSmsReset, requestSmsReset, saveSmsResetPassword, type SmsRequestStatus } from "./sms-reset-actions"
+import { checkSmsReset, requestSmsReset, saveSmsResetPassword, type SmsCheckError, type SmsRequestStatus } from "./sms-reset-actions"
 
 // "Umesahau nenosiri?" (#194, #265), which since #503 takes an email or a
 // mobile number (prototype v58, F1 to F3):
@@ -86,6 +85,8 @@ function StartStep({ language, onSms }: { language: Language; onSms: (phone: str
     })
   }
 
+  if (status === "signed-in") return <SignedInNotice language={language} />
+
   if (status === "sent") {
     return (
       <>
@@ -114,7 +115,18 @@ function StartStep({ language, onSms }: { language: Language; onSms: (phone: str
   )
 }
 
-type CheckNote = { kind: "wrong" } | { kind: "expired" } | { kind: "message"; error: Exclude<SmsResetCheckError, "wrong-number"> }
+type CheckNote = { kind: "wrong" } | { kind: "expired" } | { kind: "message"; error: Exclude<SmsCheckError, "wrong-number"> }
+
+// Each check spends one Turnstile token, and the next comes a moment after
+// the last was spent: wait for it, briefly.
+async function tokenFrom(form: HTMLFormElement | null): Promise<string> {
+  for (let waited = 0; waited < 8_000; waited += 250) {
+    const token = form ? String(new FormData(form).get("cf-turnstile-response") ?? "") : ""
+    if (token) return token
+    await new Promise((resolve) => setTimeout(resolve, 250))
+  }
+  return ""
+}
 
 function SmsStep({
   language,
@@ -132,6 +144,7 @@ function SmsStep({
   const copy = LINK_REQUEST_COPY[language]
   const sms = copy.sms
   const boxes = useRef<ConfirmationNumberHandle>(null)
+  const form = useRef<HTMLFormElement>(null)
   const turnstile = useRef<TurnstileWidgetHandle>(null)
   const [note, setNote] = useState<CheckNote | null>(null)
   // The note for a wrong answer waits until the cross has landed.
@@ -145,12 +158,21 @@ function SmsStep({
 
   async function check(code: string): Promise<ConfirmationResult> {
     setNote(null)
+    setResendStatus(null)
     setChecking(true)
+    const token = await tokenFrom(form.current)
     let answer: Awaited<ReturnType<typeof checkSmsReset>>
-    try {
-      answer = await checkSmsReset(phone, code)
-    } catch {
-      answer = { error: "unavailable" }
+    if (!token) {
+      turnstile.current?.reveal()
+      answer = { error: "check-pending" }
+    } else {
+      try {
+        answer = await checkSmsReset(phone, code, token)
+      } catch {
+        answer = { error: "unavailable" }
+      }
+      // The token is spent either way.
+      turnstile.current?.reset()
     }
     if ("ok" in answer) {
       proven.current = answer.proven
@@ -164,6 +186,10 @@ function SmsStep({
     if (result === "ok") return onRight(proven.current)
     setChecking(false)
     setNote(pendingNote.current)
+  }
+  const tryAgain = () => {
+    setNote(null)
+    boxes.current?.reset()
   }
 
   function resend(event: FormEvent<HTMLFormElement>) {
@@ -193,10 +219,12 @@ function SmsStep({
     })
   }
 
+  if ((note?.kind === "message" && note.error === "signed-in") || resendStatus === "signed-in") return <SignedInNotice language={language} />
+
   return (
     <>
       <AuthHeading intro={sms.sent}>{sms.heading}</AuthHeading>
-      <div className="flex flex-col gap-3">
+      <form ref={form} onSubmit={resend} className="flex flex-col gap-3" noValidate>
         <ConfirmationNumber ref={boxes} label={sms.number} digitLabel={sms.digit} onComplete={check} onSettled={settled} disabled={resending} autoFocus />
         {note && (
           <NoticeBox role="alert" tone="info">
@@ -204,28 +232,24 @@ function SmsStep({
               <>
                 {sms.wrong}
                 <br />
-                <button type="button" className="font-semibold text-blue-700 underline underline-offset-2" onClick={() => (setNote(null), boxes.current?.reset())}>
-                  {sms.tryAgain}
-                </button>
+                <TryAgain label={sms.tryAgain} onClick={tryAgain} />
               </>
             ) : note.kind === "expired" ? (
               sms.expired
             ) : (
               <>
                 {messageText(language, note.error)}
-                {(note.error === "rate-limited" || note.error === "unavailable") && (
+                {TEMPORARY.has(note.error) && (
                   <>
                     <br />
-                    <button type="button" className="font-semibold text-blue-700 underline underline-offset-2" onClick={() => (setNote(null), boxes.current?.reset())}>
-                      {sms.tryAgain}
-                    </button>
+                    <TryAgain label={sms.tryAgain} onClick={tryAgain} />
                   </>
                 )}
               </>
             )}
           </NoticeBox>
         )}
-        <form onSubmit={resend} className="flex flex-col items-center" noValidate>
+        <div className="flex flex-col items-center">
           <TurnstileWidget ref={turnstile} action="agent-link" language={language} className="mb-3" />
           <button
             type="submit"
@@ -243,15 +267,48 @@ function SmsStep({
             )}
           </button>
           {resendStatus && resendStatus !== "sent" && <AccountMessageView language={language} message={copy.messages[resendStatus]} />}
-        </form>
-      </div>
+        </div>
+      </form>
     </>
   )
 }
 
-function messageText(language: Language, error: Exclude<SmsResetCheckError, "wrong-number">): string {
-  if (error === "rate-limited" || error === "unavailable") return LINK_REQUEST_COPY[language].messages[error].text
-  return LOGIN_COPY[language].messages[error].text
+// Notes after which the same number may simply be typed again.
+const TEMPORARY = new Set<string>(["rate-limited", "unavailable", "check-pending", "check-failed"])
+
+function TryAgain({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <button type="button" className="font-semibold text-blue-700 underline underline-offset-2" onClick={onClick}>
+      {label}
+    </button>
+  )
+}
+
+// A browser already signed in, as anyone, signs out before a number is
+// asked for or spent, as the reset email's page does: a right number would
+// replace that session.
+function SignedInNotice({ language }: { language: Language }) {
+  const copy = LINK_REQUEST_COPY[language]
+  return (
+    <>
+      <AuthHeading>{copy.forgotHeading}</AuthHeading>
+      <SignOutNotice language={language} message={copy.signedIn} back="/auth/forgot-password" />
+    </>
+  )
+}
+
+function messageText(language: Language, error: Exclude<SmsCheckError, "wrong-number">): string {
+  switch (error) {
+    case "signed-in":
+      return LINK_REQUEST_COPY[language].signedIn.text
+    case "rate-limited":
+    case "unavailable":
+    case "check-pending":
+    case "check-failed":
+      return LINK_REQUEST_COPY[language].messages[error].text
+    default:
+      return LOGIN_COPY[language].messages[error].text
+  }
 }
 
 // Seconds until "Tuma tena" opens, counted from the last send.

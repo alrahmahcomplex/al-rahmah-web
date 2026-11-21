@@ -23,7 +23,11 @@ export type AuthSmsRequest = {
   sms?: { otp?: unknown } | null
 }
 
-export type AuthSmsRefusal = "invalid" | "phone-change" | "not-agent" | "not-active"
+// "not-agent": no agent who can use the pages right now has this login.
+export type AuthSmsRefusal = "invalid" | "phone-change" | "not-agent"
+
+// An Auth user id: a UUID.
+const LOGIN_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 export async function sendAuthSms(
   supabase: SupabaseClient,
@@ -33,23 +37,19 @@ export async function sendAuthSms(
 ): Promise<Result<{ sendId: string }, AuthSmsRefusal | SmsError>> {
   const userId = typeof request.user?.id === "string" ? request.user.id : ""
   const otp = typeof request.sms?.otp === "string" ? request.sms.otp : ""
-  if (!userId || !/^\d{6}$/.test(otp)) return { ok: false, error: "invalid" }
+  if (!LOGIN_ID.test(userId) || !/^\d{6}$/.test(otp)) return { ok: false, error: "invalid" }
   if (typeof request.user?.phone_change === "string" && request.user.phone_change !== "") return { ok: false, error: "phone-change" }
   const phone = typeof request.user?.phone === "string" ? normalizeTanzanianMobile(request.user.phone) : null
   if (!phone) return { ok: false, error: "invalid" }
 
-  const [agent, access] = await Promise.all([
-    supabase.from("marketing_agents").select("id, status, switched_off_at, retired_at").eq("user_id", userId).maybeSingle(),
-    supabase.from("agent_access_settings").select("enabled").maybeSingle(),
-  ])
-  if (agent.error || access.error) {
-    console.error("Auth SMS: could not look up the login's agent", agent.error ?? access.error)
+  // auth_sms_agent: the agent who may be texted for this login now, or null.
+  const agent = await supabase.rpc("auth_sms_agent", { login: userId })
+  if (agent.error) {
+    console.error("Auth SMS: could not look up the login's agent", agent.error)
     return { ok: false, error: { kind: "unavailable" } }
   }
-  const row = agent.data as { id: string; status: string; switched_off_at: string | null; retired_at: string | null } | null
-  if (!row) return { ok: false, error: "not-agent" }
-  const usable = row.status === "Approved" && !row.switched_off_at && !row.retired_at && (access.data as { enabled?: boolean } | null)?.enabled === true
-  if (!usable) return { ok: false, error: "not-active" }
+  const agentId = typeof agent.data === "string" ? agent.data : null
+  if (!agentId) return { ok: false, error: "not-agent" }
 
-  return sendSms(supabase, send, { kind: "reset", to: phone, agentId: row.id, message: message(otp) })
+  return sendSms(supabase, send, { kind: "reset", to: phone, agentId, message: message(otp) })
 }

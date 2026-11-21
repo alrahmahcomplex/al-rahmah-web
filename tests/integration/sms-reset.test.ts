@@ -3,6 +3,8 @@ import { randomInt, randomUUID } from "node:crypto"
 import { beforeAll, describe, expect, test, vi } from "vitest"
 
 vi.mock("server-only", () => ({}))
+// The route finishes a slow send after its answer; outside Next.js, now.
+vi.mock("next/server", async (original) => ({ ...(await original<typeof import("next/server")>()), after: (work: () => unknown) => void work() }))
 
 import { POST } from "@/app/api/auth/send-sms/route"
 import { resetSms } from "@/app/api/auth/send-sms/words"
@@ -105,6 +107,15 @@ describe("the Send SMS hook", () => {
     const change = await POST(hookRequest({ user: { id: agent.userId, phone: agent.phone.slice(1), phone_change: asked.slice(1) }, sms: { otp: "739204" } }))
     expect(change.status).toBe(200)
     expect(await sendsTo(asked)).toEqual([])
+    expect(await sendsTo(agent.phone)).toEqual([])
+  })
+
+  test("texts nothing to a switched-off agent: the session would be theirs for the number", async () => {
+    const agent = await agentWithMobileLogin()
+    const switched = await (await signedIn(MANAGER)).rpc("change_marketing_agent_status", { agent_id: agent.agentId, kind: "switched_off", reason: "Test" })
+    expect(switched.error).toBeNull()
+    const response = await POST(hookRequest({ user: { id: agent.userId, phone: agent.phone.slice(1) }, sms: { otp: "739204" } }))
+    expect(response.status).toBe(200)
     expect(await sendsTo(agent.phone)).toEqual([])
   })
 

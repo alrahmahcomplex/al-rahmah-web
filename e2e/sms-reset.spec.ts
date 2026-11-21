@@ -4,7 +4,7 @@ import { type Page } from "@playwright/test"
 import { expect, test } from "./staff-test"
 
 import { asSystem, secretClient, signedIn } from "../tests/support/db"
-import { MANAGER } from "../tests/support/fixtures"
+import { MANAGER, SEEDED_AGENT } from "../tests/support/fixtures"
 import { chooseLanguage } from "./discount-code"
 import { logIn } from "./log-in"
 
@@ -60,7 +60,20 @@ async function typeNumber(page: Page, number: string) {
 
 test("an agent resets their password by SMS and signs in with their mobile", async ({ page, browser }) => {
   const agent = await agentOnTestNumber()
+  const asked = new Date()
   await askForSms(page, "0799 000 503")
+  // F1 really asked Auth (after its reply): the login's number was sent at.
+  // Local Auth takes the test code even unasked, so this is the proof.
+  await expect
+    .poll(
+      async () =>
+        asSystem(async (sql) => {
+          const row = await sql.query<{ asked: boolean }>("select confirmation_sent_at >= $2 as asked from auth.users where phone = $1", [TEST_NUMBER, asked])
+          return row.rows[0]?.asked === true
+        }),
+      { timeout: 10_000 },
+    )
+    .toBe(true)
 
   // A wrong number: red, then the note and Jaribu tena.
   await typeNumber(page, "000000")
@@ -97,4 +110,15 @@ test("something that is neither an email nor a mobile is refused before anything
   await page.getByLabel("Barua pepe au namba ya simu").fill("0222 123 456")
   await page.getByRole("button", { name: "Tuma", exact: true }).click()
   await expect(notice(page)).toHaveText("Andika barua pepe, au namba ya simu kama 0712 345 678.")
+})
+
+test("a browser already signed in is asked to sign out first, so a right number never replaces that session", async ({ page }) => {
+  await logIn(page, SEEDED_AGENT.email, SEEDED_AGENT.password)
+  await expect(page).toHaveURL(/\/discount-code\/students$/)
+  await page.goto("/auth/forgot-password")
+  await page.getByLabel("Barua pepe au namba ya simu").fill("0799 000 503")
+  await expect(page.locator('input[name="cf-turnstile-response"]').first()).toHaveValue(/.+/, { timeout: 20_000 })
+  await page.getByRole("button", { name: "Tuma", exact: true }).click()
+  await expect(notice(page)).toContainText("Kivinjari hiki kimeingia kwenye akaunti.")
+  await expect(page.getByRole("button", { name: "Toka" })).toBeVisible()
 })

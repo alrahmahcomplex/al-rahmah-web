@@ -1,3 +1,5 @@
+import { after } from "next/server"
+
 import { sendAuthSms, type AuthSmsRequest } from "@/lib/services/auth-sms"
 import { smsSender } from "@/lib/services/sms"
 import { verifyWebhook } from "@/lib/standard-webhooks"
@@ -14,14 +16,17 @@ import { resetSms } from "./words"
 // - 200 {} when the SMS went out, and also when it is deliberately not sent
 //   (a phone change, a login that isn't an agent's). Auth then tells the
 //   person what it tells everyone, and nothing is retried.
-// - 200 too when Beem is slow to answer: Supabase stores the number only
-//   after a 200 within its 5-second hook timeout, so a message Beem delivers
-//   late is still a number that works. Beem gets 3.5 s here.
+// - 200 too when the send is slow: Supabase stores the number only after a
+//   200 within its 5-second hook timeout, so the whole send (lookup,
+//   reservation, Beem, log) gets 4 s. Past that the route answers 200 and
+//   the send finishes after the answer (after()), so a message Beem
+//   delivers late is still a number that works. Beem itself gets 3.5 s.
 // - 401 for a bad signature; 400 when the send failed (budget, limits, the
 //   provider). Never 429 or 503, which Supabase retries: a retry could text
 //   the same person twice.
 
 const BEEM_TIMEOUT_MS = 3_500
+const ANSWER_WITHIN_MS = 4_000
 
 function failed(status: number, message: string): Response {
   return Response.json({ error: { http_code: status, message } }, { status })
@@ -50,13 +55,23 @@ export async function POST(request: Request): Promise<Response> {
   const supabase = smsClient()
   if (!supabase) return failed(400, "SMS unavailable")
 
-  const sent = await sendAuthSms(supabase, smsSender(process.env, { timeoutMs: BEEM_TIMEOUT_MS }), payload, resetSms)
+  const sending = sendAuthSms(supabase, smsSender(process.env, { timeoutMs: BEEM_TIMEOUT_MS }), payload, resetSms)
+  // Keeps the function alive until the send and its log are done, even when
+  // the answer has gone first.
+  after(() => sending.then(() => undefined))
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const late = new Promise<"late">((resolve) => (timer = setTimeout(() => resolve("late"), ANSWER_WITHIN_MS)))
+  const sent = await Promise.race([sending, late])
+  clearTimeout(timer)
+  if (sent === "late") {
+    console.warn("Send SMS hook: still sending after 4 s; answered 200 so Supabase keeps the number")
+    return Response.json({})
+  }
   if (sent.ok) return Response.json({})
 
   switch (sent.error) {
     case "phone-change":
     case "not-agent":
-    case "not-active":
       console.info(`Send SMS hook: nothing sent (${sent.error})`)
       return Response.json({})
     case "invalid":

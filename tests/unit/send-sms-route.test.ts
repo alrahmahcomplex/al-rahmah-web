@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 vi.mock("server-only", () => ({}))
+// The route finishes a slow send after its answer; outside Next.js, now.
+vi.mock("next/server", async (original) => ({ ...(await original<typeof import("next/server")>()), after: (work: () => unknown) => void work() }))
 
 const sendAuthSms = vi.fn()
 vi.mock("@/lib/services/auth-sms", () => ({ sendAuthSms: (...args: unknown[]) => sendAuthSms(...args) }))
@@ -25,7 +27,7 @@ function signed(body: unknown, secret = SECRET) {
   })
 }
 
-const BODY = { user: { id: "u1", phone: "255712345123" }, sms: { otp: "739204" } }
+const BODY = { user: { id: "6f1c2c1e-1b2d-4c3e-9f4a-5b6c7d8e9f01", phone: "255712345123" }, sms: { otp: "739204" } }
 
 beforeEach(() => {
   process.env.SEND_SMS_HOOK_SECRET = SECRET
@@ -44,7 +46,6 @@ describe("the Send SMS hook's answers", () => {
       { ok: true, data: { sendId: "s1" } },
       { ok: false, error: "phone-change" },
       { ok: false, error: "not-agent" },
-      { ok: false, error: "not-active" },
     ]) {
       sendAuthSms.mockResolvedValueOnce(answer)
       const response = await POST(signed(BODY))
@@ -56,6 +57,17 @@ describe("the Send SMS hook's answers", () => {
   it("answers 200 when Beem timed out, so Supabase keeps a number Beem may still deliver", async () => {
     sendAuthSms.mockResolvedValueOnce({ ok: false, error: { kind: "provider-error", code: "timeout" } })
     expect((await POST(signed(BODY))).status).toBe(200)
+  })
+
+  it("answers 200 when the whole send runs past 4 seconds, and lets it finish", async () => {
+    vi.useFakeTimers()
+    let finish: (value: unknown) => void = () => {}
+    sendAuthSms.mockReturnValueOnce(new Promise((resolve) => (finish = resolve)))
+    const answering = POST(signed(BODY))
+    await vi.advanceTimersByTimeAsync(4_100)
+    expect((await answering).status).toBe(200)
+    finish({ ok: true, data: { sendId: "s1" } })
+    vi.useRealTimers()
   })
 
   it("answers 400 for a send that failed, never a status Supabase retries", async () => {

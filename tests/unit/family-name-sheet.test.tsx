@@ -67,7 +67,7 @@ beforeEach(() => {
 afterEach(() => vi.useRealTimers())
 
 describe("only the student's own name changes", () => {
-  it("keeps a last name of two words through nameParts, and never touches the father's name", async () => {
+  it("keeps a last name of two words through nameParts, preserving lastNameFrom", async () => {
     render(<Sheet studentName="NEEMA JUMA DE SOUZA" father="JUMA SALIM DE SOUZA" />)
     type("Student’s name", "AMINA")
     expect(sheet()).toHaveTextContent("Student’s full name: AMINA JUMA DE SOUZA")
@@ -86,6 +86,19 @@ describe("only the student's own name changes", () => {
     expect(actions.saveFatherName).not.toHaveBeenCalled()
   })
 
+  it("uses one-box fullName on legacy records without a stored lastNameFrom so the father's name stays untouched", async () => {
+    render(<Sheet studentName="NEEMA JUMA MRISHO" father="JUMA SALIM MRISHO" lastNameFrom={null} />)
+    type("Student’s name", "AMINA")
+    await save()
+
+    expect(actions.correctStudent).toHaveBeenCalledWith("lead", {
+      fullName: "AMINA JUMA MRISHO",
+      className: undefined,
+      dayOrBoarding: undefined,
+    })
+    expect(actions.saveFatherName).not.toHaveBeenCalled()
+  })
+
   it("keeps lastNameFrom = father_middle when only the student's own name changes", async () => {
     render(<Sheet studentName="NEEMA JUMA SALIM" father="JUMA SALIM MRISHO" lastNameFrom="father_middle" />)
     type("Student’s name", "AMINA")
@@ -95,6 +108,22 @@ describe("only the student's own name changes", () => {
     expect(actions.correctStudent).toHaveBeenCalledWith("lead", {
       fullName: undefined,
       nameParts: { firstName: "AMINA", fatherFirst: "JUMA", fatherMiddle: "SALIM", fatherLast: "MRISHO", lastNameFrom: "father_middle" },
+      className: undefined,
+      dayOrBoarding: undefined,
+    })
+    expect(actions.saveFatherName).not.toHaveBeenCalled()
+  })
+
+  it("rebuilds through nameParts on a mismatched father_middle record so lastNameFrom is never silently cleared", async () => {
+    // e.g. sibling's typo-mine updated the father's middle name to ALLY while this student kept ALI.
+    render(<Sheet studentName="ZAWADI JUMA ALI" father="JUMA ALLY HASSAN" lastNameFrom="father_middle" />)
+    type("Student’s name", "ZAINA")
+    expect(sheet()).toHaveTextContent("Student’s full name: ZAINA JUMA ALLY")
+    await save()
+
+    expect(actions.correctStudent).toHaveBeenCalledWith("lead", {
+      fullName: undefined,
+      nameParts: { firstName: "ZAINA", fatherFirst: "JUMA", fatherMiddle: "ALLY", fatherLast: "HASSAN", lastNameFrom: "father_middle" },
       className: undefined,
       dayOrBoarding: undefined,
     })
@@ -236,6 +265,29 @@ describe("the father's name changes", () => {
 
     expect(actions.saveFatherName).toHaveBeenLastCalledWith("lead", "JUMA SAALIM DE SOUZA", "typo-theirs", "JUMA SALIM DE SOUZA")
     expect(sentName(0)).toBe("AMINA JUMA DE SOUZA")
+  })
+
+  it("uses the sibling's lastNameFrom when splitting the sibling's spelling under father_middle", async () => {
+    actions.saveFatherName
+      .mockResolvedValueOnce({
+        status: "question",
+        fatherFullName: "JUMA SAALIM DE SOUZA",
+        sibling: { leadId: "salma", firstName: "SALMA", studentName: "SALMA JUMA SALIM", father: "JUMA SALIM DE SOUZA", lastNameFrom: "father_middle" },
+        holders: ["SALMA"],
+      })
+      .mockResolvedValue({ status: "saved", message: "Saved as one name. Still siblings." })
+    render(<Sheet studentName="NEEMA JUMA SALEM" father="JUMA SALEM DE SOUZA" lastNameFrom="father_middle" />)
+    type("Student’s name", "AMINA")
+    type("Middle name", "SAALIM")
+    await save()
+    await answer(1)
+
+    expect(actions.correctStudent).toHaveBeenCalledWith("lead", {
+      fullName: undefined,
+      nameParts: { firstName: "AMINA", fatherFirst: "JUMA", fatherMiddle: "SALIM", fatherLast: "DE SOUZA", lastNameFrom: "father_middle" },
+      className: undefined,
+      dayOrBoarding: undefined,
+    })
   })
 })
 

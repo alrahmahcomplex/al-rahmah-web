@@ -89,4 +89,20 @@ describe("SchoolSheet", () => {
     expect(within(sheet()).getByRole("combobox", { name: "Region" })).toHaveValue("Outside Tanzania (Other Country)")
     expect(list).not.toBeInTheDocument()
   })
+
+  it("keeps the sheet open when Escape dismisses a faint suggestion inside the box, and keeps country while retyping Outside Tanzania", async () => {
+    render(<Sheet school={{ kind: "school", name: "GREEN HILLS", type: "private", region: "Outside Tanzania", country: "Kenya" }} />)
+
+    const country = within(sheet()).getByRole("combobox", { name: "Country" })
+    fireEvent.focus(country)
+    fireEvent.change(country, { target: { value: "Uga" } })
+    fireEvent.keyDown(country, { key: "Escape" })
+    expect(sheet()).toBeInTheDocument()
+    fireEvent.change(country, { target: { value: "Kenya" } })
+
+    const region = within(sheet()).getByRole("combobox", { name: "Region" })
+    fireEvent.change(region, { target: { value: "Outside Tanzania (Other Countr" } })
+    fireEvent.change(region, { target: { value: "Outside Tanzania (Other Country)" } })
+    expect(within(sheet()).getByRole("combobox", { name: "Country" })).toHaveValue("Kenya")
+  })
 })

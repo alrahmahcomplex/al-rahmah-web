@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 // overwrites a newer change. The record's forms still send every field. The
 // services are stubbed.
 
-const stubs = vi.hoisted(() => ({ allowed: vi.fn(), staff: vi.fn(), details: vi.fn(), contact: vi.fn(), school: vi.fn() }))
+const stubs = vi.hoisted(() => ({ allowed: vi.fn(), staff: vi.fn(), details: vi.fn(), contact: vi.fn(), school: vi.fn(), fatherAndSchool: vi.fn() }))
 
 vi.mock("server-only", () => ({}))
 vi.mock("next/cache", () => ({ revalidatePath: () => {} }))
@@ -22,6 +22,7 @@ vi.mock("@/lib/services/leads", async (importOriginal) => ({
 vi.mock("@/lib/services/lead-details", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/services/lead-details")>()),
   correctPreviousSchool: (...args: unknown[]) => stubs.school(...args),
+  getLeadFatherAndSchool: (...args: unknown[]) => stubs.fatherAndSchool(...args),
 }))
 
 import { correctContact, correctStudent } from "@/app/staff/applicants/[id]/actions"
@@ -36,6 +37,10 @@ beforeEach(() => {
   stubs.details.mockReset().mockResolvedValue({ ok: true, data: null })
   stubs.contact.mockReset().mockResolvedValue({ ok: true, data: null })
   stubs.school.mockReset().mockResolvedValue({ ok: true, data: null })
+  stubs.fatherAndSchool.mockReset().mockResolvedValue({
+    ok: true,
+    data: { fatherFullName: "JUMA SALIM MRISHO", fatherFullNameSource: "edited", previousSchool: null, lastNameFrom: "father_last", broughtBy: null },
+  })
 })
 
 describe("correctStudent", () => {
@@ -71,9 +76,32 @@ describe("correctStudent", () => {
     })
   })
 
-  it("refuses a last-name choice without all four name parts, or mixed with fullName", async () => {
+  it("refuses nameParts when another staff member changed the father's name concurrently", async () => {
+    stubs.fatherAndSchool.mockResolvedValueOnce({
+      ok: true,
+      data: { fatherFullName: "JUMA SALEM MRISHO", fatherFullNameSource: "edited", previousSchool: null, lastNameFrom: "father_last", broughtBy: null },
+    })
+    const outcome = await correctStudent(LEAD, {
+      nameParts: { firstName: "AMINA", fatherFirst: "JUMA", fatherMiddle: "SALIM", fatherLast: "MRISHO", lastNameFrom: "father_last" },
+    })
+    expect(outcome).toEqual({
+      status: "refused",
+      field: null,
+      message: "The father’s name changed since you opened this form. Reload the page and try again.",
+    })
+    expect(stubs.details).not.toHaveBeenCalled()
+  })
+
+  it("refuses a last-name choice without all four name parts, missing lastNameFrom, or mixed with fullName", async () => {
     expect((await correctStudent(LEAD, { lastNameFrom: "father_middle" } as never)).status).toBe("refused")
     expect((await correctStudent(LEAD, { fullName: "NEEMA JUMA SALIM", lastNameFrom: "father_middle" } as never)).status).toBe("refused")
+    expect(
+      (
+        await correctStudent(LEAD, {
+          nameParts: { firstName: "NEEMA", fatherFirst: "JUMA", fatherMiddle: "SALIM", fatherLast: "MRISHO" },
+        })
+      ).status,
+    ).toBe("refused")
     expect(
       (
         await correctStudent(LEAD, {

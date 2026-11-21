@@ -251,7 +251,7 @@ export function SchoolSheet({
             value={region}
             onValueChange={(next) => {
               setRegion(next)
-              if (next !== OUTSIDE_TANZANIA) setCountry("")
+              if (next !== "" && next !== OUTSIDE_TANZANIA) setCountry("")
               setProblem(null)
             }}
             lead={() => <GuidedIcon name="pin" small />}

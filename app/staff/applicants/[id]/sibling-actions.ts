@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache"
 
+import type { LastNameFrom } from "@/lib/names"
 import { COUNTRY_NAMES, onList, OUTSIDE_TANZANIA } from "@/lib/places"
 import { correctFatherFullName, correctPreviousSchool, getSiblingLeadFacts, type PreviousSchoolType } from "@/lib/services/lead-details"
 import { getLeadFee } from "@/lib/services/lead-fees"
@@ -43,12 +44,15 @@ function revalidate(leadIds: string[]) {
   revalidatePath("/staff/discounts")
 }
 
-// Each lead's student name and father's full name, or null when they
+// Each lead's student name, father's full name and last-name choice, or null when they
 // can't be read.
-async function fathersOf(supabase: SupabaseClient, ids: string[]): Promise<Map<string, { name: string; father: string | null }> | null> {
+async function fathersOf(
+  supabase: SupabaseClient,
+  ids: string[],
+): Promise<Map<string, { name: string; father: string | null; lastNameFrom: LastNameFrom | null }> | null> {
   const read = await getSiblingLeadFacts(supabase, ids)
   if (!read.ok) return null
-  return new Map([...read.data.values()].map((r) => [r.id, { name: r.studentName, father: r.fatherFullName }]))
+  return new Map([...read.data.values()].map((r) => [r.id, { name: r.studentName, father: r.fatherFullName, lastNameFrom: r.lastNameFrom }]))
 }
 
 // Each member's School fee, for staff who may view payments; null otherwise.
@@ -142,6 +146,7 @@ export async function saveFatherName(
         firstName: firstName(them?.name ?? ""),
         studentName: them?.name ?? "",
         father: question.siblingFatherFullName,
+        lastNameFrom: them?.lastNameFrom ?? null,
       },
       holders,
     }

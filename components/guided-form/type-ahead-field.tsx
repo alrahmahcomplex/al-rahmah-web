@@ -178,6 +178,7 @@ export function TypeAheadField({
       setOpen(true)
     } else if (event.key === "Escape" && match) {
       event.preventDefault()
+      event.stopPropagation()
       setDismissed(true)
     } else if (event.key === "Enter") {
       // Enter in the box never sends the form while a list answer is half typed.

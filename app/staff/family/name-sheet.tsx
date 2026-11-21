@@ -96,24 +96,31 @@ export function NameSheet({
 
   // The student's full name for these parts: when the choice and the father parts used in the
   // student's name did not change, keep the stored rest of the student's name so a two-word last
-  // name or an imported spelling is never shortened or rewritten.
+  // name or an imported spelling is never shortened or rewritten. Under `father_middle`, when the
+  // student's own name changes on a mismatched record (e.g. after a sibling's father typo fix),
+  // rebuild from the boxes so `last_name_from` is kept rather than silently cleared to null.
   const studentNameFor = (first: string, ff: string, fm: string, fl: string, nextFrom: LastNameFrom) => {
     if (samePicked(ff, fm, fl, nextFrom)) {
       if (norm(first) === norm(opened.parts.firstName)) return opened.studentName
       const kept = withOwnName(opened.studentName, opened.parts.firstName, first)
-      if (kept) return kept
+      const rebuilt = studentNameOf(first, ff, pickedLastOf(fm, fl, nextFrom))
+      if (kept && (opened.lastNameFrom !== "father_middle" || !hasAllFour({ first, ff, fm, fl }) || norm(kept) === norm(rebuilt))) {
+        return kept
+      }
     }
     return studentNameOf(first, ff, pickedLastOf(fm, fl, nextFrom))
   }
   const fullNameOf = (t: Typed, nextFrom: LastNameFrom) => studentNameFor(t.first, t.ff, t.fm, t.fl, nextFrom)
 
-  // Sends `nameParts` (preserving or updating `last_name_from`) whenever all four parts are present
-  // and build `built` cleanly; falls back to one-box `studentName` for a two-word father or a
-  // mismatched stored spelling kept via `withOwnName`.
-  const studentChangeFor = (t: Typed, nextFrom: LastNameFrom, built: string) =>
-    hasAllFour(t) && norm(built) === norm(studentNameOf(t.first, t.ff, pickedLastOf(t.fm, t.fl, nextFrom)))
+  // Sends `nameParts` when preserving a stored choice, changing the choice, or following a father save
+  // (all four parts present and building `built`); uses one-box `studentName` for legacy leads with
+  // no stored choice (`lastNameFrom === null`) or mismatched/two-word fathers so father fields stay untouched.
+  const studentChangeFor = (t: Typed, nextFrom: LastNameFrom, built: string, fatherJustSaved: boolean) => {
+    const wantsParts = opened.lastNameFrom !== null || nextFrom !== opened.initialFrom || fatherJustSaved
+    return wantsParts && hasAllFour(t) && norm(built) === norm(studentNameOf(t.first, t.ff, pickedLastOf(t.fm, t.fl, nextFrom)))
       ? { nameParts: { firstName: t.first, fatherFirst: t.ff, fatherMiddle: t.fm, fatherLast: t.fl, lastNameFrom: nextFrom } }
       : { studentName: built }
+  }
 
   function close() {
     setRecover(false)
@@ -121,13 +128,18 @@ export function NameSheet({
   }
 
   // The student's name after the father's is saved: from the boxes as typed, or, when the desk chose the
-  // sibling's spelling, from that spelling split as the sibling's own name shows it.
-  function renameAfter(savedFather: string, message: string | null, siblingStudentName: string | undefined) {
+  // sibling's spelling, from that spelling split as the sibling's own name and last-name choice show it.
+  function renameAfter(
+    savedFather: string,
+    message: string | null,
+    siblingStudentName: string | undefined,
+    siblingLastNameFrom: LastNameFrom | null | undefined,
+  ) {
     const attempt = sent.current
     if (!attempt) return
     const { typed, from: typedFrom } = attempt
     const asTyped = norm(savedFather) === norm(fatherOf(typed))
-    const theirs = nameParts(siblingStudentName ?? "", savedFather)
+    const theirs = nameParts(siblingStudentName ?? "", savedFather, siblingLastNameFrom)
     const effectiveFrom: LastNameFrom = asTyped || theirs.fatherMiddle !== "" ? typedFrom : "father_last"
     setFatherSaved({ father: savedFather, from: effectiveFrom })
     const parts: Typed = asTyped
@@ -140,7 +152,7 @@ export function NameSheet({
       return
     }
     run(
-      () => saveStudent(leadId, studentChangeFor(parts, effectiveFrom, built)),
+      () => saveStudent(leadId, studentChangeFor(parts, effectiveFrom, built, true)),
       // With no message, a sheet saying what changed with the father's name is open: that is the confirmation.
       () => {
         if (message) toast(message === PLAIN ? "Name saved. The sibling check runs again." : message)
@@ -164,7 +176,8 @@ export function NameSheet({
     enrolled,
     compareWith,
     onChanged: refresh,
-    onSaved: ({ father: saved, message, siblingStudentName }) => renameAfter(saved, message, siblingStudentName),
+    onSaved: ({ father: saved, message, siblingStudentName, siblingLastNameFrom }) =>
+      renameAfter(saved, message, siblingStudentName, siblingLastNameFrom),
     onRefused: (reason) => {
       setBad(reason)
       setRecover(true)
@@ -197,7 +210,7 @@ export function NameSheet({
     sent.current = { typed, from }
     if (changed) return flow.send(fatherOf(typed))
     run(
-      () => saveStudent(leadId, studentChangeFor(typed, from, built)),
+      () => saveStudent(leadId, studentChangeFor(typed, from, built, fatherSaved !== null)),
       () => {
         close()
         toast("Name saved.")

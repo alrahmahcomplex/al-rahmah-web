@@ -2,8 +2,9 @@
 
 import { revalidatePath } from "next/cache"
 
-import { LAST_NAME_FROM, type LastNameFrom } from "@/lib/names"
+import { fatherFullName, LAST_NAME_FROM, type LastNameFrom } from "@/lib/names"
 import { tanzaniaToday } from "@/lib/school-calendar"
+import { getLeadFatherAndSchool } from "@/lib/services/lead-details"
 import {
   correctVisitDate,
   DAY_OR_BOARDING,
@@ -28,6 +29,7 @@ const REFUSED_INPUT: CorrectionOutcome = {
 }
 
 const isString = (value: unknown) => typeof value === "string"
+const cleanFather = (name: string | null) => (name ?? "").trim().replace(/\s+/g, " ").toUpperCase()
 
 // Server Actions take input from anyone who can post to them, so the shape is
 // checked here, and the database then checks the rules and the permission.
@@ -36,6 +38,8 @@ const isString = (value: unknown) => typeof value === "string"
 // Family page, #512) sends only that one and never overwrites the others with
 // what it read earlier. At least one field is sent. A last-name choice must
 // come inside `nameParts` with all four parts; sent without them it is refused.
+// `nameParts` also refuses stale father parts that no longer match the record,
+// so an own-name or last-name-choice save never undoes a concurrent father edit.
 export async function correctStudent(leadId: string, changes: LeadDetailsChanges): Promise<CorrectionOutcome> {
   const absent = (value: unknown) => value === undefined
   const nonEmpty = (value: unknown): value is string => typeof value === "string" && value.trim() !== ""
@@ -49,7 +53,7 @@ export async function correctStudent(leadId: string, changes: LeadDetailsChanges
       nonEmpty(parts.fatherFirst) &&
       nonEmpty(parts.fatherMiddle) &&
       nonEmpty(parts.fatherLast) &&
-      (absent(parts.lastNameFrom) || (LAST_NAME_FROM as readonly unknown[]).includes(parts.lastNameFrom)))
+      (LAST_NAME_FROM as readonly unknown[]).includes(parts.lastNameFrom))
   if (
     !isString(leadId) ||
     !raw ||
@@ -71,6 +75,18 @@ export async function correctStudent(leadId: string, changes: LeadDetailsChanges
   const allowed = await requirePermission(supabase, "leads.edit")
   if (!allowed.ok) return correctionOutcome({ kind: "forbidden" })
 
+  if (parts) {
+    const current = await getLeadFatherAndSchool(supabase, leadId)
+    if (!current.ok) return correctionOutcome({ kind: current.error })
+    if (cleanFather(current.data.fatherFullName) !== cleanFather(fatherFullName(parts))) {
+      return {
+        status: "refused",
+        field: null,
+        message: "The father’s name changed since you opened this form. Reload the page and try again.",
+      }
+    }
+  }
+
   const result = await updateLeadDetails(supabase, leadId, {
     fullName: changes.fullName,
     ...(parts
@@ -80,7 +96,7 @@ export async function correctStudent(leadId: string, changes: LeadDetailsChanges
             fatherFirst: parts.fatherFirst,
             fatherMiddle: parts.fatherMiddle,
             fatherLast: parts.fatherLast,
-            ...(parts.lastNameFrom !== undefined ? { lastNameFrom: parts.lastNameFrom as LastNameFrom } : {}),
+            lastNameFrom: parts.lastNameFrom as LastNameFrom,
           },
         }
       : {}),

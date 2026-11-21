@@ -104,7 +104,26 @@ export function Sheet({ open, onOpenChange, placement = "centre", title, hint, h
   const style = inset ? ({ "--kit-kb": `${inset.cover}px`, "--kit-vvh": `${inset.height}px` } as CSSProperties) : undefined
 
   return (
-    <Dialog.Root open={open} onOpenChange={(next) => onOpenChange(next)}>
+    <Dialog.Root
+      open={open}
+      onOpenChange={(next, details) => {
+        // A portaled TypeAheadField list inside the sheet holds focus outside Dialog.Popup;
+        // don't let focus moving into it or Escape inside it dismiss the sheet behind it.
+        const focusTarget = details.event instanceof FocusEvent ? details.event.relatedTarget : null
+        const movingIntoTypeAhead =
+          (focusTarget instanceof Element && Boolean(focusTarget.closest(".gf-ta-panel"))) ||
+          Boolean(document.activeElement?.closest(".gf-ta-panel"))
+        if (
+          !next &&
+          ((details.reason === "focus-out" && movingIntoTypeAhead) ||
+            (details.reason === "escape-key" && Boolean(document.querySelector(".gf-ta-panel"))))
+        ) {
+          details.cancel()
+          return
+        }
+        onOpenChange(next)
+      }}
+    >
       <Dialog.Portal>
         <Dialog.Backdrop className="kit-sheet-back" />
         <Dialog.Popup initialFocus={titleRef} data-placement={placement} className={cn("kit-sheet", className)} style={style}>

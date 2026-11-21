@@ -12,6 +12,7 @@ import {
   Card,
   ChipButtons,
   ChoiceTiles,
+  ClassPicker,
   DefaultTile,
   EmptyState,
   Field,
@@ -40,6 +41,7 @@ import { GuidedDemo } from "./guided-demo"
 import "./kit-page.css"
 import { OverlayCards } from "./overlays"
 import { NamesCard, PickedPartsCards } from "./picked-parts"
+import { LastNameCard, PlaceListsCard, TwoChoicesCard } from "./place-parts"
 
 // The approved prototype's "Design system" page (version 13), rebuilt with
 // the kit, card for card; then the kit's other pieces, filled with the
@@ -103,6 +105,7 @@ function Swatch({ name, token }: { name: string; token: string }) {
 function DesignSystem({ tab, today }: { tab: string; today: string }) {
   const [popPressed, setPopPressed] = useState(true)
   const [cls, setCls] = useState<string | null>("STD 6")
+  const [sheetCls, setSheetCls] = useState<string>("STD 5")
   const [sibling, setSibling] = useState<string | null>("sibling")
   const [filled, setFilled] = useState(0)
   const timers = useRef<number[]>([])
@@ -286,6 +289,37 @@ function DesignSystem({ tab, today }: { tab: string; today: string }) {
           </p>
           <Note tone="good">Fathers’ names match. The 10% sibling discount applies by itself.</Note>
           <Note tone="wait">Fathers’ names don’t match. Ask for proof.</Note>
+        </Card>
+
+        <Card title="Class picker">
+          <p className="kp-spec">
+            The class sheet&rsquo;s body: the levels on the sliding track, then the level&rsquo;s classes. It opens on the level of the picked class.
+            Picked: <b>{sheetCls}</b>.
+          </p>
+          <ClassPicker
+            label="School level"
+            levels={[
+              { label: "Nursery", classes: ["DAY CARE", "KG 1", "KG 2"] },
+              { label: "Primary", classes: ["STD 1", "STD 2", "STD 3", "STD 4", "STD 5", "STD 6", "STD 7"] },
+              { label: "Secondary", classes: ["FORM 1", "FORM 2", "FORM 3", "FORM 4"] },
+            ]}
+            picked={sheetCls}
+            onPick={setSheetCls}
+          />
+        </Card>
+
+        <Card title="Answers with Change">
+          <p className="kp-spec">
+            A key-value list whose rows each take an action: a Mist line between rows and Change in its own column. Under{" "}
+            <code>521px</code> the value goes under its key and Change stays on the right. Used on the Family page.
+          </p>
+          <KeyValueList
+            items={[
+              { key: "Full name", value: "Neema Juma Mrisho", action: <TextLink>Change</TextLink> },
+              { key: "Boy or girl", value: "Girl", action: <TextLink>Change</TextLink> },
+              { key: "Previous school", value: "Example Primary School · Public · Dar es Salaam", action: <TextLink>Change</TextLink> },
+            ]}
+          />
         </Card>
       </Bento>
     </div>
@@ -585,6 +619,9 @@ function MorePieces({ linkFilter }: { linkFilter: string }) {
 
       <Bento className="kp-ds" data-rise="group">
         <NamesCard />
+        <LastNameCard />
+        <PlaceListsCard />
+        <TwoChoicesCard />
         <OverlayCards />
         <ListInPopoverCard />
       </Bento>

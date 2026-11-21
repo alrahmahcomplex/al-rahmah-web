@@ -1,5 +1,6 @@
 import type { FatherName, PersonName, StudentName } from "@/components/guided-form"
 import { fatherNameMatch, normalizeFatherName, type FatherNameMatch } from "@/lib/father-name"
+import type { LastNameFrom } from "@/lib/names"
 import { BAND_CLASSES, FEE_BANDS, type FeeBand } from "@/lib/services/fees"
 import type {
   DayOrBoarding,
@@ -33,7 +34,11 @@ export const REGIONS = [
   "Songwe", "Tabora", "Kaskazini Unguja", "Kusini Unguja", "Mjini Magharibi", "Kaskazini Pemba", "Kusini Pemba",
 ]
 
-export type SchoolAnswer = { name: string; type: "private" | "public"; region: string } | { notKnown: true }
+// `country`: required for a school Outside Tanzania, and only then (#511).
+export type SchoolAnswer = { name: string; type: "private" | "public"; region: string; country?: string } | { notKnown: true }
+
+/** The student's name as answered: the boxes, and which of the father's names is the last name (#511). Left out, his last name. */
+export type StudentNameAnswer = StudentName & { lastNameFrom?: LastNameFrom }
 
 /**
  * The answer to "Is X a sibling of another student here?", naming the earlier
@@ -54,7 +59,7 @@ export type SiblingAnswer =
 export type Student = {
   // Stays with the student when another is removed.
   key: number
-  name?: StudentName
+  name?: StudentNameAnswer
   // Boy or girl (prototype v41, #449).
   gender?: StudentGender
   className?: LeadClass
@@ -137,8 +142,8 @@ export const isEmpty = (a: Answers) =>
 
 const join = (...parts: (string | undefined)[]) => parts.map((p) => (p ?? "").trim()).filter(Boolean).join(" ")
 
-/** The student's full name: their own name with the father's first and last names (#400). */
-export const studentName = (n?: StudentName) => (n ? join(n.firstName, n.fatherFirst, n.fatherLast) : "")
+/** The student's full name: their own name with the father's first name and his last name, or his middle name when that was picked (#400, #511). */
+export const studentName = (n?: StudentNameAnswer) => (n ? join(n.firstName, n.fatherFirst, n.lastNameFrom === "father_middle" ? n.fatherMiddle : n.fatherLast) : "")
 /** The father's full name: all three of his names. */
 export const fatherName = (n?: StudentName) => (n ? join(n.fatherFirst, n.fatherMiddle, n.fatherLast) : "")
 export const personName = (n: PersonName) => join(n.firstName, n.middleName, n.lastName)
@@ -374,7 +379,7 @@ export function settled(a: Answers): Answers {
 }
 
 /** A student's name answered. A different father's name asks their own sibling answer again, and every answer built on it. */
-export function withName(a: Answers, key: number, name: StudentName): Answers {
+export function withName(a: Answers, key: number, name: StudentNameAnswer): Answers {
   const old = a.students.find((s) => s.key === key)
   const changed = old?.name !== undefined && !sameName(fatherName(old.name), fatherName(name))
   const students = a.students.map((s) => {
@@ -1001,6 +1006,7 @@ export function payload(a: Answers, defaultYear: number, onFileFees: Record<stri
       fatherFirst: s.name?.fatherFirst ?? "",
       fatherMiddle: s.name?.fatherMiddle ?? "",
       fatherLast: s.name?.fatherLast ?? "",
+      lastNameFrom: s.name?.lastNameFrom ?? "father_last",
       gender: s.gender!,
       className: s.className!,
       enrollmentYear: yearOf(a.students, i, defaultYear),

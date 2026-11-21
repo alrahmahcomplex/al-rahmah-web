@@ -1,10 +1,22 @@
-import type { PersonName, StudentName } from "@/components/guided-form"
+import type { PersonName } from "@/components/guided-form"
 import type { AdmissionFormFamily, FormChild } from "@/lib/services/admission-form-family"
 import type { CheckInStudent, RegistrationStudent, Relationship } from "@/lib/services/leads"
 
 import { fatherNameMatch } from "@/lib/father-name"
+import type { LastNameFrom } from "@/lib/names"
 
-import { fatherName, NO_SCHOOL_ASKED, sameFatherEarlier, type Answers, type Custodian, type KnownContact, type RelationshipChoice, type Student } from "../new/model"
+import {
+  fatherName,
+  NO_SCHOOL_ASKED,
+  sameFatherEarlier,
+  studentName as builtName,
+  type Answers,
+  type Custodian,
+  type KnownContact,
+  type RelationshipChoice,
+  type Student,
+  type StudentNameAnswer,
+} from "../new/model"
 
 // Check-in of an Admission form family (#309, prototype v38): the Register
 // form's answers, started from what the form gave. Staff are asked only the
@@ -17,7 +29,7 @@ export type GivenChild = {
   leadId: string
   admissionNumber: string
   // The name parts the form's names split into, for the name question.
-  prefill: StudentName
+  prefill: StudentNameAnswer
   // Answered by the form: shown filled, "· from the Admission form".
   given: { name: boolean; gender: boolean }
   // Already in a sibling group: check-in keeps that link and asks nothing about it.
@@ -38,21 +50,39 @@ const normal = (v: string) => words(v).join(" ")
 /**
  * The four name parts from the stored names: the child's own name is the
  * first word of its name, the father's three from his full name (or, when the
- * lead holds none, the words after the first). Complete only when the father
- * has exactly three names and the student's name they make is the one stored,
- * so check-in changes no name staff haven't seen.
+ * lead holds none, the words after the first). Complete when a last-name
+ * choice (the stored one tried first, then the other) and a middle/last split
+ * of the father's words reproduce the stored student name, so check-in changes
+ * no name staff haven't seen and compound names like BIN HASSAN work (#511).
  */
-export function formName(studentName: string, fatherFullName: string | null): { name: StudentName; complete: boolean } {
+export function formName(studentName: string, fatherFullName: string | null, lastNameFrom: LastNameFrom | null = null): { name: StudentNameAnswer; complete: boolean } {
   const own = words(studentName)
   const father = fatherFullName ? words(fatherFullName) : own.slice(1)
-  const name: StudentName = {
+  const firstChoice: LastNameFrom = lastNameFrom ?? "father_last"
+  const fallback: StudentNameAnswer = {
     firstName: own[0] ?? "",
     fatherFirst: father[0] ?? "",
     fatherMiddle: father.length > 2 ? father.slice(1, -1).join(" ") : "",
     fatherLast: father.length > 1 ? father[father.length - 1] : "",
+    lastNameFrom: firstChoice,
   }
-  const rebuilt = [name.firstName, name.fatherFirst, name.fatherLast].filter(Boolean).join(" ")
-  return { name, complete: father.length === 3 && !!name.firstName && rebuilt === normal(studentName) }
+  const target = normal(studentName)
+  if (fatherFullName && father.length >= 3 && fallback.firstName) {
+    const choices: LastNameFrom[] = firstChoice === "father_middle" ? ["father_middle", "father_last"] : ["father_last", "father_middle"]
+    for (const choice of choices) {
+      for (let split = 2; split < father.length; split++) {
+        const candidate: StudentNameAnswer = {
+          firstName: fallback.firstName,
+          fatherFirst: father[0],
+          fatherMiddle: father.slice(1, split).join(" "),
+          fatherLast: father.slice(split).join(" "),
+          lastNameFrom: choice,
+        }
+        if (builtName(candidate) === target) return { name: candidate, complete: true }
+      }
+    }
+  }
+  return { name: fallback, complete: false }
 }
 
 /** A person's one stored name in the three boxes: first, middle names, last. */
@@ -69,7 +99,7 @@ export function givenRelationship(c: GivenContact): { choice: RelationshipChoice
 }
 
 function student(child: FormChild, key: number): { student: Student; given: GivenChild } {
-  const { name, complete } = formName(child.studentName, child.fatherFullName)
+  const { name, complete } = formName(child.studentName, child.fatherFullName, child.lastNameFrom)
   const asksSchool = !NO_SCHOOL_ASKED.includes(child.className)
   return {
     student: {
@@ -173,6 +203,7 @@ export function checkInStudents(students: RegistrationStudent[], answers: Answer
       fatherFirst: s.fatherFirst,
       fatherMiddle: s.fatherMiddle,
       fatherLast: s.fatherLast,
+      lastNameFrom: s.lastNameFrom,
       gender: s.gender,
       custodian: s.custodian,
       broughtBy: s.broughtBy,

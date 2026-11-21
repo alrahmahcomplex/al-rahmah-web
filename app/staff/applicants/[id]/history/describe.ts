@@ -123,6 +123,9 @@ const LABELS: Record<string, string> = {
   previous_school_type: "Previous school: private or public",
   previous_school_region: "Previous school: region",
   previous_school_not_known: "Previous school not known yet",
+  // The country of a school Outside Tanzania, and the student's last-name choice (#511).
+  previous_school_country: "Previous school: country",
+  last_name_from: "Student’s last name",
   // Asked at check-in (#309), and used to place the child in a stream (#449).
   gender: "Boy or girl",
   // Its parent or guardian.
@@ -239,6 +242,9 @@ const FATHER_SOURCES: Record<string, string> = {
 
 const SCHOOL_TYPES: Record<string, string> = { private: "Private", public: "Public" }
 
+// Which of the father's names the student's last name is (#511).
+const LAST_NAME_FROM: Record<string, string> = { father_last: "Father’s last name", father_middle: "Father’s middle name" }
+
 const ORIGINS: Record<string, string> = {
   front_desk: "Front desk",
   admission_form: "Admission form",
@@ -267,6 +273,8 @@ function display(field: string, value: unknown, contactNames: Readonly<Record<st
       return FATHER_SOURCES[String(value)] ?? raw(value)
     case "previous_school_type":
       return SCHOOL_TYPES[String(value)] ?? raw(value)
+    case "last_name_from":
+      return LAST_NAME_FROM[String(value)] ?? raw(value)
     case "referral_notice_version":
       return NOTICE_VERSIONS[String(value)] ?? raw(value)
     case "score":

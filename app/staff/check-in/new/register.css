@@ -21,16 +21,6 @@
 .rs-year > .kit-link { margin-left: auto; }
 @media (max-width: 380px) { .rs-year { flex-wrap: wrap; justify-content: center; } .rs-year > .kit-link { margin-left: 0; } }
 
-/* The class sheet: three levels, then the level's classes. */
-.rs-classes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; min-height: 204px; align-content: start; padding-top: 14px; }
-.rs-classes[data-n="4"] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-.rs-class { min-height: 56px; border-radius: 16px; border: var(--gf-stroke) solid var(--gf-line); background: var(--gf-paper); font: inherit; font-weight: 700; font-size: 17px; color: var(--gf-ink); cursor: pointer;
-  transition: background var(--gf-t-med) var(--gf-ease-out), border-color var(--gf-t-med), color var(--gf-t-med), transform var(--gf-t-fast); }
-.rs-class:hover { border-color: var(--gf-line-strong); background: var(--gf-whisper); }
-.rs-class:active { transform: scale(0.96); }
-.rs-class:focus-visible { outline: 3px solid var(--gf-focus-ring); outline-offset: 2px; }
-.rs-class[aria-pressed="true"] { background: var(--gf-indigo); border-color: var(--gf-indigo); color: var(--gf-paper); }
-
 /* "The father is the custodian": the switch in an outlined row. */
 .rs-swrow { padding: 14px 16px; border: var(--gf-stroke) solid var(--gf-line); border-radius: 20px; background: var(--gf-paper); text-align: left; transition: background var(--gf-t-med) var(--gf-ease-out), border-color var(--gf-t-med); }
 .rs-swrow:hover { background: var(--gf-chrome); --kit-quiet: var(--gf-quiet-on-tint); }

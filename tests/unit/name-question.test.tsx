@@ -143,6 +143,55 @@ describe("CustodianQuestion", () => {
     })
   })
 
+  it("keeps focus where staff put it when they move to a box before the boxes open", async () => {
+    render(<CustodianQuestion {...base} onDone={() => {}} />)
+    await userEvent.click(screen.getByRole("radio", { name: /Someone elses*Mother, guardian/ }))
+    const middle = screen.getByRole("textbox", { name: "Middle name" })
+    await userEvent.click(middle)
+    await new Promise((r) => setTimeout(r, 450))
+    expect(middle).toHaveFocus()
+  })
+
+  it("from the second household on, a hidden name or the father's number never stands in for someone else's", async () => {
+    const onDone = vi.fn()
+    render(<CustodianQuestion {...base} first={{ name: "AMINA JUMA SAID" }} onDone={onDone} />)
+    const someoneElse = () => screen.getByRole("radio", { name: /Someone elses*Mother, guardian/ })
+    const another = () => screen.getByRole("radio", { name: /Someone elses*Take their own name/ })
+    const mobile = () => screen.getByRole("textbox", { name: "Custodian’s mobile number" })
+    await userEvent.click(someoneElse())
+    await userEvent.click(another())
+    await userEvent.type(screen.getByRole("textbox", { name: "First name" }), "saida")
+    await userEvent.type(screen.getByRole("textbox", { name: "Middle name" }), "omari")
+    await userEvent.type(screen.getByRole("textbox", { name: "Last name" }), "hassan")
+    await userEvent.type(mobile(), "0755000222")
+
+    // The father, with his own number: the guardian's number doesn't follow.
+    await userEvent.click(screen.getByRole("radio", { name: /The fathers*ALI OMARI HASSAN/ }))
+    expect(mobile()).toHaveValue("")
+    await userEvent.type(mobile(), "0712345678")
+
+    // Back to Someone else: nothing is accepted until staff say which person it is.
+    await userEvent.click(someoneElse())
+    expect(screen.getByRole("radio", { name: "Mother" }).closest("[inert]")).not.toBeNull()
+    await userEvent.click(screen.getByRole("button", { name: /Continue/ }))
+    expect(onDone).not.toHaveBeenCalled()
+    expect(screen.getByText("Say whether it is AMINA JUMA SAID or someone else.")).toBeInTheDocument()
+
+    // Picked again, the guardian comes back with her own number.
+    await userEvent.click(another())
+    expect(mobile()).toHaveValue("0755000222")
+    await userEvent.click(screen.getByRole("radio", { name: "Mother" }))
+    await userEvent.click(screen.getByRole("button", { name: /Continue/ }))
+    expect(onDone).toHaveBeenCalledWith({
+      kind: "new",
+      name: { firstName: "SAIDA", middleName: "OMARI", lastName: "HASSAN" },
+      phone: "0755000222",
+      whatsapp: "",
+      relationship: "Mother",
+      description: "",
+    })
+  })
+
   it("opens on Someone else at check-in when the Admission form named a custodian", () => {
     render(
       <CustodianQuestion

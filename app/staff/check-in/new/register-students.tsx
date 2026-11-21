@@ -1043,9 +1043,9 @@ function RegisterForm({ staffId, today, years, defaultYear, fees, canLink, canEn
     try {
       const outcome = await registerInterviewFromFinish(student.leadId)
       if (myRound !== roundRef.current) return
-      if (outcome.status === "registered") {
+      if (outcome.status === "registered" || outcome.status === "already") {
         setInterviewed((m) => ({ ...m, [student.leadId]: true }))
-        toast(`${firstOf(student.name)} is on the interview list.`)
+        toast(outcome.status === "already" ? `${firstOf(student.name)} was already on the interview list.` : `${firstOf(student.name)} is on the interview list.`)
       } else {
         setInterviewError(`${student.name}: ${outcome.message}`)
       }
@@ -1076,6 +1076,9 @@ function RegisterForm({ staffId, today, years, defaultYear, fees, canLink, canEn
           if (outcome.status === "registered") {
             done += 1
             if (!firstDone) firstDone = s
+            setInterviewed((m) => ({ ...m, [s.leadId]: true }))
+          } else if (outcome.status === "already") {
+            // Put on the list by someone else since the form was saved: done, not retried.
             setInterviewed((m) => ({ ...m, [s.leadId]: true }))
           } else {
             errors.push(`${s.name}: ${outcome.message}`)

@@ -656,6 +656,8 @@ export function CustodianQuestion({
   const waRef = useRef<HTMLInputElement>(null)
   const phoneRef = useRef<HTMLInputElement>(null)
   const focusTimer = useRef(0)
+  // Each choice keeps its own numbers: the father's number never becomes someone else's, and back again.
+  const numbersOf = useRef<Partial<Record<"father" | "else", { phone: string; whatsapp: string }>>>({})
 
   useEffect(() => () => window.clearTimeout(focusTimer.current), [])
 
@@ -672,7 +674,8 @@ export function CustodianQuestion({
   const nameOk = Object.values(name).every((v) => v.trim())
   const famSettled = formParent || onFile.length === 0 || picked === "else" || !!contact
   const phoneReady = phoneOk(phone) && famSettled && (formParent || lookup?.state !== "checking")
-  const relReady = other && (reuse || (phoneReady && (!!contact || formParent || nameOk)))
+  // Only what shows counts: a name or number left from another choice, now hidden, never unlocks the relationship.
+  const relReady = other && (reuse || (askPhone && phoneReady && (!!contact || formParent || nameOk)))
   const options: readonly RelationshipChoice[] = reuse ? SAME_RELATIONSHIPS : FIRST_RELATIONSHIPS
   const relOk = !!rel && options.includes(rel) && (rel !== "Other" || desc.trim().length > 0)
   const ready = dad ? phoneReady : relReady && relOk
@@ -680,6 +683,7 @@ export function CustodianQuestion({
   function submit(e: FormEvent) {
     e.preventDefault()
     if (!who) return setError("Choose who the custodian is.")
+    if (other && first && same === null) return setError(`Say whether it is ${first.name} or someone else.`)
     if (!reuse && !phoneOk(phone)) return setError("Type the mobile number in full, for example 0712 345 678.")
     if (!reuse && whatsapp.trim() && !phoneOk(whatsapp)) return setError("Type the WhatsApp number in full, or leave it empty.")
     if (dad) {
@@ -696,18 +700,19 @@ export function CustodianQuestion({
   function pickWho(next: string) {
     const chosen = next === "father" ? "father" : "else"
     const on = chosen === "father"
+    if (who && who !== chosen) numbersOf.current[who] = { phone, whatsapp }
     setWho(chosen)
     setRel(null)
     setDesc("")
     setPicked(null)
     setSame(null)
     setError("")
+    // The form's number belongs to the form's answer: it comes back with it, and goes with the other.
+    const back = numbersOf.current[chosen] ?? formNumber(on)
+    setPhone(back.phone)
+    setWhatsapp(back.whatsapp)
+    setWaOpen(!!back.whatsapp)
     if (prefill) {
-      // The form's number belongs to the form's answer: it comes back with it, and goes with the other.
-      const back = formNumber(on)
-      setPhone(back.phone)
-      setWhatsapp(back.whatsapp)
-      setWaOpen(!!back.whatsapp)
       const r = on === formDad ? givenRelationship(prefill) : null
       setRel(r?.choice ?? null)
       setDesc(r?.description ?? "")
@@ -723,7 +728,17 @@ export function CustodianQuestion({
     <>
       <QuestionTitle id={`${id}-title`}>{`Who is the custodian of ${names}?`}</QuestionTitle>
       <Hint>The custodian is responsible for school matters, and for paying the school fees.</Hint>
-      <form ref={formRef} noValidate onSubmit={submit} onInput={() => setError("")} className="rs-col">
+      <form
+        ref={formRef}
+        noValidate
+        onSubmit={submit}
+        onInput={() => setError("")}
+        // Staff who move to a box themselves keep their place: the focus planned for when the boxes open is dropped.
+        onFocusCapture={(e) => {
+          if (e.target instanceof HTMLInputElement && e.target.type !== "radio" && e.target.type !== "checkbox") window.clearTimeout(focusTimer.current)
+        }}
+        className="rs-col"
+      >
         <ChoiceTiles
           name={`${id}-who-kind`}
           layout="pair"

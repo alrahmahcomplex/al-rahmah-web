@@ -478,7 +478,13 @@ test.describe("last-name choice, school abroad, and Register for interview (#511
     await expect(page.getByRole("heading", { name: "2 students registered" })).toBeVisible({ timeout: 15_000 })
     const familyLink = page.getByRole("link", { name: "Open this family’s full record" })
     await expect(familyLink).toBeVisible()
-    await expect(familyLink).toHaveAttribute("href", /^\/staff\/family\?students=[0-9a-f-]+,[0-9a-f-]+$/)
+    // The family's leads, in form order: student 1, then student 2.
+    const idOf = async (name: string) =>
+      inRolledBackTransaction(async (sql) => (await sql.query<{ id: string }>("select id from public.leads where student_name = $1", [name])).rows[0].id)
+    const [id1, id2] = [await idOf(firstMiddleFull), await idOf(secondLastFull)]
+    await expect(familyLink).toHaveAttribute("href", `/staff/family?students=${id1},${id2}`)
+    const interviewsOf = async (id: string) =>
+      inRolledBackTransaction(async (sql) => Number((await sql.query<{ n: string }>("select count(*) as n from public.interviews where lead = $1", [id])).rows[0].n))
 
     // Register for interview sheet: per-student buttons plus Register all for 2+ students.
     await page.getByRole("button", { name: "Register for interview" }).click()
@@ -487,11 +493,15 @@ test.describe("last-name choice, school abroad, and Register for interview (#511
     const rowButtons = sheet.getByRole("button", { name: "Register for interview" })
     await expect(rowButtons).toHaveCount(2)
 
-    // Register student 1 alone, then Register all for the remaining student.
-    await rowButtons.first().click()
-    await expect(sheet.getByText("Registered for interview")).toHaveCount(1, { timeout: 10_000 })
+    // Register student 1 alone: only that student goes on the list. Then Register all for student 2.
+    const row = (name: string) => sheet.locator(".rs-iv-row").filter({ hasText: name })
+    await row(firstMiddleFull).getByRole("button", { name: "Register for interview" }).click()
+    await expect(row(firstMiddleFull).getByText("Registered for interview")).toBeVisible({ timeout: 10_000 })
+    await expect(row(secondLastFull).getByRole("button", { name: "Register for interview" })).toBeVisible()
+    expect([await interviewsOf(id1), await interviewsOf(id2)]).toEqual([1, 0])
     await sheet.getByRole("button", { name: "Register all for interview" }).click()
-    await expect(sheet.getByText("Registered for interview")).toHaveCount(2, { timeout: 10_000 })
+    await expect(row(secondLastFull).getByText("Registered for interview")).toBeVisible({ timeout: 10_000 })
+    expect([await interviewsOf(id1), await interviewsOf(id2)]).toEqual([1, 1])
     await expect(sheet.getByRole("button", { name: "Done" })).toBeVisible()
     await sheet.getByRole("button", { name: "Done" }).click()
     await expect(page.getByText("Registered for interview")).toHaveCount(2)

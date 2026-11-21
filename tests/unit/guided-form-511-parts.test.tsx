@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react"
+import { act, render, screen, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { useState } from "react"
 import { describe, expect, it, vi } from "vitest"
@@ -130,6 +130,33 @@ describe("TypeAheadField", () => {
     await userEvent.keyboard("{Backspace}")
     expect(box).toHaveValue("arush")
     expect(screen.getByRole("status")).toHaveTextContent("none")
+  })
+
+  it("moves the list above the box when a phone keyboard leaves no room below it", async () => {
+    // The box sits 250 to 302px down a 768px page; the keyboard then leaves the top 300px visible.
+    const rect = vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
+      return this.classList.contains("gf-ta") ? ({ top: 250, bottom: 302, left: 16, right: 374, width: 358, height: 52, x: 16, y: 250 } as DOMRect) : new DOMRect()
+    })
+    const listeners: Record<string, () => void> = {}
+    const viewport = { offsetTop: 0, height: 768, addEventListener: (e: string, f: () => void) => (listeners[e] = f), removeEventListener: () => {} }
+    vi.stubGlobal("visualViewport", viewport)
+    try {
+      render(<Region />)
+      await userEvent.click(screen.getByRole("button", { name: "Show all regions" }))
+      const panel = document.querySelector<HTMLElement>(".gf-ta-panel")!
+      await vi.waitFor(() => expect(panel.style.top).toBe("308px"))
+      expect(panel).not.toHaveAttribute("data-above")
+
+      viewport.height = 300
+      act(() => listeners.resize())
+      expect(panel).toHaveAttribute("data-above")
+      expect(panel.style.top).toBe("")
+      expect(panel.style.bottom).toBe(`${window.innerHeight - 250 + 6}px`)
+      expect(panel.style.maxHeight).toBe("232px")
+    } finally {
+      rect.mockRestore()
+      vi.unstubAllGlobals()
+    }
   })
 
   it("picks with a click", async () => {

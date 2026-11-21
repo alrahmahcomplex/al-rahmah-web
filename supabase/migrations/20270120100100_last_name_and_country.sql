@@ -21,9 +21,10 @@
 --    update_lead_details keeps the stored country while the region stays
 --    Outside Tanzania (an empty one sent keeps it too), checks one when it
 --    is sent, and clears it with any other region.
--- 3. register_students, complete_admission_visit, create_lead (and so the
---    Admission form, through submit_admission_form_child),
---    update_lead_details and admission_form_family carry both.
+-- 3. register_students, complete_admission_visit, update_lead_details and
+--    admission_form_family carry both. create_lead carries the last-name
+--    choice only; the Admission form reaches it through
+--    submit_admission_form_child and asks no previous school.
 --
 -- No fee, discount, status, sibling link or Seat priority moves: no row is
 -- written, and the student's name is built as before unless a caller sends

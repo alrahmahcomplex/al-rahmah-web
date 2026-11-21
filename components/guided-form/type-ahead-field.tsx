@@ -246,7 +246,8 @@ function TypeAheadList({ anchor, listId, options, pinned, value, optionLead, lab
   const searchRef = useRef<HTMLInputElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
   const [query, setQuery] = useState("")
-  const [place, setPlace] = useState<{ left: number; top: number; width: number; maxHeight: number } | null>(null)
+  // Below the box, or above it (`bottom`) when a phone keyboard leaves more room there.
+  const [place, setPlace] = useState<{ left: number; width: number; maxHeight: number } & ({ top: number } | { bottom: number }) | null>(null)
   const shown = useMemo(() => search(options, query), [options, query])
   const match = completion(shown, query)
   const rest = match ? restOf(query, match.label) : ""
@@ -279,7 +280,10 @@ function TypeAheadList({ anchor, listId, options, pinned, value, optionLead, lab
       const bottom = vv ? vv.offsetTop + vv.height : window.innerHeight
       const r = box.getBoundingClientRect()
       if (r.bottom < top || r.top > bottom) return onClose(false)
-      setPlace({ left: r.left, top: r.bottom + 6, width: r.width, maxHeight: Math.max(120, Math.min(want, bottom - r.bottom - 18)) })
+      const below = bottom - r.bottom - 18
+      const above = r.top - top - 18
+      if (below >= Math.min(want, 170) || below >= above) setPlace({ left: r.left, width: r.width, top: r.bottom + 6, maxHeight: Math.max(0, Math.min(want, below)) })
+      else setPlace({ left: r.left, width: r.width, bottom: window.innerHeight - r.top + 6, maxHeight: Math.min(want, above) })
     }
     const timer = window.setTimeout(put, move > 1 && !calm ? 360 : 0)
     const onScroll = (event: Event) => {
@@ -356,7 +360,8 @@ function TypeAheadList({ anchor, listId, options, pinned, value, optionLead, lab
       ref={panelRef}
       className="gf-ta-panel"
       data-keep-in-view-skip=""
-      style={place ? { left: place.left, top: place.top, width: place.width, maxHeight: place.maxHeight } : { visibility: "hidden" }}
+      data-above={place && "bottom" in place ? "" : undefined}
+      style={place ? { left: place.left, width: place.width, maxHeight: place.maxHeight, ...("bottom" in place ? { bottom: place.bottom } : { top: place.top }) } : { visibility: "hidden" }}
     >
       <div className="gf-ta-search">
         <Icon name="search" small />

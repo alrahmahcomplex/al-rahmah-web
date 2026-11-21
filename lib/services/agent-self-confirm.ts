@@ -6,6 +6,7 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 
 import { normalizeTanzanianMobile, withoutPlus } from "@/lib/phone"
 
+import { classifySendFailure, type AgentInviteSender } from "./agent-invites"
 import type { Result } from "./result"
 import { sendSms, type SmsSender } from "./sms"
 
@@ -154,6 +155,48 @@ export async function checkConfirmationNumber(
     return { ok: false, error: "unavailable" }
   }
   return { ok: true, data: { kind } }
+}
+
+export type InviteOutcome =
+  | { kind: "sent"; email: string; stored: boolean }
+  | { kind: "expired" | "off" | "code_limited" | "no_email" | "email_unusable" | "not_sent" }
+
+const INVITE_RESULT = { "rate-limited": "rate_limited", "smtp-error": "smtp_error", "rejected-address": "rejected_address", "other-error": "other_error" } as const
+
+/**
+ * Email instead: today's agent invite to the email on record, or, with none,
+ * to the typed one if no one else uses it. The link finishes on today's
+ * /discount-code/set-password. `stored`: the email on record was used and
+ * the typed one ignored.
+ */
+export async function sendSelfConfirmInvite(
+  supabase: SupabaseClient,
+  send: AgentInviteSender,
+  input: { attempt: string; browser: string; email: string },
+  redirectTo: string,
+): Promise<Result<InviteOutcome, SelfConfirmError>> {
+  const prepared = await call(supabase, "prepare_self_confirm_invite", { attempt: input.attempt, browser: digestOf(input.browser), typed_email: input.email })
+  if (!prepared.ok) return prepared
+  const row = prepared.data ?? {}
+  if (row.outcome !== "ready" || typeof row.email !== "string" || typeof row.event !== "string") {
+    const kind = (["expired", "off", "code_limited", "no_email", "email_unusable"] as const).find((k) => k === row.outcome)
+    if (!kind) {
+      console.error("Self-confirm: unexpected invite answer", row)
+      return { ok: false, error: "unavailable" }
+    }
+    return { ok: true, data: { kind } }
+  }
+  const { error } = await send(row.email, redirectTo)
+  const failure = error ? classifySendFailure(error) : null
+  if (failure?.kind === "other-error") console.error("Self-confirm: the invite email could not be sent", error)
+  const recorded = await supabase.rpc("record_self_confirm_invite", {
+    event: row.event,
+    result: failure ? INVITE_RESULT[failure.kind] : "sent",
+    error_code: failure?.kind === "other-error" ? failure.code : null,
+  })
+  if (recorded.error) console.error("Self-confirm: could not record the invite", recorded.error)
+  if (failure) return { ok: true, data: { kind: "not_sent" } }
+  return { ok: true, data: { kind: "sent", email: row.email, stored: row.stored === true } }
 }
 
 export type FinishError = "password-too-short" | "not-proven" | "unavailable"

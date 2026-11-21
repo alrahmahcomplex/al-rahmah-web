@@ -101,7 +101,9 @@ as $$
         and exists (
             select 1 from public.marketing_agents m
             where m.id = agent_can_self_confirm.agent_id
-              and m.status = 'Approved' and m.switched_off_at is null and m.retired_at is null and m.user_id is null
+              and m.status = 'Approved' and m.switched_off_at is null and m.retired_at is null
+              -- Not joined: no login, or only an unused invite's.
+              and (m.user_id is null or not public.agent_joined(m.user_id))
         )
 $$;
 
@@ -131,7 +133,7 @@ begin
     where m.code = public.normalize_referral_code(start_agent_self_confirm.code)
       and m.switched_off_at is null and m.retired_at is null;
     if agent.id is null then return jsonb_build_object('outcome', 'no_match'); end if;
-    if agent.user_id is not null then return jsonb_build_object('outcome', 'joined'); end if;
+    if agent.user_id is not null and public.agent_joined(agent.user_id) then return jsonb_build_object('outcome', 'joined'); end if;
     if agent.status <> 'Approved' then return jsonb_build_object('outcome', 'pending'); end if;
 
     perform 1 from public.marketing_agents m where m.id = agent.id for update;
@@ -300,6 +302,107 @@ grant execute on function public.void_agent_confirm_number(uuid, text) to servic
 grant execute on function public.check_agent_confirm_number(uuid, text, text) to service_role;
 
 -- ---------------------------------------------------------------------------
+-- 3b. Email instead: today's agent invite
+-- ---------------------------------------------------------------------------
+
+-- Readies today's invite for the attempt's agent: the stored email is kept;
+-- with none on record, the typed email, if no one else uses it, is stored
+-- (system actor). Opens an invite event like prepare_agent_invite, with no
+-- staff member behind it. The app then sends the invite and records it.
+create function public.prepare_self_confirm_invite(attempt uuid, browser text, typed_email text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+    a public.agent_confirm_attempts;
+    agent public.marketing_agents;
+    address text := nullif(lower(btrim(coalesce(prepare_self_confirm_invite.typed_email, ''))), '');
+    event_id uuid;
+begin
+    a := public.agent_confirm_attempt(prepare_self_confirm_invite.attempt, prepare_self_confirm_invite.browser);
+    if a.id is null then return jsonb_build_object('outcome', 'expired'); end if;
+    if not public.agent_can_self_confirm(a.agent_id) then return jsonb_build_object('outcome', 'off'); end if;
+    select m.* into agent from public.marketing_agents m where m.id = a.agent_id for update;
+    -- No staff member is behind a self-confirm write.
+    perform set_config('audit.actor_kind', 'system', true);
+    perform set_config('audit.actor_staff_id', '', true);
+
+    -- 5 numbers and links per code a day, together.
+    if (select count(*) from public.agent_confirm_numbers n join public.agent_confirm_attempts o on o.id = n.attempt_id
+        where o.agent_id = agent.id and n.created_at > clock_timestamp() - interval '1 day')
+       + (select count(*) from public.agent_events e
+          where e.agent_id = agent.id and e.kind = 'invite' and e.result = 'started' and e.created_by is null
+            and e.created_at > clock_timestamp() - interval '1 day') >= 5 then
+        return jsonb_build_object('outcome', 'code_limited');
+    end if;
+
+    if agent.email is null then
+        if address is null or address !~ '^[^@\s]+@[^@\s]+\.[^@\s]+$' or char_length(address) > 254 then
+            return jsonb_build_object('outcome', 'no_email');
+        end if;
+        if public.agent_email_taken(address) or exists (select 1 from auth.users u where lower(u.email) = address) then
+            return jsonb_build_object('outcome', 'email_unusable');
+        end if;
+        perform set_config('audit.actor_kind', 'system', true);
+        perform set_config('audit.actor_staff_id', '', true);
+        update public.marketing_agents m set email = address where m.id = agent.id;
+        agent.email := address;
+    end if;
+
+    -- Auth won't invite an address whose login is already confirmed; an
+    -- unused invite's login gives way, as in prepare_agent_invite.
+    if agent.user_id is not null and not public.agent_joined(agent.user_id)
+       and exists (select 1 from auth.users u where u.id = agent.user_id and u.email_confirmed_at is not null) then
+        perform set_config('audit.actor_kind', 'system', true);
+        perform set_config('audit.actor_staff_id', '', true);
+        update public.marketing_agents m set user_id = null where m.id = agent.id;
+        delete from auth.users u where u.id = agent.user_id and coalesce(u.encrypted_password, '') = '';
+    end if;
+
+    insert into public.agent_events (agent_id, kind, result, email, created_by)
+    values (agent.id, 'invite', 'started', agent.email, null)
+    returning id into event_id;
+    update public.agent_confirm_attempts o set channel = 'email', destination = agent.email, state = 'sent' where o.id = a.id;
+
+    -- `stored`: the email was already on record (the typed one was ignored).
+    return jsonb_build_object('outcome', 'ready', 'email', agent.email, 'event', event_id, 'stored', address is distinct from agent.email);
+end;
+$$;
+
+-- How the self-confirm invite went, closing its event like record_agent_invite.
+create function public.record_self_confirm_invite(event uuid, result text, error_code text)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+    started public.agent_events;
+begin
+    if record_self_confirm_invite.result is null
+       or record_self_confirm_invite.result not in ('sent', 'rate_limited', 'smtp_error', 'rejected_address', 'other_error') then
+        raise exception 'invalid';
+    end if;
+    select e.* into started from public.agent_events e
+    where e.id = record_self_confirm_invite.event and e.kind = 'invite' and e.result = 'started' and e.created_by is null;
+    if not found then raise exception 'not_found'; end if;
+    perform set_config('audit.actor_kind', 'system', true);
+    perform set_config('audit.actor_staff_id', '', true);
+    insert into public.agent_events (agent_id, kind, result, attempt_id, error_code, email, created_by)
+    values (started.agent_id, 'invite', record_self_confirm_invite.result, started.id,
+            case when record_self_confirm_invite.result = 'other_error' then coalesce(record_self_confirm_invite.error_code, 'unknown') end,
+            started.email, null);
+end;
+$$;
+
+revoke execute on function public.prepare_self_confirm_invite(uuid, text, text) from public, anon, authenticated;
+revoke execute on function public.record_self_confirm_invite(uuid, text, text) from public, anon, authenticated;
+grant execute on function public.prepare_self_confirm_invite(uuid, text, text) to service_role;
+grant execute on function public.record_self_confirm_invite(uuid, text, text) to service_role;
+
+-- ---------------------------------------------------------------------------
 -- 4. The phone login: Auth accepts it only for a proven attempt
 -- ---------------------------------------------------------------------------
 
@@ -362,6 +465,7 @@ declare
     linked boolean := false;
     attempt_id uuid;
     attempt_agent uuid;
+    unused_login uuid;
 begin
     perform set_config('audit.actor_kind', 'system', true);
     perform set_config('audit.actor_staff_id', '', true);
@@ -372,6 +476,14 @@ begin
         attempt_id := public.self_confirm_attempt_for(new);
         if attempt_id is not null then
             select a.agent_id into attempt_agent from public.agent_confirm_attempts a where a.id = attempt_id;
+            select m.user_id into unused_login from public.marketing_agents m where m.id = attempt_agent for update;
+            -- An unused invite's login (no password yet) gives way, as a new
+            -- invite clears it in prepare_agent_invite.
+            if unused_login is not null and not public.agent_joined(unused_login)
+               and exists (select 1 from auth.users u where u.id = unused_login and coalesce(u.encrypted_password, '') = '') then
+                update public.marketing_agents m set user_id = null where m.id = attempt_agent;
+                delete from auth.users u where u.id = unused_login;
+            end if;
             update public.marketing_agents m
             set user_id = new.id
             where m.id = attempt_agent

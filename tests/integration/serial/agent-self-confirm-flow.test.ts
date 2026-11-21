@@ -9,6 +9,7 @@ import {
   createPhoneLogin,
   digestOf,
   sendConfirmationNumber,
+  sendSelfConfirmInvite,
   startSelfConfirm,
 } from "@/lib/services/agent-self-confirm"
 import { createAgent } from "@/lib/services/marketing-agents"
@@ -218,5 +219,87 @@ describe("switched off", () => {
       await setSelfConfirm(true)
     }
     expect(digestOf("x")).toMatch(/^[0-9a-f]{64}$/)
+  })
+})
+
+describe("email instead", () => {
+  // Today's invite, as utils/supabase/admin sends it.
+  const inviteSender = async (email: string, redirectTo: string) => {
+    const { error } = await secretClient().auth.admin.inviteUserByEmail(email, { redirectTo, data: { kind: "agent" } })
+    return { error: error ? { message: error.message, status: error.status, code: error.code } : null }
+  }
+  const REDIRECT = "http://localhost:3100/discount-code/set-password"
+
+  test("a record with no email stores the typed one and sends today's invite", async () => {
+    const agent = await agentOnRecord()
+    const browser = randomUUID()
+    const started = await start(agent, browser)
+    if (started.kind !== "ready") throw new Error("not ready")
+    const address = `self-confirm-${randomUUID().slice(0, 8)}@example.test`
+    expect(await sendSelfConfirmInvite(secretClient(), inviteSender, { attempt: started.attempt, browser, email: address }, REDIRECT)).toEqual({
+      ok: true,
+      data: { kind: "sent", email: address, stored: false },
+    })
+    const row = await asSystem(async (sql) => {
+      const r = await sql.query<{ email: string; linked: boolean; results: string[] }>(
+        `select m.email, m.user_id is not null as linked,
+           array(select e.result from public.agent_events e where e.agent_id = m.id order by e.created_at) as results
+         from public.marketing_agents m where m.id = $1`,
+        [agent.id],
+      )
+      return r.rows[0]
+    })
+    expect(row).toEqual({ email: address, linked: true, results: ["started", "sent"] })
+  })
+
+  test("a stored email is kept and the typed one ignored", async () => {
+    const stored = `stored-${randomUUID().slice(0, 8)}@example.test`
+    const agent = await agentOnRecord()
+    await asSystem((sql) => sql.query("update public.marketing_agents set email = $1 where id = $2", [stored, agent.id]))
+    const browser = randomUUID()
+    const started = await start(agent, browser)
+    if (started.kind !== "ready") throw new Error("not ready")
+    expect(started.emailOnRecord).toBe(true)
+    const sent = await sendSelfConfirmInvite(secretClient(), inviteSender, { attempt: started.attempt, browser, email: "someone-else@example.test" }, REDIRECT)
+    expect(sent).toEqual({ ok: true, data: { kind: "sent", email: stored, stored: true } })
+  })
+
+  test("an email someone else uses is refused, and nothing is stored", async () => {
+    const agent = await agentOnRecord()
+    const browser = randomUUID()
+    const started = await start(agent, browser)
+    if (started.kind !== "ready") throw new Error("not ready")
+    expect(await sendSelfConfirmInvite(secretClient(), inviteSender, { attempt: started.attempt, browser, email: MANAGER.email }, REDIRECT)).toEqual({
+      ok: true,
+      data: { kind: "email_unusable" },
+    })
+    const email = await asSystem(async (sql) => (await sql.query("select email from public.marketing_agents where id = $1", [agent.id])).rows[0])
+    expect(email).toEqual({ email: null })
+  })
+
+  test("an agent with an unused invite can still finish by mobile; the invite's login gives way", async () => {
+    const agent = await agentOnRecord()
+    const browser = randomUUID()
+    const first = await start(agent, browser)
+    if (first.kind !== "ready") throw new Error("not ready")
+    const address = `unused-${randomUUID().slice(0, 8)}@example.test`
+    await sendSelfConfirmInvite(secretClient(), inviteSender, { attempt: first.attempt, browser, email: address }, REDIRECT)
+
+    const again = await start(agent, browser)
+    if (again.kind !== "ready") throw new Error(`not ready: ${again.kind}`)
+    const sms = keptSender()
+    await sendConfirmationNumber(secretClient(), sms.send, { attempt: again.attempt, browser }, words, ENV)
+    await checkConfirmationNumber(secretClient(), { attempt: again.attempt, browser, digits: sms.lastDigits() }, ENV)
+    const login = await createPhoneLogin(secretClient(), { attempt: again.attempt, phone: agent.phone!, password: "self-confirm-password" }, 6)
+    expect(login.ok).toBe(true)
+    const after = await asSystem(async (sql) => {
+      const r = await sql.query<{ linked_to_phone: boolean; invite_logins: number }>(
+        `select m.user_id = $2 as linked_to_phone, (select count(*)::int from auth.users u where lower(u.email) = $3) as invite_logins
+         from public.marketing_agents m where m.id = $1`,
+        [agent.id, login.ok ? login.data.userId : null, address],
+      )
+      return r.rows[0]
+    })
+    expect(after).toEqual({ linked_to_phone: true, invite_logins: 0 })
   })
 })

@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test"
 
 import { admissionYears } from "../lib/admission-form"
-import { answerGender, expectQuestion, family, fillForm, fillParent, fillStudent, nameBox, openQuestion, PHONE_WIDTH, send, toCode, toSend, setLanguageCookie, WORDS } from "./admission-form"
+import { answerGender, custodianTile, expectQuestion, family, fillForm, fillParent, fillStudent, nameBox, openQuestion, PHONE_WIDTH, send, toCode, toSend, setLanguageCookie, WORDS } from "./admission-form"
 
 // The Admission form's history entries and its sessionStorage draft (#255):
 // the phone's Back and Forward move between questions, a reload keeps the
@@ -164,4 +164,31 @@ test("Forward to a question the answers no longer allow stays put, and the form'
 
   await page.getByRole("button", { name: t.back }).click()
   await expect(openQuestion(page).getByRole("radio", { name: t.mother })).toBeChecked()
+})
+
+// #513: the custodian reopened with the phone's Back keeps its own entry when
+// The father is picked there, and the relationship's entry, skipped now,
+// shows the custodian question under its own name.
+test("switching to The father on a custodian reached with Back keeps the history in order", async ({ page }) => {
+  const who = family()
+  await page.goto("/apply")
+  await toCode(page, "sw", who, nextYear)
+  await page.goBack()
+  await expectQuestion(page, t.phone)
+  await page.goBack()
+  await expectQuestion(page, /ni nani kwa/)
+  await page.goBack()
+  await expectQuestion(page, t.parentName)
+
+  await custodianTile(page, "sw", "father").click()
+  const fatherPhone = `Namba ya simu ya ${who.father.split(" ")[0]} ni ipi?`
+  await expectQuestion(page, fatherPhone)
+  await expect(page).toHaveURL(/q=phone/)
+  // Back goes to the custodian question, not past it.
+  await page.goBack()
+  await expectQuestion(page, t.parentName)
+  await expect(page).toHaveURL(/q=pname/)
+  await page.goForward()
+  await expectQuestion(page, fatherPhone)
+  await expect(page).toHaveURL(/q=phone/)
 })

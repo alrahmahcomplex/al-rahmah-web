@@ -298,6 +298,10 @@ export function AdmissionFormSteps({
   // the page.
   const trail = useRef<StepKey[]>([])
   const pos = useRef(0)
+  // Whether the open question was reached through the browser's Back or
+  // Forward, on its own history entry. Continue from there then adds the next
+  // question's entry after it, instead of taking its place (round 2, #513).
+  const viaHistory = useRef(false)
   // Sent back to an earlier question's own entry: the problems to show once
   // its popstate arrives.
   const arriving = useRef<{ key: StepKey; shown: Shown[] } | null>(null)
@@ -421,7 +425,13 @@ export function AdmissionFormSteps({
         }
         trail.current[pos.current] = target
         window.history.replaceState(null, "", urlFor(target, f.children))
+      } else if (want !== asked) {
+        // An entry for the relationship, skipped once The father was picked:
+        // it shows the custodian question, so it names it.
+        trail.current[pos.current] = want
+        window.history.replaceState(null, "", urlFor(want, f.children))
       }
+      viaHistory.current = true
       arriving.current = null
       setNotice(null)
       setInteracted(true)
@@ -457,6 +467,7 @@ export function AdmissionFormSteps({
   // Opens a question. `push` gives it a new history entry (moving forward);
   // `replace` swaps the current entry for it.
   function show(next: FormState, how: "push" | "replace") {
+    viaHistory.current = false
     setForm(next)
     const url = urlFor(next.open, next.children)
     if (how === "push") {
@@ -604,7 +615,9 @@ export function AdmissionFormSteps({
     const nextChildren = children === f.children ? latest.children : children
     setProblems([])
     setExpanded(new Set())
-    show({ ...latest, children: nextChildren, done, open: furthest(nextChildren, done) }, latest.done.has(key) ? "replace" : "push")
+    // A reopened question folds into the entry it borrowed; one reached on its
+    // own entry keeps it, and the next question gets a new one.
+    show({ ...latest, children: nextChildren, done, open: furthest(nextChildren, done) }, latest.done.has(key) && !viaHistory.current ? "replace" : "push")
   }
 
   // A "Badilisha …" link: reopen an answered question, unless the open one
@@ -706,17 +719,21 @@ export function AdmissionFormSteps({
     else focusSoon(`#parent-name-${PERSON_BOXES.find((key) => !parent[key].trim()) ?? "firstName"}`)
   }
 
-  // Enter, or a click on a custodian button that picks nothing new. A click
-  // on The father, already picked, answers the question, as a tap on a picked
-  // tile does elsewhere: a tap, Space and a screen reader's click alike, since
-  // no Continue shows for him. Arrow keys always pick the other button, so
+  // Enter, Space or a click on a custodian button that picks nothing new.
+  // Space or a click on The father, already picked, answers the question, as
+  // a tap on a picked tile does elsewhere: a tap and a screen reader's click
+  // alike, since no Continue shows for him. Arrow keys always pick the other button, so
   // they never land here. Enter answers it as Continue would, so with nobody
   // picked it says to choose.
   function custodianAgain(event: React.MouseEvent | React.KeyboardEvent) {
     const target = event.target
     if (!(target instanceof HTMLInputElement) || target.name !== "custodian") return
     if (event.type === "keydown") {
-      if ((event as React.KeyboardEvent).key !== "Enter") return
+      const { key } = event as React.KeyboardEvent
+      // Space on a checked radio makes no click in Chromium, so it is handled
+      // here; prevented, it makes none in any browser either (round 2).
+      const fatherAgain = key === " " && target.checked && target.value === "father" && fatherIsCustodian(formRef.current.parent)
+      if (key !== "Enter" && !fatherAgain) return
       event.preventDefault()
       window.clearTimeout(switchTimer.current)
       void commit("pname")

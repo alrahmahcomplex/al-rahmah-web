@@ -97,6 +97,14 @@ test("The father is the custodian: the relationship is Father, the phone questio
   await expect(page.getByRole("button", { name: "Change Relationship" })).toHaveCount(0)
   await expect(page.getByText(`${who.father} · Father`)).toBeVisible()
 
+  // Back to the custodian: no Continue shows for The father, so Space on his
+  // picked button answers the question again.
+  await page.getByRole("button", { name: WORDS.en.back }).click()
+  await expectQuestion(page, WORDS.en.parentName)
+  await openQuestion(page).getByRole("radio", { name: /^The father/ }).focus()
+  await page.keyboard.press("Space")
+  await expectQuestion(page, `What is ${who.father.split(" ")[0]}'s phone number?`)
+
   await openQuestion(page).getByLabel(/phone number/).fill(who.phone)
   await openQuestion(page).getByRole("button", { name: "Continue" }).click()
   await toSend(page, "en")

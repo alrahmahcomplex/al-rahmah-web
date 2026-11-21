@@ -860,11 +860,14 @@ describe("the Admission form page", { timeout: 30_000 }, () => {
     await user.click(open().getByRole("radio", { name: /^The father/ }))
     await user.click(open().getByRole("radio", { name: /^Someone else/ }))
     await user.click(open().getByRole("radio", { name: /^The father/ }))
-    // Within the pause: go and change the phone, then come back on Continue.
-    await user.click(screen.getByRole("button", { name: "Change Number" }))
-    await waitForQuestion("What is JUMA's phone number?")
+    // Within the pause: go and change the student's name, a Change link that
+    // stays on the page, then come back on Continue. The relationship is
+    // answered (Father), so Continue goes on to the phone, open again for him.
+    await user.click(screen.getByRole("button", { name: "Change Details, ZAWADI JUMA MFANO" }))
+    await user.click(screen.getAllByRole("button", { name: "Change Name" })[0])
+    await waitForQuestion("What is the student's name?")
     await user.click(open().getByRole("button", { name: "Continue" }))
-    await waitForQuestion("Have a discount code?")
+    await waitForQuestion("What is JUMA's phone number?")
   })
 
   it("opens the father's box when the database refuses the custodian's name with The father picked", async () => {

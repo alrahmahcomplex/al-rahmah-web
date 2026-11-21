@@ -1499,6 +1499,11 @@ export const RELATIONS: Record<string, RelationEntry> = {
     anon: ["select", "references", "trigger", "maintain"],
   },
   "public.sibling_rule_settings": { authenticated: [], anon: [] },
+  // Self-confirm attempts, their numbers' digests and misses (#503 slice 3):
+  // its secret-key functions only.
+  "public.agent_confirm_attempts": { authenticated: [], anon: [] },
+  "public.agent_confirm_misses": { authenticated: [], anon: [] },
+  "public.agent_confirm_numbers": { authenticated: [], anon: [] },
   // The SMS log and its budget (#503): reserve_sms and record_sms only.
   "public.sms_sends": { authenticated: [], anon: [] },
   "public.sms_settings": { authenticated: [], anon: [] },

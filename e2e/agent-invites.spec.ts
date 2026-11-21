@@ -152,7 +152,7 @@ test("the Manager sends the invite; the agent sets a password from the email and
 
 test("an agent signs in on the one sign-in page; wrong credentials point to the forgotten password", async ({ page }) => {
   await signInAgent(page, SEEDED_AGENT.email, "not-the-password")
-  await expect(notice(page)).toContainText("Barua pepe au nenosiri si sahihi.")
+  await expect(notice(page)).toContainText("Barua pepe, namba ya simu au nenosiri si sahihi.")
   await expect(notice(page).getByRole("link", { name: "Umesahau nenosiri?" })).toHaveAttribute("href", "/auth/forgot-password")
 
   await signInAgent(page, SEEDED_AGENT.email, SEEDED_AGENT.password)

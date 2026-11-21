@@ -298,10 +298,16 @@ content_path = "./supabase/templates/recovery.html"
 # content_path = "./supabase/templates/password_changed_notification.html"
 
 [auth.sms]
-# Allow/disallow new user signups via SMS to your project.
-enable_signup = false
+# The phone provider (#503): agents may sign in with a mobile and a password.
+# The CLI turns the provider on with this setting. Nobody can sign up by phone
+# all the same: the project-wide enable_signup above stays false, as hosted's
+# "Allow new users to sign up" stays OFF. Logins are made by the app only.
+enable_signup = true
 # If enabled, users need to confirm their phone number before signing in.
-enable_confirmations = false
+# On, so a signed-in person asking to change their phone gets a pending
+# change, which the database refuses (mobile_login_guards), instead of the
+# number being set at once. Hosted's "Confirm phone" is on too.
+enable_confirmations = true
 # Template for sending OTP to users
 template = "Your code is {{ .Code }}"
 # Controls the minimum amount of time that must pass before sending another sms otp.
@@ -318,6 +324,16 @@ max_frequency = "5s"
 # Force log out if the user has been inactive longer than the specified duration.
 # inactivity_timeout = "8h"
 
+# The Send SMS hook (#503): Supabase hands every SMS it would send (a reset
+# code, a phone change) to the app, which sends it through Beem (the route
+# comes in #503 slice 2b). Locally it calls the app on the e2e port. The
+# secret is a local test value only; hosted has its own, in Vercel as
+# SEND_SMS_HOOK_SECRET.
+[auth.hook.send_sms]
+enabled = true
+uri = "http://host.docker.internal:3100/api/auth/send-sms"
+secrets = "v1,whsec_+MGBB5HlwmiVEtF39l8a73U9xuIKvoj/wVb5aIvOecM="
+
 # This hook runs before a new user is created and allows developers to reject the request based on the incoming user object.
 # [auth.hook.before_user_created]
 # enabled = true
@@ -329,12 +345,15 @@ max_frequency = "5s"
 # uri = "pg-functions://<database>/<schema>/<hook_name>"
 
 # Configure one of the supported SMS providers: `twilio`, `twilio_verify`, `messagebird`, `textlocal`, `vonage`.
+# Not Twilio (#503): the CLI turns the phone provider on only when one of these
+# providers is enabled as well as [auth.sms] enable_signup, so this one is,
+# with placeholder values. Twilio is never called: with the Send SMS hook on,
+# Supabase hands every SMS to the app instead.
 [auth.sms.twilio]
-enabled = false
-account_sid = ""
-message_service_sid = ""
-# DO NOT commit your Twilio auth token to git. Use environment variable substitution instead:
-auth_token = "env(SUPABASE_AUTH_SMS_TWILIO_AUTH_TOKEN)"
+enabled = true
+account_sid = "local-placeholder-not-used"
+message_service_sid = "local-placeholder-not-used"
+auth_token = "local-placeholder-not-used"
 
 # Multi-factor-authentication is available to Supabase Pro plan.
 [auth.mfa]

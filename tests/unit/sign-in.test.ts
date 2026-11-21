@@ -68,24 +68,52 @@ describe("signing in on the one sign-in page", () => {
     vi.useRealTimers()
   })
 
+  it("signs an agent in with a mobile, sent to Supabase as 255 and nine digits", async () => {
+    const { client, auth, signOut } = fakeSupabase({ agent: AGENT })
+
+    expect(await signIn(client, { phone: "+255712345123" }, "fixture-password", TOKEN)).toEqual({ ok: true, data: "agent" })
+    expect(auth.signInWithPassword).toHaveBeenCalledWith({ phone: "255712345123", password: "fixture-password", options: { captchaToken: TOKEN } })
+    expect(signOut).not.toHaveBeenCalled()
+  })
+
+  it("refuses a staff login reached by mobile and ends only this browser's session: staff sign in with their email only", async () => {
+    const { client, signOut } = fakeSupabase({ staff: STAFF, agent: AGENT })
+
+    expect(await signIn(client, { phone: "+255712345123" }, "fixture-password", TOKEN)).toEqual({ ok: false, error: "no-account" })
+    expect(signOut).toHaveBeenCalledTimes(1)
+    expect(signOut).toHaveBeenCalledWith({ scope: "local" })
+  })
+
+  it("answers a banned login reached by mobile with wrong details, so the number gives nothing away", async () => {
+    const banned = { message: "User is banned", code: "user_banned", status: 400 }
+    const byMobile = fakeSupabase({ signInError: banned })
+    expect(await signIn(byMobile.client, { phone: "+255712345123" }, "wrong-password", TOKEN)).toEqual({
+      ok: false,
+      error: "invalid-credentials",
+    })
+    // An email keeps today's answer.
+    const byEmail = fakeSupabase({ signInError: banned })
+    expect(await signIn(byEmail.client, { email: "neema@example.test" }, "wrong-password", TOKEN)).toEqual({ ok: false, error: "banned" })
+  })
+
   it("sends an active staff member to the staff side and keeps the session", async () => {
     const { client, signOut } = fakeSupabase({ staff: STAFF })
 
-    expect(await signIn(client, "manager@example.test", "fixture-password", TOKEN)).toEqual({ ok: true, data: "staff" })
+    expect(await signIn(client, { email: "manager@example.test" }, "fixture-password", TOKEN)).toEqual({ ok: true, data: "staff" })
     expect(signOut).not.toHaveBeenCalled()
   })
 
   it("sends a switched-on Discount code holder to their students and keeps the session", async () => {
     const { client, signOut } = fakeSupabase({ agent: AGENT })
 
-    expect(await signIn(client, "neema@example.test", "fixture-password", TOKEN)).toEqual({ ok: true, data: "agent" })
+    expect(await signIn(client, { email: "neema@example.test" }, "fixture-password", TOKEN)).toEqual({ ok: true, data: "agent" })
     expect(signOut).not.toHaveBeenCalled()
   })
 
   it("never sends a staff login to the agent side, even if both answer", async () => {
     const { client } = fakeSupabase({ staff: STAFF, agent: AGENT })
 
-    expect(await signIn(client, "manager@example.test", "fixture-password", TOKEN)).toEqual({ ok: true, data: "staff" })
+    expect(await signIn(client, { email: "manager@example.test" }, "fixture-password", TOKEN)).toEqual({ ok: true, data: "staff" })
   })
 
   it.each([
@@ -97,14 +125,14 @@ describe("signing in on the one sign-in page", () => {
   ] as const)("reports a refused password (%o) as %s and reads no records", async (signInError, error) => {
     const { client, rpc } = fakeSupabase({ signInError, staff: STAFF })
 
-    expect(await signIn(client, "manager@example.test", "wrong", TOKEN)).toEqual({ ok: false, error })
+    expect(await signIn(client, { email: "manager@example.test" }, "wrong", TOKEN)).toEqual({ ok: false, error })
     expect(rpc).not.toHaveBeenCalled()
   })
 
   it("sends the Turnstile token to Supabase as captchaToken", async () => {
     const { client, auth } = fakeSupabase({ staff: STAFF })
 
-    await signIn(client, "manager@example.test", "fixture-password", TOKEN)
+    await signIn(client, { email: "manager@example.test" }, "fixture-password", TOKEN)
     expect(auth.signInWithPassword).toHaveBeenCalledWith({
       email: "manager@example.test",
       password: "fixture-password",
@@ -115,7 +143,7 @@ describe("signing in on the one sign-in page", () => {
   it("sends nothing to Supabase without a Turnstile token", async () => {
     const { client, auth, rpc } = fakeSupabase({ staff: STAFF })
 
-    expect(await signIn(client, "manager@example.test", "fixture-password", "")).toEqual({ ok: false, error: "check-pending" })
+    expect(await signIn(client, { email: "manager@example.test" }, "fixture-password", "")).toEqual({ ok: false, error: "check-pending" })
     expect(auth.signInWithPassword).not.toHaveBeenCalled()
     expect(rpc).not.toHaveBeenCalled()
   })
@@ -123,7 +151,7 @@ describe("signing in on the one sign-in page", () => {
   it("refuses a deactivated staff member and ends the session, without trying the agent side", async () => {
     const { client, signOut, rpc } = fakeSupabase({ staff: { data: { ...STAFF_ROW, active: false }, error: null }, agent: AGENT })
 
-    expect(await signIn(client, "manager@example.test", "fixture-password", TOKEN)).toEqual({ ok: false, error: "deactivated" })
+    expect(await signIn(client, { email: "manager@example.test" }, "fixture-password", TOKEN)).toEqual({ ok: false, error: "deactivated" })
     expect(signOut).toHaveBeenCalled()
     expect(rpc).not.toHaveBeenCalledWith("current_agent_account")
   })
@@ -135,14 +163,14 @@ describe("signing in on the one sign-in page", () => {
   ] as const)("refuses an agent in state %s and ends the session", async (state, error) => {
     const { client, signOut } = fakeSupabase({ agent: { data: { state, full_name: null, code: null }, error: null } })
 
-    expect(await signIn(client, "neema@example.test", "fixture-password", TOKEN)).toEqual({ ok: false, error })
+    expect(await signIn(client, { email: "neema@example.test" }, "fixture-password", TOKEN)).toEqual({ ok: false, error })
     expect(signOut).toHaveBeenCalled()
   })
 
   it("refuses a login that is neither staff nor agent and ends the session", async () => {
     const { client, signOut } = fakeSupabase()
 
-    expect(await signIn(client, "someone@example.test", "fixture-password", TOKEN)).toEqual({ ok: false, error: "no-account" })
+    expect(await signIn(client, { email: "someone@example.test" }, "fixture-password", TOKEN)).toEqual({ ok: false, error: "no-account" })
     expect(signOut).toHaveBeenCalled()
   })
 
@@ -150,7 +178,7 @@ describe("signing in on the one sign-in page", () => {
     for (const options of [{ staff: { data: null, error: { message: "connection refused" } } }, { agent: { data: null, error: { message: "connection refused" } } }]) {
       const { client, signOut } = fakeSupabase(options)
 
-      expect(await signIn(client, "someone@example.test", "fixture-password", TOKEN)).toEqual({ ok: false, error: "unavailable" })
+      expect(await signIn(client, { email: "someone@example.test" }, "fixture-password", TOKEN)).toEqual({ ok: false, error: "unavailable" })
       expect(signOut).toHaveBeenCalled()
     }
   })
@@ -159,7 +187,7 @@ describe("signing in on the one sign-in page", () => {
     vi.useFakeTimers()
     const { client } = fakeSupabase({ staffAnswers: [ISSUED_AT_FUTURE], staff: STAFF })
 
-    const pending = signIn(client, "manager@example.test", "fixture-password", TOKEN)
+    const pending = signIn(client, { email: "manager@example.test" }, "fixture-password", TOKEN)
     await vi.runAllTimersAsync()
     expect(await pending).toEqual({ ok: true, data: "staff" })
   })

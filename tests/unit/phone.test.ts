@@ -1,6 +1,31 @@
 import { describe, expect, test } from "vitest"
 
-import { normalizeTanzanianMobile, withoutPlus } from "@/lib/phone"
+import { normalizeTanzanianMobile, readSignInLogin, withoutPlus } from "@/lib/phone"
+
+describe("readSignInLogin", () => {
+  test.each([
+    ["  Neema@Example.TEST ", { email: "neema@example.test" }],
+    ["0712 345 123", { phone: "+255712345123" }],
+    ["+255754888210", { phone: "+255754888210" }],
+  ])("reads %s", (typed, login) => {
+    expect(readSignInLogin(typed)).toEqual(login)
+  })
+
+  test.each([
+    "",
+    "neema",
+    "0754 888",
+    "0222 123 456",
+    "@example.test",
+    "neema@",
+    "ne ema@example.test",
+    "neema@example..test",
+    "neema@-example.test",
+    "neema@@example.test",
+  ])("refuses %j", (typed) => {
+    expect(readSignInLogin(typed)).toBeNull()
+  })
+})
 
 describe("normalizeTanzanianMobile", () => {
   test.each([

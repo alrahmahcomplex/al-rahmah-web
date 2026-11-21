@@ -67,12 +67,16 @@ export function LoginForm({ language, notice, studentsNote = false }: { language
       <form ref={form} action={formAction} className="flex w-full flex-col">
         <div className="flex flex-col gap-3">
           {studentsNote && <NoticeBox tone="info">{copy.studentsNote}</NoticeBox>}
+          {/* An email or a mobile number (#503), so a plain text box: the
+              browser fills in whichever the person signs in with. */}
           <IconField
-            id="email"
-            label={copy.email}
+            id="login"
+            label={copy.login}
             icon={User}
-            type="email"
-            autoComplete="email"
+            type="text"
+            autoComplete="username"
+            autoCapitalize="none"
+            spellCheck={false}
             required
           />
           <PasswordField

@@ -326,7 +326,9 @@ function TypeAheadList({ anchor, listId, options, pinned, value, optionLead, lab
 
   function onKey(event: KeyboardEvent<HTMLInputElement>) {
     // Enter picks the highlighted option below, which starts on the faint match and moves with the arrows.
-    if (event.key !== "Enter" && match && takesCompletion(event.key, { shift: event.shiftKey, caretAtEnd: true, fits: startsWith(shown, query).length })) {
+    const input = event.currentTarget
+    const caretAtEnd = input.selectionStart === input.value.length && input.selectionEnd === input.value.length
+    if (event.key !== "Enter" && match && takesCompletion(event.key, { shift: event.shiftKey, caretAtEnd, fits: startsWith(shown, query).length })) {
       event.preventDefault()
       onPick(match)
       return

@@ -110,6 +110,18 @@ describe("TypeAheadField", () => {
     expect(screen.getByRole("combobox", { name: "Region" })).toHaveValue("Katavi")
   })
 
+  it("moves the caret with Right arrow inside the search, and takes the match only at its end", async () => {
+    render(<Region />)
+    await userEvent.click(screen.getByRole("button", { name: "Show all regions" }))
+    const find = screen.getByRole("combobox", { name: "Search regions" })
+    await userEvent.type(find, "kag")
+    await userEvent.keyboard("{ArrowLeft}{ArrowRight}")
+    expect(screen.getByRole("listbox", { name: "Regions" })).toBeInTheDocument()
+    await userEvent.keyboard("{ArrowRight}")
+    expect(screen.queryByRole("listbox")).toBeNull()
+    expect(screen.getByRole("combobox", { name: "Region" })).toHaveValue("Kagera")
+  })
+
   it("keeps the letters left when a picked name is edited", async () => {
     render(<Region />)
     const box = screen.getByRole("combobox", { name: "Region" })

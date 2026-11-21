@@ -64,13 +64,15 @@ type LeadRow = {
   previous_school_type: string | null
   previous_school_region: string | null
   previous_school_not_known: boolean
+  previous_school_country: string | null
 }
 
 async function row(leadId: string): Promise<LeadRow> {
   const [found] = await owner<LeadRow>(
     `select guardian_contact_id, custodian_relationship::text, custodian_relationship_description,
             brought_by_name, brought_by_phone, brought_by_relationship,
-            previous_school_name, previous_school_type::text, previous_school_region, previous_school_not_known
+            previous_school_name, previous_school_type::text, previous_school_region, previous_school_not_known,
+            previous_school_country
      from public.leads where id = $1`,
     [leadId],
   )
@@ -434,10 +436,14 @@ describe("correcting the previous school", () => {
     })
     expect(await fees([lead])).toEqual(before)
 
-    expect(await correct(staff, lead, { previous_school_region: "Outside Tanzania" })).toEqual({
+    // Moved abroad, the school needs its country (#511): refused without one, saved with one.
+    expect(await correct(staff, lead, { previous_school_region: "Outside Tanzania" })).toMatchObject({ error: "invalid" })
+    expect((await row(lead)).previous_school_region).toBe("Pwani")
+    expect(await correct(staff, lead, { previous_school_region: "Outside Tanzania", previous_school_country: "Kenya" })).toEqual({
       data: { result: "updated" },
     })
-    expect((await row(lead)).previous_school_region).toBe("Outside Tanzania")
+    expect(await row(lead)).toMatchObject({ previous_school_region: "Outside Tanzania", previous_school_country: "Kenya" })
+    expect(await fees([lead])).toEqual(before)
   })
 
   test("refuses a region off the list, a type off the list and incomplete details", async () => {

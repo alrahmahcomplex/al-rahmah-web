@@ -1,9 +1,11 @@
 "use client"
 
-import { useId, useState, useTransition } from "react"
+import { useId, useMemo, useState, useTransition } from "react"
 
+import { Icon as GuidedIcon, TypeAheadField } from "@/components/guided-form"
 import { FatherNameBoxes, type FatherName } from "@/components/guided-form/names"
 import { Button, ChipButtons, ChoiceTiles, Field, Tag, TextLink, toast } from "@/components/kit"
+import { countriesSavedFirst, countryFlag, countryNeed, OUTSIDE_TANZANIA, sameSchoolName, schoolChanged, schoolKey } from "@/lib/places"
 import type { LeadPreviousSchool, PreviousSchoolType } from "@/lib/services/lead-details"
 import type { LeadClass } from "@/lib/services/leads"
 
@@ -144,7 +146,18 @@ export function FatherNameRow({
 }
 
 const schoolLine = (school: Extract<LeadPreviousSchool, { kind: "school" }>) =>
-  `${school.name} · ${school.type === "private" ? "Private" : "Public"} · ${school.region}`
+  `${school.name} · ${school.type === "private" ? "Private" : "Public"} · ${school.region === OUTSIDE_TANZANIA && school.country ? school.country : school.region}`
+
+// The country of a school Outside Tanzania, as on the Family page (#511).
+const COUNTRY_LABELS = {
+  field: "Country",
+  placeholder: "Type or choose a country",
+  showAll: "Show all countries",
+  search: "Search countries",
+  list: "Countries",
+  none: (q: string) => `No country matches “${q}”.`,
+}
+const flag = (country: string) => <span className="gf-flag">{countryFlag(country)}</span>
 
 export function PreviousSchoolRow({
   leadId,
@@ -165,6 +178,11 @@ export function PreviousSchoolRow({
   const [name, setName] = useState(known?.name ?? "")
   const [type, setType] = useState<PreviousSchoolType | null>(known?.type ?? null)
   const [region, setRegion] = useState<string | null>(known?.region ?? null)
+  const [country, setCountry] = useState(known?.country ?? "")
+  // The school staff last picked a country for (it counts for that school only), and whether they typed in the box (#511).
+  const [countryPickedFor, setCountryPickedFor] = useState<string | null>(null)
+  const [countryTouched, setCountryTouched] = useState(false)
+  const countryOptions = useMemo(() => countriesSavedFirst(known?.country).map((c) => ({ value: c, label: c })), [known?.country])
   const [find, setFind] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [pending, startTransition] = useTransition()
@@ -180,6 +198,9 @@ export function PreviousSchoolRow({
     setName(known?.name ?? "")
     setType(known?.type ?? null)
     setRegion(known?.region ?? null)
+    setCountry(known?.country ?? "")
+    setCountryPickedFor(null)
+    setCountryTouched(false)
     setFind("")
     setError(null)
     setEditing(true)
@@ -206,7 +227,17 @@ export function PreviousSchoolRow({
     const n = name.trim().replace(/\s+/g, " ")
     if (n.length < 2) return setError("Type the school’s name.")
     if (!type || !region) return setError("Choose private or public, and the region.")
-    save({ kind: "school", name: n, type, region }, "Previous school saved.")
+    const out = region === OUTSIDE_TANZANIA
+    // The lead's rule (#511): another school or a new region abroad needs its country picked, the saved one again
+    // included; private or public alone keeps the saved one, or none on a school saved before the country list.
+    const need = countryNeed({ saved: known, name: n, region, country, pickedFor: countryPickedFor, touched: countryTouched })
+    if (need === "missing") return setError("Choose the country from the list.")
+    if (need === "again") return setError("Choose the country again for the new school.")
+    // The same name in other capitals is the same school: the record keeps it as it is.
+    const savedName = known && sameSchoolName(n, known.name) ? known.name : n
+    // Private or public alone sends no country: the record keeps the one stored, a colleague's correction included.
+    const sendCountry = out && !!country && (schoolChanged(known, n, region) || countryTouched)
+    save({ kind: "school", name: savedName, type, region, ...(sendCountry ? { country } : {}) }, "Previous school saved.")
   }
 
   return (
@@ -276,11 +307,40 @@ export function PreviousSchoolRow({
               value={region}
               onChange={(r) => {
                 setRegion(r)
+                if (r !== OUTSIDE_TANZANIA) setCountry("")
                 setError(null)
               }}
             />
           ) : (
             <p className="lr-hint">No region by that name.</p>
+          )}
+          {region === OUTSIDE_TANZANIA && (
+            // Typing in the country box counts as changing it, even when the text matches no country yet.
+            <div
+              className="contents"
+              // The list's search box sends its typing here too, through the portal: only the country box counts.
+              onInput={(e) => {
+                if (e.target instanceof HTMLElement && e.target.id === `${nameId}-country`) setCountryTouched(true)
+              }}
+            >
+              <p className="lr-hint">Which country is the school in?</p>
+              <TypeAheadField
+                id={`${nameId}-country`}
+                compact
+                options={countryOptions}
+                pinned={known?.country}
+                value={country}
+                onValueChange={(next) => {
+                  setCountry(next)
+                  setCountryTouched(true)
+                  if (next) setCountryPickedFor(schoolKey(name, region ?? ""))
+                  setError(null)
+                }}
+                lead={(value) => (value ? flag(value) : <GuidedIcon name="globe" small />)}
+                optionLead={flag}
+                labels={COUNTRY_LABELS}
+              />
+            </div>
           )}
           {error && (
             <p id={errorId} role="alert" className="lr-error">

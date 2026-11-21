@@ -124,6 +124,7 @@ test.describe("checking in an Admission form family", () => {
     await go(page, "Continue").click()
     // The cousin's custodian: the same person, as her aunt.
     await expect(open(page).getByRole("heading", { name: `Who is the custodian of ${zawadi.first}?` })).toBeVisible()
+    await pick(page, /^Someone else\s+Mother, guardian/)
     await pick(page, new RegExp(`^${form.parent}`))
     await pick(page, "Aunt")
     await go(page, "Continue").click()
@@ -153,6 +154,90 @@ test.describe("checking in an Admission form family", () => {
     // Checked in, the number opens the record again.
     await findOnHome(page, form.numbers[1])
     await expect(page).toHaveURL(new RegExp(`/staff/applicants/${form.ids[1]}$`))
+  })
+
+  test("an old Outside Tanzania school with no country opens prefilled for the country, and single-student finish opens View full record", async ({ page }) => {
+    const dad: Child["father"] = [word("ALI"), word("OMARI"), word("HASSAN")]
+    const yusuf: Child = { first: word("YUSUF"), father: dad, className: "STD 6", gender: "Boy" }
+    const form = await sentForm([yusuf])
+    await asSystem((sql) =>
+      sql.query(
+        "update public.leads set previous_school_name = 'OLD SCHOOL ABROAD', previous_school_type = 'private', previous_school_region = 'Outside Tanzania' where id = $1",
+        [form.ids[0]],
+      ),
+    )
+
+    await signInOnce(page, ADMISSIONS.email, ADMISSIONS.password)
+    await findOnHome(page, form.numbers[0])
+    await expect(page).toHaveURL(new RegExp(`/staff/check-in/${form.ids[0]}$`))
+    await expect(open(page).getByRole("heading", { name: `Which school is ${yusuf.first} coming from?` })).toBeVisible()
+    await expect(open(page).getByText(/no country saved yet/i)).toBeVisible()
+    await expect(open(page).getByRole("textbox", { name: "School name" })).toHaveValue("OLD SCHOOL ABROAD")
+    await open(page).getByRole("combobox", { name: "Country" }).fill("uga")
+    await open(page).getByRole("combobox", { name: "Country" }).press("Enter")
+    await go(page, "Continue").click()
+    // Custodian prefilled from Admission form -> Someone else (Mother).
+    await go(page, "Continue").click()
+    await pick(page, new RegExp(`^${form.parent}`))
+    await go(page, "Looks right").click()
+    await go(page, "Record the visit").click()
+
+    await expect(page.getByRole("heading", { name: "Visit recorded" })).toBeVisible({ timeout: 15_000 })
+    await expect(page.getByRole("link", { name: "View full record" })).toHaveAttribute("href", `/staff/applicants/${form.ids[0]}`)
+    await page.getByRole("button", { name: "Register for interview" }).click()
+    const sheet = page.getByRole("dialog", { name: "Register for interview" })
+    // With one student, only that student's button shows (no Register all).
+    await expect(sheet.getByRole("button", { name: "Register all for interview" })).toHaveCount(0)
+    await expect(sheet.getByRole("button", { name: "Register for interview" })).toBeVisible()
+    await sheet.getByRole("button", { name: "Register for interview" }).click()
+    await expect(sheet.getByText("Registered for interview")).toBeVisible({ timeout: 10_000 })
+
+    const country = await inRolledBackTransaction(async (sql) => {
+      const { rows } = await sql.query<{ previous_school_country: string | null }>(
+        "select previous_school_country from public.leads where id = $1",
+        [form.ids[0]],
+      )
+      return rows[0].previous_school_country
+    })
+    expect(country).toBe("Uganda")
+  })
+
+  test("Not known yet keeps an old Outside Tanzania school with no country as it is", async ({ page }) => {
+    const dad: Child["father"] = [word("ALI"), word("OMARI"), word("HASSAN")]
+    const yusuf: Child = { first: word("YUSUF"), father: dad, className: "STD 6", gender: "Boy" }
+    const form = await sentForm([yusuf])
+    await asSystem((sql) =>
+      sql.query(
+        "update public.leads set previous_school_name = 'OLD SCHOOL ABROAD', previous_school_type = 'private', previous_school_region = 'Outside Tanzania' where id = $1",
+        [form.ids[0]],
+      ),
+    )
+
+    await signInOnce(page, ADMISSIONS.email, ADMISSIONS.password)
+    await findOnHome(page, form.numbers[0])
+    await expect(open(page).getByText(/no country saved yet/i)).toBeVisible()
+    // One press: the school stays, and the form moves on.
+    await go(page, "Not known yet").click()
+    await expect(page.getByText("OLD SCHOOL ABROAD · Private · Outside Tanzania · country not known yet")).toBeVisible()
+    await go(page, "Continue").click()
+    await pick(page, new RegExp(`^${form.parent}`))
+    await go(page, "Looks right").click()
+    await go(page, "Record the visit").click()
+    await expect(page.getByRole("heading", { name: "Visit recorded" })).toBeVisible({ timeout: 15_000 })
+
+    const school = await inRolledBackTransaction(async (sql) => {
+      const { rows } = await sql.query(
+        "select previous_school_name, previous_school_region, previous_school_country, previous_school_not_known from public.leads where id = $1",
+        [form.ids[0]],
+      )
+      return rows[0]
+    })
+    expect(school).toEqual({
+      previous_school_name: "OLD SCHOOL ABROAD",
+      previous_school_region: "Outside Tanzania",
+      previous_school_country: null,
+      previous_school_not_known: false,
+    })
   })
 
   test("the Applicants sheet offers check-in for a family still waiting for its visit", async ({ page }) => {

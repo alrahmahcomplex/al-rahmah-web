@@ -132,10 +132,16 @@ describe("Register students", () => {
     expect(await register([student(), bad])).toMatchObject({ ok: false, error: { kind: "invalid", field: "last_name_from", student: 2 } })
   })
 
-  test("a school Outside Tanzania takes its country from the list, stored in the list's spelling", async () => {
+  test("a school Outside Tanzania requires a country from the list, stored in the list's spelling", async () => {
     const outside = { name: "EXAMPLE SCHOOL ABROAD", type: "private", region: "Outside Tanzania" } as const
-    // Left out, for now: today's screens send none, and staff must still be able to save.
-    expect(await registered(student({ previousSchool: outside }))).toMatchObject({ previous_school_region: "Outside Tanzania", previous_school_country: null })
+    expect(await register([student({ previousSchool: outside })])).toMatchObject({
+      ok: false,
+      error: { kind: "invalid", field: "previous_school_country", student: 1 },
+    })
+    expect(await register([student({ previousSchool: { ...outside, country: "   " } })])).toMatchObject({
+      ok: false,
+      error: { kind: "invalid", field: "previous_school_country", student: 1 },
+    })
     expect(await register([student({ previousSchool: { ...outside, country: "Atlantis" } })])).toMatchObject({
       ok: false,
       error: { kind: "invalid", field: "previous_school_country", student: 1 },
@@ -239,7 +245,7 @@ describe("check-in of an Admission form family", () => {
     })
   })
 
-  test("a school Outside Tanzania on file with no country still checks in, given again or kept", async () => {
+  test("a school Outside Tanzania on file with no country stays valid at check-in, sent back unchanged or left out; changed, it needs a country", async () => {
     const kids = [parts(), parts()]
     const sent = await submitAdmissionForm(secretClient(), {
       submissionKey: randomUUID(),
@@ -255,22 +261,73 @@ describe("check-in of an Admission form family", () => {
         [rows.map((r) => r.id)],
       ),
     )
+    const client = await signedIn(ADMISSIONS)
+    const person = [{ firstName: word(), middleName: word(), lastName: word(), phone: phone() }]
+    const old = { name: "EXAMPLE SCHOOL ABROAD", type: "private", region: "Outside Tanzania" } as const
+    const visit = (first: Partial<RegistrationStudent>) =>
+      completeAdmissionVisit(client, {
+        visitDate: yesterday,
+        people: person,
+        students: [
+          { leadId: rows[0].id, ...kids[0], gender: "Girl", custodian: { person: 1, relationship: "Mother" }, ...first },
+          { leadId: rows[1].id, ...kids[1], gender: "Boy", custodian: { person: 1, relationship: "Mother" } },
+        ],
+      })
+
+    // Another school without a country: refused, naming the student.
+    expect(await visit({ previousSchool: { ...old, name: "ANOTHER SCHOOL ABROAD" } })).toMatchObject({
+      ok: false,
+      error: { kind: "invalid", field: "previous_school_country", student: 1 },
+    })
+    // A country off the list is refused even on the unchanged school.
+    expect(await visit({ previousSchool: { ...old, country: "Atlantis" } })).toMatchObject({
+      ok: false,
+      error: { kind: "invalid", field: "previous_school_country", student: 1 },
+    })
+
+    // Sent back unchanged (Not known yet at check-in), and left out: both check in, the school as it was.
+    const done = await visit({ previousSchool: old })
+    if (!done.ok || done.data.kind !== "completed") throw new Error(JSON.stringify(done))
+    for (const r of rows) expect(await rowOf(r.id)).toMatchObject({ previous_school_region: "Outside Tanzania", previous_school_country: null })
+    const kept = await inRolledBackTransaction(async (sql) =>
+      (await sql.query("select previous_school_name, previous_school_type::text, previous_school_not_known from public.leads where id = any($1::uuid[])", [rows.map((r) => r.id)])).rows,
+    )
+    expect(kept).toEqual([
+      { previous_school_name: "EXAMPLE SCHOOL ABROAD", previous_school_type: "private", previous_school_not_known: false },
+      { previous_school_name: "EXAMPLE SCHOOL ABROAD", previous_school_type: "private", previous_school_not_known: false },
+    ])
+  })
+
+  test("with a country given, the school on file with none takes it at check-in", async () => {
+    const kid = parts()
+    const sent = await submitAdmissionForm(secretClient(), {
+      submissionKey: randomUUID(),
+      parent: { fullName: "", nameParts: { firstName: word(), middleName: word(), lastName: word() }, relationship: "Mother", phone: phone() },
+      children: [{ fullName: studentFullName(kid), nameParts: kid, className: "STD 5" as const, enrollmentYear: nextYear, dayOrBoarding: "Day" as const }],
+    })
+    if (!sent.ok) throw new Error(JSON.stringify(sent.error))
+    const row = await rowOf(sent.data[0].admissionNumber)
+    await asSystem((sql) =>
+      sql.query(
+        "update public.leads set previous_school_name = 'EXAMPLE SCHOOL ABROAD', previous_school_type = 'private', previous_school_region = 'Outside Tanzania' where id = $1",
+        [row.id],
+      ),
+    )
     const done = await completeAdmissionVisit(await signedIn(ADMISSIONS), {
       visitDate: yesterday,
       people: [{ firstName: word(), middleName: word(), lastName: word(), phone: phone() }],
       students: [
         {
-          leadId: rows[0].id,
-          ...kids[0],
+          leadId: row.id,
+          ...kid,
           gender: "Girl",
           custodian: { person: 1, relationship: "Mother" },
-          previousSchool: { name: "EXAMPLE SCHOOL ABROAD", type: "private", region: "Outside Tanzania" },
+          previousSchool: { name: "EXAMPLE SCHOOL ABROAD", type: "private", region: "Outside Tanzania", country: "kenya" },
         },
-        { leadId: rows[1].id, ...kids[1], gender: "Boy", custodian: { person: 1, relationship: "Mother" } },
       ],
     })
     if (!done.ok || done.data.kind !== "completed") throw new Error(JSON.stringify(done))
-    for (const r of rows) expect(await rowOf(r.id)).toMatchObject({ previous_school_region: "Outside Tanzania", previous_school_country: null })
+    expect(await rowOf(row.id)).toMatchObject({ previous_school_region: "Outside Tanzania", previous_school_country: "Kenya" })
   })
 })
 
@@ -417,12 +474,19 @@ describe("corrections on the record", () => {
     })
   })
 
-  test("a country is kept while the region stays Outside Tanzania, cleared with any other, and refused with one", async () => {
+  test("a country is kept for private or public alone, needed again for another school, cleared with a region here, and refused with one", async () => {
     const row = await registered(student({ previousSchool: { name: "EXAMPLE SCHOOL ABROAD", type: "private", region: "Outside Tanzania", country: "Kenya" } }))
     const client = await signedIn(ADMISSIONS)
 
-    // The record's school correction sends no country yet: the one stored stays.
-    expect(await correctPreviousSchool(client, row.id, { kind: "school", name: "ANOTHER SCHOOL ABROAD", type: "private", region: "Outside Tanzania" })).toEqual({ ok: true, data: null })
+    // Private or public alone keeps the stored country.
+    expect(await correctPreviousSchool(client, row.id, { kind: "school", name: "EXAMPLE SCHOOL ABROAD", type: "public", region: "Outside Tanzania" })).toEqual({ ok: true, data: null })
+    expect((await rowOf(row.id)).previous_school_country).toBe("Kenya")
+
+    // Another school abroad with no country sent: refused, so Kenya never follows it.
+    expect(await correctPreviousSchool(client, row.id, { kind: "school", name: "ANOTHER SCHOOL ABROAD", type: "private", region: "Outside Tanzania" })).toEqual({
+      ok: false,
+      error: { kind: "invalid", field: "previous_school_country" },
+    })
     expect((await rowOf(row.id)).previous_school_country).toBe("Kenya")
 
     expect(await correctPreviousSchool(client, row.id, { kind: "school", name: "ANOTHER SCHOOL ABROAD", type: "private", region: "Outside Tanzania", country: "rwanda" })).toEqual({ ok: true, data: null })
@@ -446,6 +510,43 @@ describe("corrections on the record", () => {
 
     expect(await correctPreviousSchool(client, row.id, { kind: "school", name: "A SCHOOL HERE", type: "public", region: "Mwanza" })).toEqual({ ok: true, data: null })
     expect(await rowOf(row.id)).toMatchObject({ previous_school_region: "Mwanza", previous_school_country: null })
+  })
+
+  test("an old school abroad with no country stays valid on the record; changing it needs the country", async () => {
+    const row = await registered(student())
+    // As a school saved before the country list: Outside Tanzania, no country.
+    await asSystem((sql) =>
+      sql.query(
+        "update public.leads set previous_school_name = 'EXAMPLE SCHOOL ABROAD', previous_school_type = 'private', previous_school_region = 'Outside Tanzania' where id = $1",
+        [row.id],
+      ),
+    )
+    const client = await signedIn(ADMISSIONS)
+    const old = { kind: "school", name: "EXAMPLE SCHOOL ABROAD", type: "private", region: "Outside Tanzania" } as const
+
+    // Another detail, or the same school sent back: saved, no country needed.
+    const { error } = await client.rpc("update_lead_details", { lead_id: row.id, changes: { gender: "Girl" } })
+    expect(error).toBeNull()
+    expect(await correctPreviousSchool(client, row.id, old)).toEqual({ ok: true, data: null })
+    expect(await rowOf(row.id)).toMatchObject({ previous_school_region: "Outside Tanzania", previous_school_country: null })
+
+    // Private or public alone: saved, still no country. Its name changed with no country: refused.
+    expect(await correctPreviousSchool(client, row.id, { ...old, type: "public" })).toEqual({ ok: true, data: null })
+    expect(await rowOf(row.id)).toMatchObject({ previous_school_region: "Outside Tanzania", previous_school_country: null })
+    expect(await correctPreviousSchool(client, row.id, { ...old, name: "ANOTHER SCHOOL ABROAD" })).toEqual({
+      ok: false,
+      error: { kind: "invalid", field: "previous_school_country" },
+    })
+    // The same name in other capitals and spacing is the same school: no country needed.
+    expect(await correctPreviousSchool(client, row.id, { ...old, name: "example  school abroad" })).toEqual({ ok: true, data: null })
+    expect(await rowOf(row.id)).toMatchObject({ previous_school_region: "Outside Tanzania", previous_school_country: null })
+
+    // Moved abroad from a school here with no country: refused too.
+    expect(await correctPreviousSchool(client, row.id, { kind: "school", name: "A SCHOOL HERE", type: "public", region: "Mwanza" })).toEqual({ ok: true, data: null })
+    expect(await correctPreviousSchool(client, row.id, old)).toEqual({ ok: false, error: { kind: "invalid", field: "previous_school_country" } })
+
+    expect(await correctPreviousSchool(client, row.id, { ...old, name: "ANOTHER SCHOOL ABROAD", country: "Uganda" })).toEqual({ ok: true, data: null })
+    expect(await rowOf(row.id)).toMatchObject({ previous_school_region: "Outside Tanzania", previous_school_country: "Uganda" })
   })
 
   test("the table refuses a country beside a Tanzanian region or off the list", async () => {

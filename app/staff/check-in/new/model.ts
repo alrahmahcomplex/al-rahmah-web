@@ -36,7 +36,9 @@ export const REGIONS = [
 ]
 
 // `country`: required for a school Outside Tanzania, and only then (#511).
-export type SchoolAnswer = { name: string; type: "private" | "public"; region: string; country?: string } | { notKnown: true }
+// `kept`: at check-in, the school on file left as the database holds it (Not known yet on an old school abroad
+// with no country); nothing is sent for it.
+export type SchoolAnswer = { name: string; type: "private" | "public"; region: string; country?: string; kept?: true } | { notKnown: true }
 
 /** The student's name as answered: the boxes, and which of the father's names is the last name (#511). Left out, his last name. */
 export type StudentNameAnswer = StudentName & { lastNameFrom?: LastNameFrom }
@@ -1016,7 +1018,8 @@ export function payload(a: Answers, defaultYear: number, onFileFees: Record<stri
       custodian,
     }
     if (s.className && !NO_SCHOOL_ASKED.includes(s.className) && s.school) {
-      out.previousSchool = "notKnown" in s.school ? { notKnown: true } : s.school
+      if ("notKnown" in s.school) out.previousSchool = { notKnown: true }
+      else if (!s.school.kept) out.previousSchool = s.school
     }
     const sib = s.sibling
     const link = onFileAnswer(a, root) === true ? a.onFile[root]?.links?.[s.key] : undefined

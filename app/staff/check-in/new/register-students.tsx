@@ -2,10 +2,13 @@
 
 import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react"
 
-import { GuidedHead, GuidedStack, GuidedStep, Hint, QuestionTitle, revealStep, SummaryRow, ContinuePill, type ProgressGroup } from "@/components/guided-form"
+import { GuidedHead, GuidedStack, GuidedStep, Hint, QuestionTitle, revealStep, SummaryRow, ContinuePill, useKeepFocusInView, type ProgressGroup } from "@/components/guided-form"
 import { Button, ButtonLink, GuidedTask, Note, PageHeader, Sheet, TextLink, toast } from "@/components/kit"
-import type { RegistrationQuestion } from "@/lib/services/leads"
+import { OUTSIDE_TANZANIA, sameSchoolName } from "@/lib/places"
+import type { LeadClass, RegistrationQuestion } from "@/lib/services/leads"
 
+import { InterviewSheet, RegisteredChip, useInterviewRegistration } from "./interview-sheet"
+import { familyHref } from "../../family/model"
 import { completeVisit, type CompleteVisitOutcome } from "../[id]/actions"
 import { checkInStudents, custodianAtCheckIn, type CheckIn } from "../[id]/model"
 import { readOnFileSibling, registerFamily, type RegisterFamilyOutcome } from "./actions"
@@ -53,6 +56,7 @@ import {
   type OnFileAsk,
   type OnFileFee,
   type OnFileLink,
+  type SchoolAnswer,
   type SiblingAnswer,
   type Student,
 } from "./model"
@@ -98,11 +102,14 @@ type Head = { key: string; title: string; remove?: number }
 // `fixed`: an answer the family gave that check-in keeps, shown with no Change.
 type Step = { id: string; group: number; head: Head; label: string; done: boolean; silent?: boolean; fixed?: boolean; summary: () => ReactNode; body: () => ReactNode }
 
-type Saved =
-  | Extract<RegisterFamilyOutcome, { status: "created" }>
-  | (Extract<CompleteVisitOutcome, { status: "completed" }> & { codeMissed: 0 })
-type Finished = Saved & { names: string[]; unknownSchools: number }
+type FinishedStudent = { student: number; leadId: string; admissionNumber: string; name: string; className: LeadClass }
+type Finished = { students: FinishedStudent[]; ten: number; requests: number; codeMissed: number; unknownSchools: number }
 type SaveOutcome = RegisterFamilyOutcome | CompleteVisitOutcome
+
+const schoolComplete = (school: SchoolAnswer | undefined): boolean =>
+  !!school && ("notKnown" in school || school.region !== OUTSIDE_TANZANIA || !!school.country)
+const schoolWhere = (school: Exclude<SchoolAnswer, { notKnown: true }>) =>
+  school.region === OUTSIDE_TANZANIA && school.country ? school.country : school.region
 
 /** A question the save asked about a student joining a child on file's group, as one of the two sheets shows it. */
 type SaveQuestion = { key: number; root: number; leadId: string; tier: "close" | "different"; pair: NamePair }
@@ -132,6 +139,8 @@ export type RegisterStudentsProps = {
   canEnterCode: boolean
   // leads.view: the custodian's number is checked against families on file.
   canCheck: boolean
+  // interviews.record: Register for interview on the finished screen (#511).
+  canInterview: boolean
   // Check-in of an Admission form family (#309).
   checkIn?: CheckInMode
 }
@@ -182,7 +191,9 @@ function startingAnswers(staffId: string, mode?: CheckInMode): Answers {
   return freshAnswers(nextKey())
 }
 
-function RegisterForm({ staffId, today, years, defaultYear, fees, canLink, canEnterCode, canCheck, checkIn: mode }: RegisterStudentsProps) {
+function RegisterForm({ staffId, today, years, defaultYear, fees, canLink, canEnterCode, canCheck, canInterview, checkIn: mode }: RegisterStudentsProps) {
+  // On phones, keep the focused text box above the keyboard when Space/Enter moves the caret (#511).
+  useKeepFocusInView()
   const GROUPS = mode ? CHECK_IN_GROUPS : REGISTER_GROUPS
   const given = (key: number) => mode?.given.children.find((c) => c.key === key)
   const [answers, setAnswers] = useState<Answers>(() => startingAnswers(staffId, mode))
@@ -196,10 +207,15 @@ function RegisterForm({ staffId, today, years, defaultYear, fees, canLink, canEn
     Object.fromEntries(checkInChildren.filter((c) => c.linked === linked && read[c.leadId]).map((c) => [c.key, read[c.leadId]]))
   const [edit, setEdit] = useState<string | null>(null)
   const [finished, setFinished] = useState<Finished | null>(null)
+  const interviews = useInterviewRegistration(finished?.students ?? null)
   const [instant, setInstant] = useState(false)
   const [interacted, setInteracted] = useState(false)
   const [round, setRound] = useState(0)
   const [pending, setPending] = useState(false)
+  // Saved, and the finished screen is on its way: the form stays locked until it shows.
+  const [saved, setSaved] = useState(false)
+  // Start over confirmed: nothing is saved while the form clears.
+  const [resetting, setResetting] = useState(false)
   const [failure, setFailure] = useState<ReactNode>(null)
   // The fee and group of each child on file staff linked, or "failed" when it could not be read.
   const [onFileFees, setOnFileFees] = useState<Record<string, OnFileFee | "failed">>({})
@@ -253,7 +269,7 @@ function RegisterForm({ staffId, today, years, defaultYear, fees, canLink, canEn
     timers.add(id)
   }
 
-  const locked = pending || !!finished
+  const locked = pending || saved || resetting || !!finished
   function answer(id: string, change: (a: Answers) => Answers) {
     if (locked) return
     setInteracted(true)
@@ -276,6 +292,9 @@ function RegisterForm({ staffId, today, years, defaultYear, fees, canLink, canEn
     setAnswers(mode ? mode.start : freshAnswers(nextKey()))
     setEdit(null)
     setFinished(null)
+    setSaved(false)
+    setResetting(false)
+    interviews.reset()
     setFailure(null)
     setOnFileFees({})
     asked.current.clear()
@@ -503,21 +522,44 @@ function RegisterForm({ staffId, today, years, defaultYear, fees, canLink, canEn
         body: () => <BoardQuestion id={`rs-${sid}`} first={f} saved={s.board} onPick={(v) => later(() => answer(`${sid}.board`, setStudent(s.key, { board: v })), PICK_MS)} />,
       })
       if (s.className && !NO_SCHOOL_ASKED.includes(s.className)) {
+        const prefillSchool = s.school ?? form?.prefillSchool
+        const needsCountry = !!prefillSchool && !("notKnown" in prefillSchool) && prefillSchool.region === OUTSIDE_TANZANIA && !prefillSchool.country
+        // An Outside Tanzania school on file from before the country list, kept as it is: valid with no country.
+        // An Outside Tanzania school on file from before the country list: kept as it is, or with only private or
+        // public changed, it is valid with no country.
+        const old = form?.prefillSchool
+        const legacy =
+          !!old && !!s.school && !("notKnown" in s.school) && s.school.region === OUTSIDE_TANZANIA && !s.school.country &&
+          (s.school.kept || sameSchoolName(s.school.name, old.name))
+        const done = schoolComplete(s.school) || legacy
         out.push({
           id: `${sid}.school`,
           group: 0,
           head,
           label: "Previous school",
-          done: !!s.school,
+          done,
           summary: () =>
-            !s.school ? "" : "notKnown" in s.school ? "Not known yet · add it later on the student’s record" : `${s.school.name} · ${s.school.type === "private" ? "Private" : "Public"} · ${s.school.region}`,
+            !s.school
+              ? ""
+              : "notKnown" in s.school
+                ? "Not known yet · add it later on the student’s record"
+                : `${s.school.name} · ${s.school.type === "private" ? "Private" : "Public"} · ${schoolWhere(s.school)}${legacy ? " · country not known yet" : ""}`,
           body: () => (
             <SchoolQuestion
+              // A new answer (Not known yet keeping the school included) opens the step afresh on it, so nothing
+              // typed before and left behind comes back.
+              key={JSON.stringify(s.school ?? null)}
               id={`rs-${sid}-school`}
               first={f}
-              saved={s.school}
+              saved={prefillSchool}
+              needsCountry={needsCountry}
               onDone={(school) => answer(`${sid}.school`, setStudent(s.key, { school }))}
               onNotKnown={() => {
+                // At check-in, an old school abroad with no country stays on the record as it is, the country still empty.
+                if (old) {
+                  answer(`${sid}.school`, setStudent(s.key, { school: { ...old, kept: true } }))
+                  return
+                }
                 answer(`${sid}.school`, setStudent(s.key, { school: { notKnown: true } }))
                 toast("Saved as Not known yet. Add it later on the student’s record.")
               }}
@@ -811,9 +853,11 @@ function RegisterForm({ staffId, today, years, defaultYear, fees, canLink, canEn
             ? "One of the custodians’ phone numbers can’t be read. Check it"
             : outcome.field === "student_name" && outcome.reason === "repeated_on_form"
               ? `${who} is on this form twice. Remove one`
-              : who
-                ? `Something in ${who}’s answers can’t be saved. Check them`
-                : "Something on the form can’t be saved. Check the answers"
+              : outcome.field === "previous_school_country" && who
+                ? `Choose the country for ${who}’s previous school`
+                : who
+                  ? `Something in ${who}’s answers can’t be saved. Check them`
+                  : "Something on the form can’t be saved. Check the answers"
         return (
           <>
             {nothing} {what}, then press the button again. {KEPT}
@@ -887,10 +931,30 @@ function RegisterForm({ staffId, today, years, defaultYear, fees, canLink, canEn
         setPending(false)
         if (outcome.status === "created" || outcome.status === "completed") {
           clearDraft(staffId, mode?.family)
-          const names = answers.students.map((s) => studentName(s.name))
+          const byNumber = new Map(outcome.students.map((s) => [s.student, s]))
+          const savedStudents: FinishedStudent[] = answers.students.map((s, i) => {
+            const row = byNumber.get(i + 1) ?? outcome.students[i]
+            return {
+              student: i + 1,
+              leadId: row.leadId,
+              admissionNumber: row.admissionNumber,
+              name: studentName(s.name),
+              className: s.className!,
+            }
+          })
           const unknownSchools = answers.students.filter((s) => s.school && "notKnown" in s.school && s.className && !NO_SCHOOL_ASKED.includes(s.className)).length
-          const saved: Saved = outcome.status === "created" ? outcome : { ...outcome, codeMissed: 0 }
-          later(() => setFinished({ ...saved, names, unknownSchools }), FINISH_MS)
+          const done: Finished = {
+            students: savedStudents,
+            ten: outcome.ten,
+            requests: outcome.requests,
+            codeMissed: outcome.status === "created" ? outcome.codeMissed : 0,
+            unknownSchools,
+          }
+          setSaved(true)
+          later(() => {
+            setFinished(done)
+            setSaved(false)
+          }, FINISH_MS)
           return
         }
         if (outcome.status === "questions") {
@@ -989,6 +1053,7 @@ function RegisterForm({ staffId, today, years, defaultYear, fees, canLink, canEn
     return a <= b ? mismatch.pair.mine.first : mismatch.pair.theirs.first
   })()
 
+
   return (
     <>
       {mode && (
@@ -1011,7 +1076,9 @@ function RegisterForm({ staffId, today, years, defaultYear, fees, canLink, canEn
           // Back skips the answers check-in keeps as the family gave them.
           canBack: backTo >= 0 && !locked,
           onBack: () => backTo >= 0 && setEdit(visible[backTo].id),
-          canReset: at <= 0 && openId === steps[0].id,
+          // Start over sits in the left slot on the first question, and after the section chip from the second on (#511, prototype v50).
+          canReset: !locked,
+          endReset: true,
           onReset: () => {
             if (isEmpty(answers)) toast("Nothing to clear yet. The form is empty.")
             else setStartOver(true)
@@ -1030,9 +1097,17 @@ function RegisterForm({ staffId, today, years, defaultYear, fees, canLink, canEn
                       ? "The students are now Visited."
                       : "The students are now Visited, and their records are complete."
                     : finished.unknownSchools > 0
-                      ? `${firstOf(finished.names[0] ?? "")} is now Visited.`
-                      : `${firstOf(finished.names[0] ?? "")} is now Visited, and the record is complete.`,
-                results: finished.students.map((s) => ({ label: finished.names[s.student - 1], value: s.admissionNumber })),
+                      ? `${firstOf(finished.students[0]?.name ?? "")} is now Visited.`
+                      : `${firstOf(finished.students[0]?.name ?? "")} is now Visited, and the record is complete.`,
+                results: finished.students.map((s) => ({
+                  label: (
+                    <span className="rs-done-name">
+                      <span>{s.name}</span>
+                      {interviews.interviewed[s.leadId] && <RegisteredChip />}
+                    </span>
+                  ),
+                  value: s.admissionNumber,
+                })),
                 children: (
                   <>
                     {finished.ten > 0 && <Note tone="good" icon="check">{`The 10% sibling discount is on ${count(finished.ten)}.`}</Note>}
@@ -1045,18 +1120,38 @@ function RegisterForm({ staffId, today, years, defaultYear, fees, canLink, canEn
                     {finished.codeMissed > 0 && (
                       <Note tone="wait" icon="alert">{`The Discount code wasn’t saved on ${count(finished.codeMissed)}. Add it on the student’s record in Applicants.`}</Note>
                     )}
-                    <ButtonLink href="/staff/applicants" size="wide" chevron>
-                      Open Applicants
-                    </ButtonLink>
-                    {mode ? (
-                      <ButtonLink href="/staff" variant="ghost" size="wide">
-                        Check in another family
-                      </ButtonLink>
-                    ) : (
-                      <ContinuePill variant="ghost" onClick={restart}>
-                        Register another family
-                      </ContinuePill>
+                    {canInterview && (
+                      <Button
+                        size="wide"
+                        chevron
+                        onClick={interviews.openSheet}
+                      >
+                        Register for interview
+                      </Button>
                     )}
+                    <div className="rs-done-two">
+                      {mode ? (
+                        <ButtonLink href="/staff" variant="ghost">
+                          Check in another family
+                        </ButtonLink>
+                      ) : (
+                        <Button variant="ghost" onClick={restart}>
+                          Register another student
+                        </Button>
+                      )}
+                      {canCheck && (
+                        <ButtonLink
+                          href={
+                            finished.students.length > 1
+                              ? familyHref(finished.students.map((s) => s.leadId))
+                              : `/staff/applicants/${finished.students[0].leadId}`
+                          }
+                          variant="ghost"
+                        >
+                          {finished.students.length > 1 ? "Open this family’s full record" : "View full record"}
+                        </ButtonLink>
+                      )}
+                    </div>
                   </>
                 ),
               }
@@ -1067,6 +1162,8 @@ function RegisterForm({ staffId, today, years, defaultYear, fees, canLink, canEn
           {items}
         </GuidedStack>
       </GuidedTask>
+
+      <InterviewSheet reg={interviews} students={finished?.students ?? null} />
 
       <Sheet
         open={startOver}
@@ -1082,6 +1179,7 @@ function RegisterForm({ staffId, today, years, defaultYear, fees, canLink, canEn
               size="wide"
               onClick={() => {
                 setStartOver(false)
+                setResetting(true)
                 later(() => {
                   restart()
                   toast("The form has started over.")

@@ -89,6 +89,18 @@ describe("only the app puts a mobile on a login", () => {
     expect(kept).toEqual({ phone: agent.phone.slice(1), phone_change: "" })
   })
 
+  test("the database refuses the pending phone change Auth would save, whatever happens to the SMS", async () => {
+    // Auth sends the code before it saves phone_change, so the request above
+    // can fail at the send. This writes the change as Auth would, straight
+    // to the row, so only the guard can refuse it.
+    const agent = await agentWithMobileLogin()
+    await expect(
+      asSystem((sql) => sql.query("update auth.users set phone_change = $1 where id = $2", [mobile().slice(1), agent.userId])),
+    ).rejects.toThrow("A mobile is put on a login only by the app.")
+    // Clearing a pending change is still allowed.
+    await expect(asSystem((sql) => sql.query("update auth.users set phone_change = '' where id = $1", [agent.userId]))).resolves.toBeDefined()
+  })
+
   test("retiring an agent frees their mobile, which then says only wrong details", async () => {
     const agent = await agentWithMobileLogin()
     expect((await changeAgentStatus(await signedIn(MANAGER), agent.id, "retire", "Created wrongly")).ok).toBe(true)

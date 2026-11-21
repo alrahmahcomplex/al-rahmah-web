@@ -540,3 +540,76 @@ as $$
 $$;
 
 revoke execute on function public.agent_joined(uuid) from public, anon, authenticated, service_role;
+
+-- ---------------------------------------------------------------------------
+-- reserve_sms, re-created (from #522's review): a missing sms_settings row
+-- refuses the send instead of reading an empty budget.
+-- ---------------------------------------------------------------------------
+
+create or replace function public.reserve_sms(kind text, to_phone text, agent_id uuid default null)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+    settings public.sms_settings;
+    -- Read after the lock below, so the clock and the day are those of the
+    -- moment this reservation holds it.
+    at_time timestamptz;
+    day date;
+    mobile text := public.normalize_phone(reserve_sms.to_phone);
+    spent integer;
+    made uuid;
+begin
+    if auth.role() is distinct from 'service_role' then
+        raise exception 'not_permitted';
+    end if;
+    if reserve_sms.kind is null or reserve_sms.kind not in ('self_confirm', 'reset', 'courtesy')
+       or mobile is null or mobile !~ '^\+255[67][0-9]{8}$' then
+        raise exception 'invalid';
+    end if;
+
+    -- One reservation at a time, whatever the day: two at once can't both
+    -- take the budget's last place or a mobile's last one, even either side
+    -- of midnight, where the hour's window spans two days.
+    perform pg_advisory_xact_lock(hashtextextended('sms-reservations', 0));
+    at_time := clock_timestamp();
+    day := (at_time at time zone 'Africa/Dar_es_Salaam')::date;
+    select * into settings from public.sms_settings;
+    -- With no settings row, no budget can be read: nothing is sent.
+    if settings.daily_budget is null then
+        raise exception 'unavailable';
+    end if;
+
+    select count(*) into spent
+    from public.sms_sends s
+    where s.tz_day = day and s.result in ('reserved', 'sent', 'provider_error');
+    if spent >= settings.daily_budget then
+        insert into public.sms_sends (kind, to_phone, agent_id, tz_day, result, created_at)
+        values (reserve_sms.kind, mobile, reserve_sms.agent_id, day, 'budget_reached', at_time);
+        return jsonb_build_object('outcome', 'budget_reached');
+    end if;
+
+    if reserve_sms.kind <> 'courtesy' and (
+        (select count(*) from public.sms_sends s
+         where s.to_phone = mobile and s.kind <> 'courtesy' and s.result in ('reserved', 'sent', 'provider_error')
+           and s.created_at > at_time - interval '1 hour') >= settings.per_mobile_hour
+        or (select count(*) from public.sms_sends s
+            where s.to_phone = mobile and s.kind <> 'courtesy' and s.result in ('reserved', 'sent', 'provider_error')
+              and s.tz_day = day) >= settings.per_mobile_day
+    ) then
+        insert into public.sms_sends (kind, to_phone, agent_id, tz_day, result, created_at)
+        values (reserve_sms.kind, mobile, reserve_sms.agent_id, day, 'mobile_limited', at_time);
+        return jsonb_build_object('outcome', 'mobile_limited');
+    end if;
+
+    insert into public.sms_sends (kind, to_phone, agent_id, tz_day, result, created_at)
+    values (reserve_sms.kind, mobile, reserve_sms.agent_id, day, 'reserved', at_time)
+    returning id into made;
+    return jsonb_build_object('outcome', 'reserved', 'send_id', made);
+end;
+$$;
+
+revoke execute on function public.reserve_sms(text, text, uuid) from public, anon, authenticated;
+grant execute on function public.reserve_sms(text, text, uuid) to service_role;

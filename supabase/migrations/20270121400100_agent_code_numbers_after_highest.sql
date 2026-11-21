@@ -23,65 +23,76 @@
 -- - Numbers run from 001 to 999 and start again (20261229100100). Once the
 --   sequence has gone past 999 it is ahead of every code's number, so codes
 --   saved after that no longer move it.
--- - The sequence moves past the highest number held today, the one-time fix
---   at the end. No stored code changes.
+-- - The sequence moves past the highest number held today, the one-time fix,
+--   once before the trigger and once after: a sign-up while this runs never
+--   gets a number below it, and a code saved before the trigger is counted.
+--   No stored code changes.
+-- - Supabase runs these statements one by one, outside a transaction. Each
+--   function is created and revoked in one block, so no client role can call
+--   it in between.
 -- - last_agent_code_number, which seeded the sequence once, is dropped:
 --   highest_agent_code_number replaces it.
 
--- The highest number any agent record's code holds, retired records
--- included, or 0.
-create function public.highest_agent_code_number()
-returns bigint
-language sql
-stable
-security definer
-set search_path = ''
-as $$
-    select coalesce(max(case when public.is_agent_code_shape(a.code) then right(a.code, 3)::bigint end), 0)
-    from public.marketing_agents a;
-$$;
-
-revoke execute on function public.highest_agent_code_number() from public, anon, authenticated, service_role;
-
--- Takes numbers from the sequence until the last one taken is at least
--- `code_number`; a sequence already there is left alone. The callers pass
--- 999 at most, so this takes at most 999 numbers.
-create function public.move_agent_code_numbers_to(code_number bigint)
-returns void
-language plpgsql
-security definer
-set search_path = ''
-as $$
-declare
-    taken bigint;
+-- The functions, each created and revoked in one block.
+do $migration$
 begin
-    -- The sequence's own position, not a snapshot: it shows every number any
-    -- session has taken, committed or not.
-    select case when s.is_called then s.last_value else s.last_value - 1 end into taken
-    from public.agent_code_numbers s;
-    while taken < move_agent_code_numbers_to.code_number loop
-        taken := nextval('public.agent_code_numbers');
-    end loop;
+    -- The highest number any agent record's code holds, retired records
+    -- included, or 0.
+    create function public.highest_agent_code_number()
+    returns bigint
+    language sql
+    stable
+    security definer
+    set search_path = ''
+    as $$
+        select coalesce(max(case when public.is_agent_code_shape(a.code) then right(a.code, 3)::bigint end), 0)
+        from public.marketing_agents a;
+    $$;
+    revoke execute on function public.highest_agent_code_number() from public, anon, authenticated, service_role;
+
+    -- Takes numbers from the sequence until the last one taken is at least
+    -- `code_number`, never past 999; a sequence already there is left alone,
+    -- so this takes at most 999 numbers. The position is read again before
+    -- each number, so two moves at once stop as soon as either gets there.
+    create function public.move_agent_code_numbers_to(code_number bigint)
+    returns void
+    language plpgsql
+    security definer
+    set search_path = ''
+    as $$
+    declare
+        target bigint := least(move_agent_code_numbers_to.code_number, 999);
+    begin
+        -- The sequence's own position, not a snapshot: it shows every number
+        -- any session has taken, committed or not.
+        while (select case when s.is_called then s.last_value else s.last_value - 1 end
+               from public.agent_code_numbers s) < target loop
+            perform nextval('public.agent_code_numbers');
+        end loop;
+    end;
+    $$;
+    revoke execute on function public.move_agent_code_numbers_to(bigint) from public, anon, authenticated, service_role;
+
+    create function public.move_agent_code_numbers()
+    returns trigger
+    language plpgsql
+    security definer
+    set search_path = ''
+    as $$
+    begin
+        if public.is_agent_code_shape(new.code) then
+            perform public.move_agent_code_numbers_to(right(new.code, 3)::bigint);
+        end if;
+        return null;
+    end;
+    $$;
+    revoke execute on function public.move_agent_code_numbers() from public, anon, authenticated, service_role;
 end;
-$$;
+$migration$;
 
-revoke execute on function public.move_agent_code_numbers_to(bigint) from public, anon, authenticated, service_role;
-
-create function public.move_agent_code_numbers()
-returns trigger
-language plpgsql
-security definer
-set search_path = ''
-as $$
-begin
-    if public.is_agent_code_shape(new.code) then
-        perform public.move_agent_code_numbers_to(right(new.code, 3)::bigint);
-    end if;
-    return null;
-end;
-$$;
-
-revoke execute on function public.move_agent_code_numbers() from public, anon, authenticated, service_role;
+-- The one-time fix, first: from here on a sign-up gets a number above every
+-- code held now.
+select public.move_agent_code_numbers_to(public.highest_agent_code_number());
 
 -- After the row: a code refused by the unique index or another trigger never
 -- moves the sequence. A creation that rolls back later leaves it moved, which
@@ -92,7 +103,6 @@ create trigger move_agent_code_numbers
 
 drop function public.last_agent_code_number();
 
--- The one-time fix: the next generated code takes one more than the highest
--- number held today. Supabase runs these statements one by one; a code saved
--- between the trigger above and this line has already moved the sequence.
+-- Again, for a code an import or the Manager saved between the first fix and
+-- the trigger.
 select public.move_agent_code_numbers_to(public.highest_agent_code_number());

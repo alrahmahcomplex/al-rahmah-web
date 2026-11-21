@@ -370,6 +370,13 @@ describe("the next number comes after the highest any agent code holds (#521)", 
     })
   })
 
+  test("the sequence is never moved past 999 by a code's number", async () => {
+    await atNumber(990, async (sql) => {
+      await sql.query("select public.move_agent_code_numbers_to(5000)")
+      expect(await counter(sql)).toBe(999)
+    })
+  })
+
   test("a sign-up during an import gets its number at once, after the import's codes", async () => {
     const open = async () => {
       const sql = new Client({ connectionString: process.env.SUPABASE_DB_URL })

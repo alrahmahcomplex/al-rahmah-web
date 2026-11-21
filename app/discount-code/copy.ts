@@ -178,6 +178,8 @@ export const COPY: Record<Language, Copy> = {
       joined: "Tayari una akaunti. Ingia.",
       "email-unusable": "Barua pepe hii haiwezi kutumika. Tumia nyingine au piga simu ofisini.",
       "access-off": "Huduma hii imesimamishwa kwa muda.",
+      // O-N28 (#503 self-confirm).
+      "self-confirm-locked": "Kwa usalama, tumesimamisha namba za kuthibitisha za code hii. Jaribu tena baada ya dakika 30.",
     },
     checkPending: "Subiri ukaguzi wa usalama ukamilike, kisha utume.",
     rateLimited: "Umejaribu mara nyingi mno. Subiri dakika chache kisha ujaribu tena. Majibu yako bado yapo.",
@@ -280,6 +282,7 @@ export const COPY: Record<Language, Copy> = {
       joined: "You already have an account. Sign in.",
       "email-unusable": "This email can't be used. Use another or call the office.",
       "access-off": "This service is paused for now.",
+      "self-confirm-locked": "For safety, we've stopped confirmation numbers for this code. Try again in 30 minutes.",
     },
     checkPending: "Wait a moment for the security check to finish, then send.",
     rateLimited: "Too many tries. Wait a few minutes, then try again. Everything you typed is still here.",

@@ -37,6 +37,7 @@ import { cn } from "@/lib/utils"
 
 import { CARD } from "./frame"
 import { registerAsAgent } from "./actions"
+import { SelfConfirmFlow } from "./self-confirm-flow"
 import { COPY, discountWords } from "./copy"
 import type { DiscountCodeMessage, DiscountCodeState } from "./outcome"
 
@@ -121,6 +122,8 @@ export function DiscountCodeForm({
   const [problem, setProblem] = useState<Shown | null>(null)
   const [notice, setNotice] = useState<Notice>(null)
   const [done, setDone] = useState<Done | null>(null)
+  // Self-confirm (#503): code and names matched; the choice of sign-in follows.
+  const [selfConfirm, setSelfConfirm] = useState<Extract<DiscountCodeState, { status: "self-confirm" }> | null>(null)
   const [confirming, setConfirming] = useState(false)
   const [sending, startSending] = useTransition()
   // Counts restarts, so an answer to a send from before a restart is ignored.
@@ -228,6 +231,7 @@ export function DiscountCodeForm({
     setProblem(null)
     setNotice(null)
     setDone(null)
+    setSelfConfirm(null)
     setConfirming(false)
     // A full restart skips the fold animations, for that one render.
     setInstant(true)
@@ -279,6 +283,10 @@ export function DiscountCodeForm({
         setDone(result)
         return
       }
+      if (result.status === "self-confirm") {
+        setSelfConfirm(result)
+        return
+      }
       // The token is spent once checked, so get a fresh one for the next try.
       turnstile.current?.reset()
       if (result.status === "invalid") return show({ field: result.field, server: true })
@@ -287,6 +295,22 @@ export function DiscountCodeForm({
   }
 
   const topBar = <BrandTopBar variant="complex" language={language} showLanguagePrompt={showLanguagePrompt} onClearForm={startOver} />
+
+  if (selfConfirm) {
+    return (
+      <>
+        {topBar}
+        <SelfConfirmFlow
+          language={language}
+          started={selfConfirm}
+          onChangeEmail={() => {
+            setSelfConfirm(null)
+            setOpen("email")
+          }}
+        />
+      </>
+    )
+  }
 
   if (done) {
     return (

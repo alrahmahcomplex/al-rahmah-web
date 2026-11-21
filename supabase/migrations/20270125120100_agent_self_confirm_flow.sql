@@ -56,7 +56,8 @@ create table public.agent_confirm_numbers (
 
 create index agent_confirm_numbers_attempt_idx on public.agent_confirm_numbers (attempt_id, created_at);
 
--- Wrong names (per agent, an hour) and wrong numbers (per agent, a day).
+-- Wrong names (5 in 30 minutes lock the code, O-N28) and wrong numbers
+-- (10 per agent a day).
 create table public.agent_confirm_misses (
     id uuid primary key default gen_random_uuid(),
     agent_id uuid not null references public.marketing_agents (id),
@@ -138,7 +139,7 @@ begin
 
     perform 1 from public.marketing_agents m where m.id = agent.id for update;
 
-    if (select count(*) from public.agent_confirm_misses x where x.agent_id = agent.id and x.kind = 'names' and x.at > clock_timestamp() - interval '1 hour') >= 5 then
+    if (select count(*) from public.agent_confirm_misses x where x.agent_id = agent.id and x.kind = 'names' and x.at > clock_timestamp() - interval '30 minutes') >= 5 then
         return jsonb_build_object('outcome', 'locked');
     end if;
     if (select count(*) from public.agent_confirm_attempts a where a.browser_digest = start_agent_self_confirm.browser and a.created_at > clock_timestamp() - interval '1 day') >= 3

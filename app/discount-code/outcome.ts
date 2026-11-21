@@ -12,6 +12,11 @@ export type DiscountCodeState =
   | { status: "registered"; code: string; link: string; email: string; discount: number | null }
   // A claim on an existing code waits for the Marketing Office (or a retry of one).
   | { status: "claimed"; code: string; link: string; discount: number | null }
+  // Self-confirm (#503 slice 3, only while it is on): code and names match;
+  // the page goes on to the choice of how to sign in.
+  | { status: "self-confirm"; attempt: string; mobileOnRecord: boolean; typedMatches: boolean; canText: boolean; emailOnRecord: boolean; email: string; phone: string }
+  // Self-confirm locked for the code after too many wrong names.
+  | { status: "self-confirm-locked" }
   // Messages that keep the form, each with its own words.
   | { status: "code-needed" }
   | { status: "phone-mismatch" }
@@ -27,4 +32,4 @@ export type DiscountCodeState =
   | { status: "invalid"; field: AgentField }
   | { status: "unavailable" }
 
-export type DiscountCodeMessage = Exclude<DiscountCodeState["status"], "idle" | "registered" | "claimed" | "invalid">
+export type DiscountCodeMessage = Exclude<DiscountCodeState["status"], "idle" | "registered" | "claimed" | "invalid" | "self-confirm">

@@ -38,11 +38,13 @@ export async function saveStudent(leadId: string, change: { studentName?: string
   }
 }
 
-/** A save in a sheet: pending while it runs, its refusal kept to show. */
+/** A save in a sheet: pending while it runs, refreshing until router.refresh commits, its refusal kept to show. */
 export function useSheetSave() {
   const router = useRouter()
   const [problem, setProblem] = useState<string | null>(null)
   const [pending, startTransition] = useTransition()
+  const [refreshing, startRefresh] = useTransition()
+  const refresh = () => startRefresh(() => router.refresh())
   // `refused` replaces showing the reason in the sheet, for a caller that says more.
   function run(save: () => Promise<CorrectionOutcome>, done: () => void, refused?: (reason: string) => void) {
     setProblem(null)
@@ -50,8 +52,8 @@ export function useSheetSave() {
       const outcome = await save()
       if (outcome.status !== "saved") return refused ? refused(refusalText(outcome)) : setProblem(refusalText(outcome))
       done()
-      router.refresh()
+      refresh()
     })
   }
-  return { problem, setProblem, pending, run, refresh: () => router.refresh() }
+  return { problem, setProblem, pending, refreshing, run, refresh }
 }

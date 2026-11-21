@@ -37,6 +37,8 @@ type Typed = { first: string; ff: string; fm: string; fl: string }
 const typedOf = (n: StudentName): Typed => ({ first: clean(n.firstName), ff: clean(n.fatherFirst), fm: clean(n.fatherMiddle), fl: clean(n.fatherLast) })
 const fatherOf = (t: Typed) => [t.ff, t.fm, t.fl].filter(Boolean).join(" ")
 
+export type NameBusy = false | "saving" | "refreshing"
+
 export function NameSheet({
   leadId,
   studentName,
@@ -54,8 +56,8 @@ export function NameSheet({
   compareWith: SiblingPerson | null
   open: boolean
   onOpenChange: (open: boolean) => void
-  // Told while a save runs, so the card keeps this sheet and opens no other.
-  onBusy: (busy: boolean) => void
+  // Told while a save or its refresh runs, so the card keeps this sheet and opens no other from stale props.
+  onBusy: (busy: NameBusy) => void
 }) {
   // The record as the sheet opened, and the boxes it gave.
   const [opened] = useState(() => ({ studentName, father, parts: nameParts(studentName, father) }))
@@ -66,16 +68,25 @@ export function NameSheet({
   const [fatherSaved, setFatherSaved] = useState<string | null>(null)
   // A refusal opens the sheet again, once no sheet of the father flow is in front.
   const [recover, setRecover] = useState(false)
-  const { pending: renaming, problem, setProblem, run } = useSheetSave()
+  const { pending: renaming, refreshing, problem, setProblem, run, refresh } = useSheetSave()
   // What was sent, for the student's name once the father's is saved.
   const sent = useRef<Typed | null>(null)
   const errorId = useId()
 
   const fatherChanged = (t: Typed) => norm(fatherOf(t)) !== norm(fatherSaved ?? opened.father)
-  // The student's full name the boxes give.
-  const fullNameOf = (t: Typed) =>
-    (fatherSaved === null && !fatherChanged(t) ? withOwnName(opened.studentName, opened.parts.firstName, t.first) : null) ??
-    studentNameOf(t.first, t.ff, t.fl)
+  const sameEnds = (ff: string, fl: string) => norm(ff) === norm(opened.parts.fatherFirst) && norm(fl) === norm(opened.parts.fatherLast)
+  // The student's full name for these parts: when the father's first and last names did not change
+  // (only his middle name, or only the student's own name), keep the stored rest of the student's name
+  // so a two-word last name or an imported spelling is never shortened or rewritten.
+  const studentNameFor = (first: string, ff: string, fl: string) => {
+    if (sameEnds(ff, fl)) {
+      if (norm(first) === norm(opened.parts.firstName)) return opened.studentName
+      const kept = withOwnName(opened.studentName, opened.parts.firstName, first)
+      if (kept) return kept
+    }
+    return studentNameOf(first, ff, fl)
+  }
+  const fullNameOf = (t: Typed) => studentNameFor(t.first, t.ff, t.fl)
 
   function close() {
     setRecover(false)
@@ -90,7 +101,7 @@ export function NameSheet({
     setFatherSaved(savedFather)
     const asTyped = norm(savedFather) === norm(fatherOf(typed))
     const theirs = nameParts(siblingStudentName ?? "", savedFather)
-    const built = asTyped ? studentNameOf(typed.first, typed.ff, typed.fl) : studentNameOf(typed.first, theirs.fatherFirst, theirs.fatherLast)
+    const built = asTyped ? studentNameFor(typed.first, typed.ff, typed.fl) : studentNameFor(typed.first, theirs.fatherFirst, theirs.fatherLast)
     close()
     if (norm(built) === norm(opened.studentName)) {
       if (message) toast(message)
@@ -117,6 +128,7 @@ export function NameSheet({
     father,
     enrolled,
     compareWith,
+    onChanged: refresh,
     onSaved: ({ father: saved, message, siblingStudentName }) => renameAfter(saved, message, siblingStudentName),
     onRefused: (reason) => {
       setBad(reason)
@@ -126,8 +138,8 @@ export function NameSheet({
   })
   const pending = renaming || flow.pending
   useEffect(() => {
-    onBusy(pending)
-  }, [onBusy, pending])
+    onBusy(pending ? "saving" : refreshing ? "refreshing" : false)
+  }, [onBusy, pending, refreshing])
 
   function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -187,7 +199,16 @@ export function NameSheet({
             value={name}
             maxLength={60}
             disabled={pending}
-            invalid={bad ? { firstName: !name.firstName.trim(), fatherFirst: !name.fatherFirst.trim(), fatherMiddle: !name.fatherMiddle.trim(), fatherLast: !name.fatherLast.trim() } : undefined}
+            invalid={
+              bad
+                ? {
+                    firstName: !name.firstName.trim(),
+                    fatherFirst: fatherChanged(draft) && !name.fatherFirst.trim(),
+                    fatherMiddle: fatherChanged(draft) && !name.fatherMiddle.trim(),
+                    fatherLast: fatherChanged(draft) && !name.fatherLast.trim(),
+                  }
+                : undefined
+            }
             aria-describedby={shown ? errorId : undefined}
             onChange={(next) => {
               setName(next)

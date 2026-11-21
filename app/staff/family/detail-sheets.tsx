@@ -1,6 +1,6 @@
 "use client"
 
-import { useId, useRef, useState } from "react"
+import { useEffect, useId, useRef, useState } from "react"
 
 import { Button, ChipButtons, ChoiceTiles, ClassPicker, Field, FieldError, Note, Sheet, toast } from "@/components/kit"
 import type { LeadPreviousSchool, PreviousSchoolType } from "@/lib/services/lead-details"
@@ -68,6 +68,13 @@ export function BoardingSheet({ details, open, onOpenChange }: { details: Studen
   const [picked, setPicked] = useState<DayOrBoarding>(details.dayOrBoarding)
   // The first pick wins: a second tap before its save ends is ignored, so two quick taps never save twice.
   const choosing = useRef(false)
+  const timer = useRef<number | null>(null)
+  useEffect(
+    () => () => {
+      if (timer.current !== null) window.clearTimeout(timer.current)
+    },
+    [],
+  )
   const id = useId()
   return (
     <Sheet
@@ -96,7 +103,8 @@ export function BoardingSheet({ details, open, onOpenChange }: { details: Studen
               choosing.current = true
               const next = value as DayOrBoarding
               setPicked(next)
-              window.setTimeout(() => {
+              timer.current = window.setTimeout(() => {
+                timer.current = null
                 if (next === details.dayOrBoarding) return onOpenChange(false)
                 run(
                   () => saveStudent(details.leadId, { dayOrBoarding: next }),

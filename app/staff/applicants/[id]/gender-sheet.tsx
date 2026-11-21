@@ -29,12 +29,15 @@ export function GenderSheet({
   studentName,
   className,
   gender,
+  disabled,
   onSaved,
 }: {
   leadId: string
   studentName: string
   className: LeadClass
   gender: StudentGender | null
+  // Prevents opening while another sheet on the same card is saving.
+  disabled?: boolean
   // After a save, for a page the save does not refresh itself (the Family page).
   onSaved?: () => void
 }) {
@@ -54,7 +57,7 @@ export function GenderSheet({
   const id = useId()
 
   function changeOpen(next: boolean) {
-    if (pending) return
+    if (pending || (next && disabled)) return
     setOpen(next)
     if (next) {
       setPicked(gender)
@@ -123,7 +126,9 @@ export function GenderSheet({
   const warning = move && move.for === picked && move.moves && move.placed ? genderMoveWarning({ studentName, className }, picked, { placed: move.placed, wouldTake: move.wouldTake }) : null
   return (
     <>
-      <TextLink onClick={() => changeOpen(true)}>{gender ? "Change" : "Give the answer"}</TextLink>
+      <TextLink disabled={disabled} onClick={() => changeOpen(true)}>
+        {gender ? "Change" : "Give the answer"}
+      </TextLink>
       <Sheet
         open={open}
         onOpenChange={changeOpen}

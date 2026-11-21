@@ -28,7 +28,7 @@ export type FamilyStudent = {
   previousSchool: LeadPreviousSchool
   // "Name (Relationship)", or null.
   broughtBy: string | null
-  // On the interview list already; or may be registered now (its first interview).
+  // On the interview list with no result yet; or may be registered now (first interview or retake).
   interview: "registered" | "can-register" | "none"
   // Whom a Sibling request after a father's name change compares with.
   compareWith: SiblingPerson | null
@@ -76,10 +76,12 @@ async function readStudent(leadId: string, permissions: readonly Permission[]) {
     previousSchool: details.data.previousSchool,
     broughtBy: details.data.broughtBy,
     interview:
-      interviews.ok && interviews.data.length > 0
-        ? "registered"
-        : open && registration.ok && registration.data === "first" && permissions.includes("interviews.record")
+      open && registration.ok && registration.data !== null
+        ? permissions.includes("interviews.record")
           ? "can-register"
+          : "none"
+        : interviews.ok && interviews.data.some((row) => row.result === null)
+          ? "registered"
           : "none",
     compareWith: sibling?.compareWith ?? null,
     fee: !fee

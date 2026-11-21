@@ -43,6 +43,12 @@ export type CustodianView = {
 const digits = (value: string) => value.replace(/\D/g, "")
 const cleanPart = (part: string) => part.trim().replace(/\s+/g, " ").toUpperCase()
 const same = (a: string, b: string) => cleanPart(a) === cleanPart(b)
+function normPhone(raw: string): string {
+  const s = raw.replace(/[\s.()[\]-]/g, "")
+  if (/^0\d{9}$/.test(s)) return `+255${s.slice(1)}`
+  if (/^255\d{9}$/.test(s)) return `+${s}`
+  return s
+}
 
 export function CustodianSheet({ custodian: shown, open, onOpenChange }: { custodian: CustodianView; open: boolean; onOpenChange: (open: boolean) => void }) {
   // The custodian as they were when Change opened it. A page refresh while the sheet is open (another
@@ -53,7 +59,8 @@ export function CustodianSheet({ custodian: shown, open, onOpenChange }: { custo
   const shared = custodian.members.every(
     (m) => m.relationship === first.relationship && (m.relationshipDescription ?? "") === (first.relationshipDescription ?? ""),
   )
-  const father = shared && first.relationship === "Father"
+  // A custodian who is the father of any student on the page is not renamed here (settled decision, prototype v54).
+  const father = custodian.members.some((m) => m.relationship === "Father")
   const [name, setName] = useState<PersonName>(() => personParts(custodian.fullName))
   const [relationship, setRelationship] = useState<Relationship>(first.relationship)
   const [description, setDescription] = useState(first.relationshipDescription ?? "")
@@ -77,13 +84,17 @@ export function CustodianSheet({ custodian: shown, open, onOpenChange }: { custo
     if (whatsapp.trim() && digits(whatsapp).length < 10) return setProblem("Type the WhatsApp number in full, or leave it empty.")
 
     const desc = relationship === "Other" ? description.trim() : null
+    const trimmedPhone = phone.trim()
+    const trimmedWhatsapp = whatsapp.trim()
+    // A WhatsApp number equal to the phone is stored as empty; clearing it here avoids sending a lone `whatsapp` that matches `phone` (phone_first).
+    const nextWhatsapp = trimmedWhatsapp === "" || normPhone(trimmedWhatsapp) === normPhone(trimmedPhone) ? null : trimmedWhatsapp
     const changes: ContactChanges = {
       ...(nameChanged ? { fullName } : {}),
       ...(shared && !father && (relationship !== first.relationship || (desc ?? "") !== (first.relationshipDescription ?? ""))
         ? { relationship, relationshipDescription: desc }
         : {}),
-      ...(phone.trim() !== custodian.phone ? { phone: phone.trim() } : {}),
-      ...(whatsapp.trim() !== (custodian.whatsapp ?? "") ? { whatsapp: whatsapp.trim() === "" ? null : whatsapp.trim() } : {}),
+      ...(trimmedPhone !== custodian.phone ? { phone: trimmedPhone } : {}),
+      ...((nextWhatsapp ?? "") !== (custodian.whatsapp ?? "") ? { whatsapp: nextWhatsapp } : {}),
     }
     if (Object.keys(changes).length === 0) {
       onOpenChange(false)

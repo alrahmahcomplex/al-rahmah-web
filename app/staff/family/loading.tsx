@@ -1,5 +1,7 @@
 import { SkeletonBlock } from "@/components/kit"
 
+import "./family.css"
+
 // The Family page while it opens: Back, the header, then the students' cards beside the custodians and fees.
 export default function Loading() {
   return (
@@ -8,7 +10,7 @@ export default function Loading() {
       <SkeletonBlock width={96} height={36} />
       <SkeletonBlock width={320} height={32} />
       <SkeletonBlock width="50%" height={16} />
-      <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1.25fr) minmax(280px, 0.9fr)", gap: 18 }}>
+      <div className="fam-cols">
         <SkeletonBlock height={420} shape="card" />
         <SkeletonBlock height={260} shape="card" />
       </div>

@@ -89,6 +89,40 @@ describe("the father's name changes", () => {
     expect(sentName(0)).toBe("NEEMA JUMA KOMBO")
   })
 
+  it("keeps a mismatched student name whole when only the father's middle name changes", async () => {
+    actions.saveFatherName.mockResolvedValue({ status: "saved", message: "Father’s name saved." })
+    render(<Sheet studentName="NEEMA JUMA DE SOUZA" father="JUMA SALIM DA SOUZA" />)
+    type("Middle name", "SALIM DE")
+    expect(sheet()).toHaveTextContent("Student’s full name: NEEMA JUMA DE SOUZA")
+    await save()
+
+    expect(actions.saveFatherName).toHaveBeenCalledWith("lead", "JUMA SALIM DE SOUZA", null, null)
+    expect(actions.correctStudent).not.toHaveBeenCalled()
+  })
+
+  it("keeps a mismatched two-word last name when both the student's own name and the father's middle name change", async () => {
+    actions.saveFatherName.mockResolvedValue({ status: "saved", message: "Father’s name saved." })
+    render(<Sheet studentName="NEEMA JUMA DE SOUZA" father="JUMA SALIM DA SOUZA" />)
+    type("Student’s name", "AMINA")
+    type("Middle name", "SALIM DE")
+    expect(sheet()).toHaveTextContent("Student’s full name: AMINA JUMA DE SOUZA")
+    await save()
+
+    expect(actions.saveFatherName).toHaveBeenCalledWith("lead", "JUMA SALIM DE SOUZA", null, null)
+    expect(sentName(0)).toBe("AMINA JUMA DE SOUZA")
+  })
+
+  it("does not rewrite an imported student name when only the father's middle name changes", async () => {
+    actions.saveFatherName.mockResolvedValue({ status: "saved", message: "Father’s name saved." })
+    render(<Sheet studentName="NEEMA MRISHO" father="JUMA SALIM MRISHO" />)
+    type("Middle name", "SALEM")
+    expect(sheet()).toHaveTextContent("Student’s full name: NEEMA MRISHO")
+    await save()
+
+    expect(actions.saveFatherName).toHaveBeenCalledWith("lead", "JUMA SALEM MRISHO", null, null)
+    expect(actions.correctStudent).not.toHaveBeenCalled()
+  })
+
   it("asks for all three of the father's names", async () => {
     render(<Sheet studentName="NEEMA JUMA MRISHO" father="JUMA SALIM MRISHO" />)
     type("Middle name", "")

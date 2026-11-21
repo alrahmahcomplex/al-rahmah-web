@@ -35,6 +35,12 @@ describe("familyTitle", () => {
         { studentName: "HAMISI ALLY MRISHO", fatherFullName: "ALLY OMARI MRISHO" },
       ]),
     ).toBe("The Mrisho family")
+    expect(
+      familyTitle([
+        { studentName: "NEEMA JUMA DE SOUZA", fatherFullName: "JUMA SALIM DE SOUZA" },
+        { studentName: "HAMISI JUMA DE SOUZA", fatherFullName: "JUMA SALIM DE SOUZA" },
+      ]),
+    ).toBe("The De Souza family")
   })
 
   it("lists the students' first names when the last names differ or one is missing", () => {

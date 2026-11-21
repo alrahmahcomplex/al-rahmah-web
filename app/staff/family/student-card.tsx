@@ -13,7 +13,7 @@ import { GenderSheet } from "../applicants/[id]/gender-sheet"
 import { registerInterview } from "../applicants/[id]/interview-actions"
 import type { SiblingPerson } from "../applicants/[id]/sibling-read"
 import { BoardingSheet, ClassSheet, SchoolSheet } from "./detail-sheets"
-import { NameSheet } from "./name-sheet"
+import { NameSheet, type NameBusy } from "./name-sheet"
 import type { StudentDetails } from "./saving"
 
 // One student on the Family page (#512, prototype v54): every answer with
@@ -55,8 +55,8 @@ export function StudentCard({ student, canEdit }: { student: StudentCardData; ca
   // Each sheet's edit session. Change mounts only that sheet afresh, so opening another sheet never
   // replaces a name sheet whose father flow is still saving.
   const [session, setSession] = useState({ name: 0, class: 0, board: 0, school: 0 })
-  // While the name sheet saves (its father flow included), it keeps the card: no other sheet opens over it.
-  const [nameBusy, setNameBusy] = useState(false)
+  // While the name sheet saves or its refresh is in flight, it keeps the card: no other sheet opens over it or mounts from stale props.
+  const [nameBusy, setNameBusy] = useState<NameBusy>(false)
   const [registering, startRegister] = useTransition()
   const details: StudentDetails = {
     leadId: lead.id,
@@ -72,9 +72,10 @@ export function StudentCard({ student, canEdit }: { student: StudentCardData; ca
         aria-label={`Change ${label} of ${lead.studentName}`}
         onClick={() => {
           // A new edit session: the sheet mounts again and starts from the record as it is now.
-          // A name sheet still saving (its father flow included) opens again as it is instead.
+          // While the name sheet is saving, reopen it as-is instead of remounting; while its refresh
+          // is still landing, wait so a fresh sheet never starts from pre-save props.
           if (nameBusy) {
-            if (what === "name") setEditing("name")
+            if (nameBusy === "saving" && what === "name") setEditing("name")
             return
           }
           setSession((n) => ({ ...n, [what]: n[what] + 1 }))
@@ -97,7 +98,7 @@ export function StudentCard({ student, canEdit }: { student: StudentCardData; ca
       key: "Boy or girl",
       value: lead.gender ?? <span className="fam-quiet">Not recorded yet</span>,
       action: canEdit ? (
-        <GenderSheet leadId={lead.id} studentName={lead.studentName} className={lead.className} gender={lead.gender} onSaved={() => router.refresh()} />
+        <GenderSheet leadId={lead.id} studentName={lead.studentName} className={lead.className} gender={lead.gender} disabled={Boolean(nameBusy)} onSaved={() => router.refresh()} />
       ) : undefined,
     },
     { key: "Class", value: lead.className, action: change("class", "the class") },

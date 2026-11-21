@@ -36,9 +36,9 @@ const asWord = (word: string) => word.charAt(0).toUpperCase() + word.slice(1).to
  * otherwise "The family of Neema, Hamisi and Zawadi" (owner, prototype v54).
  */
 export function familyTitle(students: readonly { studentName: string; fatherFullName: string | null }[]): string {
-  const lasts = new Set(students.map((s) => (words(s.fatherFullName).at(-1) ?? "").toLowerCase()))
+  const lasts = new Set(students.map((s) => nameParts(s.studentName, s.fatherFullName).fatherLast.toLowerCase()))
   const [last] = lasts
-  if (lasts.size === 1 && last) return `The ${asWord(last)} family`
+  if (lasts.size === 1 && last) return `The ${last.split(" ").map(asWord).join(" ")} family`
   return `The family of ${list(students.map((s) => asWord(words(s.studentName)[0] ?? s.studentName)), "and")}`
 }
 

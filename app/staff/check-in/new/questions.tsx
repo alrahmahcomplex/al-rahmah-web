@@ -51,6 +51,7 @@ import {
   list,
   mentionsSiblings,
   phoneOk,
+  studentName,
   type Answers,
   type Brought,
   type Custodian,
@@ -58,6 +59,7 @@ import {
   type KnownContact,
   type RelationshipChoice,
   type SchoolAnswer,
+  type StudentNameAnswer,
 } from "./model"
 import { listCodesToPick } from "./code-actions"
 
@@ -81,14 +83,16 @@ function again(saved: string | undefined, onPick: (v: string) => void) {
   }
 }
 
-export function NameQuestion({ id, next, saved, onDone }: { id: string; next: boolean; saved?: StudentName; onDone: (name: StudentName) => void }) {
+export function NameQuestion({ id, next, saved, onDone }: { id: string; next: boolean; saved?: StudentNameAnswer; onDone: (name: StudentNameAnswer) => void }) {
   const [name, setName] = useState<StudentName>(saved ?? EMPTY_STUDENT)
+  // The last-name choice the answer holds (#511): kept through a save of the same question, so the name doesn't change.
+  const lastNameFrom = saved?.lastNameFrom ?? "father_last"
   const [bad, setBad] = useState<keyof StudentName | null>(null)
   const titleId = `${id}-title`
   const errId = `${id}-error`
   const clean = (n: StudentName): StudentName => ({ firstName: cleanName(n.firstName), fatherFirst: cleanName(n.fatherFirst), fatherMiddle: cleanName(n.fatherMiddle), fatherLast: cleanName(n.fatherLast) })
   const v = clean(name)
-  const full = [v.firstName, v.fatherFirst, v.fatherLast].filter(Boolean).join(" ")
+  const full = studentName({ ...v, lastNameFrom })
 
   function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -98,7 +102,7 @@ export function NameQuestion({ id, next, saved, onDone }: { id: string; next: bo
       e.currentTarget.querySelector<HTMLInputElement>(`[id="${id}-${missing}"]`)?.focus()
       return
     }
-    onDone(v)
+    onDone({ ...v, lastNameFrom })
   }
 
   return (

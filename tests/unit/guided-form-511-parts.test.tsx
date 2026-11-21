@@ -102,6 +102,24 @@ describe("TypeAheadField", () => {
     expect(screen.getByRole("combobox", { name: "Region" })).toHaveFocus()
   })
 
+  it("picks the option the arrows moved to with Enter, not the faint match", async () => {
+    render(<Region />)
+    await userEvent.click(screen.getByRole("button", { name: "Show all regions" }))
+    await userEvent.type(screen.getByRole("combobox", { name: "Search regions" }), "ka")
+    await userEvent.keyboard("{ArrowDown}{Enter}")
+    expect(screen.getByRole("combobox", { name: "Region" })).toHaveValue("Katavi")
+  })
+
+  it("keeps the letters left when a picked name is edited", async () => {
+    render(<Region />)
+    const box = screen.getByRole("combobox", { name: "Region" })
+    await userEvent.type(box, "arusha")
+    expect(screen.getByRole("status")).toHaveTextContent("Arusha")
+    await userEvent.keyboard("{Backspace}")
+    expect(box).toHaveValue("arush")
+    expect(screen.getByRole("status")).toHaveTextContent("none")
+  })
+
   it("picks with a click", async () => {
     render(<Region />)
     await userEvent.click(screen.getByRole("button", { name: "Show all regions" }))

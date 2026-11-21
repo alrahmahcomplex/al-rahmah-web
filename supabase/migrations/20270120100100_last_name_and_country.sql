@@ -12,12 +12,15 @@
 --    an import, a lead from before #400). No row is backfilled: the names
 --    already stored stay as they are.
 -- 2. previous_school_country: a school Outside Tanzania names its country,
---    one of previous_school_countries(), and the country is required then.
---    Any other region, or Not known yet, has none: a constraint keeps it so.
---    Registration refuses a country with a Tanzanian region.
---    update_lead_details keeps the country while the region stays Outside
---    Tanzania, clears it with any other region, and does not require it, so
---    the record's school correction keeps working until it asks for one.
+--    one of previous_school_countries(). Any other region, or none, has no
+--    country: a constraint keeps it so, and registration refuses a country
+--    with a Tanzanian region. A country left out is accepted for now: the
+--    screens today send none, and refusing it would stop staff saving a
+--    school Outside Tanzania until the country list ships. The release that
+--    adds the list on Register students and Check-in makes it required there.
+--    update_lead_details keeps the stored country while the region stays
+--    Outside Tanzania (an empty one sent keeps it too), checks one when it
+--    is sent, and clears it with any other region.
 -- 3. register_students, complete_admission_visit, create_lead (and so the
 --    Admission form, through submit_admission_form_child),
 --    update_lead_details and admission_form_family carry both.
@@ -26,12 +29,19 @@
 -- written, and the student's name is built as before unless a caller sends
 -- `father_middle`.
 --
+-- Everything below is one `do` block, so it applies whole or not at all: the
+-- CLI runs a file's statements one by one, and a failure half way would
+-- leave register_students and complete_admission_visit on different rules.
+--
 -- Rollback: a new migration putting back registration_name and
 -- registration_previous_school as 20261223100100 and 20261216100100 made
 -- them, register_students and complete_admission_visit as 20270118100100,
 -- create_lead and admission_form_family as 20270117100100, and
 -- update_lead_details as 20261230100100; then dropping the two columns, the
 -- type and the four new functions.
+
+do $migration$
+begin
 
 create type public.student_last_name_from as enum ('father_last', 'father_middle');
 
@@ -117,7 +127,7 @@ alter table public.leads
         check (previous_school_country is null
                or previous_school_country is not distinct from public.previous_school_country(previous_school_country)),
     add constraint leads_previous_school_country_outside_only
-        check (previous_school_country is null or previous_school_region = 'Outside Tanzania');
+        check (previous_school_country is null or previous_school_region is not distinct from 'Outside Tanzania');
 
 -- ---------------------------------------------------------------------------
 -- The registration helpers.
@@ -256,8 +266,9 @@ end;
 $fn$;
 
 -- registration_previous_school_country(school, region, student): the
--- country of a school Outside Tanzania, required and on the list. With any
--- other region, or none, a country given is refused. Internal.
+-- country of a school Outside Tanzania, on the list; null when left out (see
+-- 2 above). With any other region, or none, a country given is refused.
+-- Internal.
 create function public.registration_previous_school_country(school jsonb, region text, student integer)
 returns text
 language plpgsql
@@ -278,7 +289,7 @@ begin
         end if;
         return null;
     end if;
-    if country is null then
+    if typed is not null and country is null then
         raise exception 'invalid'
             using detail = jsonb_build_object('student', registration_previous_school_country.student, 'field', 'previous_school_country')::text;
     end if;
@@ -2230,13 +2241,12 @@ begin
     end if;
 
     -- The country of a school Outside Tanzania (#511): kept while the
-    -- region stays Outside Tanzania, cleared with any other region or
-    -- Not known yet. A country with any other region is refused.
+    -- region stays Outside Tanzania, also when an empty one is sent;
+    -- cleared with any other region or Not known yet. A country with any
+    -- other region, or off the list, is refused.
     school_country := lead.previous_school_country;
     if changes ? 'previous_school_country' then
-        if nullif(btrim(coalesce(changes ->> 'previous_school_country', '')), '') is null then
-            school_country := null;
-        else
+        if nullif(btrim(coalesce(changes ->> 'previous_school_country', '')), '') is not null then
             school_country := public.previous_school_country(changes ->> 'previous_school_country');
             if school_country is null or school_region is distinct from 'Outside Tanzania' then
                 raise exception 'invalid' using detail = jsonb_build_object('field', 'previous_school_country')::text;
@@ -2478,3 +2488,6 @@ begin
     );
 end;
 $function$;
+
+end;
+$migration$;

@@ -89,11 +89,18 @@ export function TypeAheadField({
   const [dismissed, setDismissed] = useState(false)
   const [open, setOpen] = useState(false)
 
-  // A value set from outside (a draft, Start over) shows its label.
+  // A value set from outside (a draft, Start over) shows its label. One this
+  // box sent itself, such as "" while a picked name is edited, keeps the text.
   const [shownValue, setShownValue] = useState(value)
+  const [sent, setSent] = useState<string | null>(null)
   if (shownValue !== value) {
     setShownValue(value)
-    if (exactly(options, text)?.value !== value) setText(labelOf(value))
+    if (value !== sent && exactly(options, text)?.value !== value) setText(labelOf(value))
+    setSent(null)
+  }
+  const send = (next: string, how: "type" | "key" | "pick") => {
+    setSent(next)
+    onValueChange(next, how)
   }
 
   const match = focused && !dismissed && !open ? completion(options, text) : null
@@ -103,13 +110,13 @@ export function TypeAheadField({
     setText(next)
     setDismissed(false)
     const exact = exactly(options, next)
-    if ((exact?.value ?? "") !== value) onValueChange(exact?.value ?? "", "type")
+    if ((exact?.value ?? "") !== value) send(exact?.value ?? "", "type")
   }
 
   function take(option: TypeAheadOption, how: "key" | "pick") {
     setText(option.label)
     setDismissed(true)
-    if (option.value !== value || how === "pick") onValueChange(option.value, how)
+    if (option.value !== value || how === "pick") send(option.value, how)
   }
 
   function onKey(event: KeyboardEvent<HTMLInputElement>) {
@@ -265,10 +272,14 @@ function TypeAheadList({ anchor, listId, options, pinned, value, optionLead, lab
     const calm = prefersReducedMotion()
     if (move > 1) area.scrollBy({ top: move, behavior: calm ? "auto" : "smooth" })
 
+    // The part of the screen a phone keyboard leaves free: the visual viewport, in the page's fixed coordinates.
     const put = () => {
+      const vv = window.visualViewport
+      const top = vv ? vv.offsetTop : 0
+      const bottom = vv ? vv.offsetTop + vv.height : window.innerHeight
       const r = box.getBoundingClientRect()
-      if (r.bottom < 0 || r.top > window.innerHeight) return onClose(false)
-      setPlace({ left: r.left, top: r.bottom + 6, width: r.width, maxHeight: Math.max(170, Math.min(want, window.innerHeight - r.bottom - 18)) })
+      if (r.bottom < top || r.top > bottom) return onClose(false)
+      setPlace({ left: r.left, top: r.bottom + 6, width: r.width, maxHeight: Math.max(120, Math.min(want, bottom - r.bottom - 18)) })
     }
     const timer = window.setTimeout(put, move > 1 && !calm ? 360 : 0)
     const onScroll = (event: Event) => {
@@ -276,10 +287,14 @@ function TypeAheadList({ anchor, listId, options, pinned, value, optionLead, lab
     }
     window.addEventListener("scroll", onScroll, true)
     window.addEventListener("resize", put)
+    window.visualViewport?.addEventListener("resize", put)
+    window.visualViewport?.addEventListener("scroll", put)
     return () => {
       window.clearTimeout(timer)
       window.removeEventListener("scroll", onScroll, true)
       window.removeEventListener("resize", put)
+      window.visualViewport?.removeEventListener("resize", put)
+      window.visualViewport?.removeEventListener("scroll", put)
       area.style.paddingBottom = padWas
     }
     // Placed once per opening; scrolling and resizing place it again.
@@ -310,7 +325,8 @@ function TypeAheadList({ anchor, listId, options, pinned, value, optionLead, lab
   }, [at, listId, place])
 
   function onKey(event: KeyboardEvent<HTMLInputElement>) {
-    if (match && takesCompletion(event.key, { shift: event.shiftKey, caretAtEnd: true, fits: startsWith(shown, query).length })) {
+    // Enter picks the highlighted option below, which starts on the faint match and moves with the arrows.
+    if (event.key !== "Enter" && match && takesCompletion(event.key, { shift: event.shiftKey, caretAtEnd: true, fits: startsWith(shown, query).length })) {
       event.preventDefault()
       onPick(match)
       return

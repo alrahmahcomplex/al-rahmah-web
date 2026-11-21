@@ -120,5 +120,8 @@ test("a browser already signed in is asked to sign out first, so a right number 
   await expect(page.locator('input[name="cf-turnstile-response"]').first()).toHaveValue(/.+/, { timeout: 20_000 })
   await page.getByRole("button", { name: "Tuma", exact: true }).click()
   await expect(notice(page)).toContainText("Kivinjari hiki kimeingia kwenye akaunti.")
-  await expect(page.getByRole("button", { name: "Toka" })).toBeVisible()
+  await page.getByRole("button", { name: "Toka" }).click()
+  // Back on the forgot page, signed out, ready for the reset.
+  await expect(page).toHaveURL(/\/auth\/forgot-password$/)
+  await expect(page.getByLabel("Barua pepe au namba ya simu")).toBeVisible()
 })

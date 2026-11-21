@@ -9,8 +9,9 @@ import { createClient } from "@/utils/supabase/server"
 // The pages that refuse while another kind of account is signed in in this
 // browser (one account per browser), and to which signing out returns, with
 // their query (the invite or reset link). Matched by the whole path, so no
-// other address under /auth or /discount-code comes back.
-const RETURN_TO = ["/auth", "/auth/confirm", "/auth/reset-password", "/discount-code/set-password"]
+// other address under /auth or /discount-code comes back. The forgot page
+// asks a signed-in browser to sign out before a reset by SMS (#503).
+const RETURN_TO = ["/auth", "/auth/confirm", "/auth/reset-password", "/auth/forgot-password", "/discount-code/set-password"]
 
 function returnPath(back: string): string {
   return RETURN_TO.includes(back.split(/[?#]/)[0]) ? back : "/auth"

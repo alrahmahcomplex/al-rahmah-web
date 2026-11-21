@@ -106,6 +106,39 @@ describe("SchoolQuestion", () => {
   })
 })
 
+describe("SchoolQuestion at check-in, round 2 of #526", () => {
+  const OLD = { name: "IS", type: "private" as const, region: "Outside Tanzania" }
+
+  it("takes a two-letter school name, as the database does", async () => {
+    const onDone = vi.fn()
+    render(<SchoolQuestion id="s" first="YUSUF" saved={OLD} needsCountry onDone={onDone} onNotKnown={() => {}} />)
+    await userEvent.type(screen.getByRole("combobox", { name: "Country" }), "uga")
+    await userEvent.keyboard("{Enter}")
+    await userEvent.click(screen.getByRole("button", { name: /Continue/ }))
+    expect(onDone).toHaveBeenCalledWith({ ...OLD, country: "Uganda" })
+  })
+
+  it("asks once more before Not known yet takes the school on file off the record", async () => {
+    const onNotKnown = vi.fn()
+    render(<SchoolQuestion id="s" first="YUSUF" saved={OLD} needsCountry onDone={() => {}} onNotKnown={onNotKnown} />)
+    await userEvent.click(screen.getByRole("button", { name: "Not known yet" }))
+    expect(onNotKnown).not.toHaveBeenCalled()
+    expect(screen.getByText("Not known yet takes IS off the record. Press Not known yet again to go ahead, or choose the country.")).toBeInTheDocument()
+    await userEvent.click(screen.getByRole("button", { name: "Not known yet" }))
+    expect(onNotKnown).toHaveBeenCalledTimes(1)
+  })
+
+  it("keeps the caret in the school's name when staff go back to it before the region box opens", async () => {
+    render(<SchoolQuestion id="s" first="YUSUF" onDone={() => {}} onNotKnown={() => {}} />)
+    const name = screen.getByRole("textbox", { name: "School name" })
+    await userEvent.type(name, "green hills")
+    await userEvent.click(screen.getByRole("radio", { name: "Private" }))
+    await userEvent.click(name)
+    await new Promise((r) => setTimeout(r, 450))
+    expect(name).toHaveFocus()
+  })
+})
+
 describe("CustodianQuestion", () => {
   const base = { id: "c1", names: "YUSUF", father: "ALI OMARI HASSAN", first: null, canCheck: false, otherFather: null }
 

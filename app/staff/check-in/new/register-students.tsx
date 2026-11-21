@@ -218,6 +218,8 @@ function RegisterForm({ staffId, today, years, defaultYear, fees, canLink, canEn
   const [round, setRound] = useState(0)
   const roundRef = useRef(0)
   const [pending, setPending] = useState(false)
+  // Saved, and the finished screen is on its way: the form stays locked until it shows.
+  const [saved, setSaved] = useState(false)
   const [failure, setFailure] = useState<ReactNode>(null)
   // The fee and group of each child on file staff linked, or "failed" when it could not be read.
   const [onFileFees, setOnFileFees] = useState<Record<string, OnFileFee | "failed">>({})
@@ -271,7 +273,7 @@ function RegisterForm({ staffId, today, years, defaultYear, fees, canLink, canEn
     timers.add(id)
   }
 
-  const locked = pending || !!finished
+  const locked = pending || saved || !!finished
   function answer(id: string, change: (a: Answers) => Answers) {
     if (locked) return
     setInteracted(true)
@@ -295,6 +297,7 @@ function RegisterForm({ staffId, today, years, defaultYear, fees, canLink, canEn
     setAnswers(mode ? mode.start : freshAnswers(nextKey()))
     setEdit(null)
     setFinished(null)
+    setSaved(false)
     setInterviewOpen(false)
     setInterviewed({})
     setBusyInterview({})
@@ -936,7 +939,11 @@ function RegisterForm({ staffId, today, years, defaultYear, fees, canLink, canEn
             codeMissed: outcome.status === "created" ? outcome.codeMissed : 0,
             unknownSchools,
           }
-          later(() => setFinished(done), FINISH_MS)
+          setSaved(true)
+          later(() => {
+            setFinished(done)
+            setSaved(false)
+          }, FINISH_MS)
           return
         }
         if (outcome.status === "questions") {

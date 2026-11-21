@@ -322,7 +322,7 @@ Searching by exact **Admission Number** always finds the lead, whatever its stat
 
 The dashboard reports **Visited leads** and **Interviewed leads**, each filterable by date, week, month, and year. It also reports **Passed interviews**, **Failed interviews**, **Enrolled students**, and **Leads by enrollment class**.
 
-All dashboard metrics show overall totals by default. Each metric provides a filter icon and a simple dropdown allowing the user to choose a date, week, month, or year reporting period.
+Each dashboard metric opens on **All time** for the **Current admission year** by default, with a filter icon and dropdowns allowing the user to choose a date, week, month, or year reporting period and any **Enrollment year** (or **All years**).
 
 **Leads by enrollment class** shows the number of leads in each fixed class for the selected reporting period.
 
@@ -332,7 +332,7 @@ The reporting period says when something happened, in calendar terms and Tanzani
 
 **Enrolled students** counts the leads that are **Enrolled** now, by the date **Enrolled** was triggered as the lead's School fee records it. A lead that went back below the line through a payment adjustment or a fee change, or was **Declined** after it was Enrolled, is left out. An Enrolled lead marked **Inactive** or **Archived** still counts, since a closure mark isn't a status. A lead enrolled on the **Academic-year start** counts on the start date, and an adjustment that moves the trigger date moves the lead to that date's period.
 
-Every panel opens on **All time** and **All years**, and each panel keeps its own filters, so two panels can show different periods side by side. The **Enrollment year** filter always uses the lead's current enrollment year, so one child counts in one intake on every panel.
+Every panel opens on **All time** and the **Current admission year** (with **All years** still selectable), and each panel keeps its own filters, so two panels can show different periods or intakes side by side. The **Enrollment year** filter always uses the lead's current enrollment year, so one child counts in one intake on every panel.
 
 Only **Enrolled students** depends on a lead's current status. The other metrics count what happened, whatever the lead's status or closure mark is now: a lead that visited and was later **Declined** or marked **Archived** still counts in **Visited leads**.
 
@@ -340,7 +340,7 @@ Counts follow corrected values. A corrected **Visit date**, interview date, resu
 
 **Seats by class** shows, for each class and **Enrollment year**, each **Stream**'s seats, the leads placed in it by **Seat priority** and its free seats, then the class total with how many are **Waiting for a stream**. A class with no streams has no seat limit, so it shows only its seat holders by **Seat priority**.
 
-**Seats by class** is a snapshot of the seats as they stand now, so it has only an **Enrollment year** filter and no period. It opens on the latest year with a Fee schedule and offers the other years that have one. It shows counts, never the leads holding the seats, and only to staff who may view payments.
+**Seats by class** is a snapshot of the seats as they stand now, so it has only an **Enrollment year** filter and no period. It opens on the latest year with a Fee schedule up to the **Current admission year** (or the earliest schedule when every schedule is later), matching the Seats screen and Home, and offers the other years that have one. It shows counts, never the leads holding the seats, and only to staff who may view payments.
 
 **Sibling counts** list the cases that need a person: **Sibling requests** by age, **Granted: fee edit needed**, typing mistakes confirmed by each staff member, **Manual Sibling fee edits** by reason and by accountant, **Legacy members** that kept a 10% on leaving, students **Enrolled** with the Sibling 10% whose group has nobody Enrolled at full, and students from STD 2 up whose **Previous school** is **Not known yet** or not answered.
 
@@ -462,6 +462,9 @@ Sibling students are interviewed and assessed independently. Each student receiv
 
 **Enrollment year**:
 The single calendar year in which the student is planned to enroll, such as **2026** or **2027**. It is selected by staff, or on the **Admission form** from the current calendar year and the next, and must not be represented as an academic-year range.
+
+**Current admission year**:
+The **Enrollment year** the school is currently admitting for, in Tanzania time. From **1 June** (when the second term starts) through **31 December**, it is the next calendar year (`year + 1`); from **1 January** through **31 May**, it is the current calendar year. Every default enrollment year in the system — the **Admission form**, staff registration and check-in, Home, Reports, Interviews, Seats, Fee schedule and WhatsApp groups — starts on the current admission year.
 
 **Class**:
 A fixed school class selected from the current workbook list: **DAY CARE**, **KG 1**, **KG 2**, **STD 1** through **STD 7**, and **FORM 1** through **FORM 4**. Staff cannot create ad hoc class values. The workbook's **PRE-FORM ONE** is not a class: such a student is a **FORM 1** lead on the **Pre-Form One programme**.

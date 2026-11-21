@@ -45,11 +45,13 @@ export function PanelFilter({
   panelKey,
   title,
   filters,
+  defaultYear,
   enrollmentYears,
 }: {
   panelKey: string
   title: string
   filters: DashboardFilters
+  defaultYear: number
   enrollmentYears: number[]
 }) {
   const router = useRouter()
@@ -87,7 +89,7 @@ export function PanelFilter({
     if (filtersKey(next) === filtersKey(shown)) return
     setShown(next)
     setPending([...pending, filtersKey(next)])
-    router.push(panelHref(new URLSearchParams(searchParams), panelKey, next), { scroll: false })
+    router.push(panelHref(new URLSearchParams(searchParams), panelKey, next, defaultYear), { scroll: false })
   }
 
   function setPeriod(next: Period) {
@@ -99,17 +101,17 @@ export function PanelFilter({
     setPeriod(kind === "all" ? { kind } : { kind, anchor: anchorFor(kind, today) })
   }
 
-  // Year options: the years leads carry, and the one chosen even if no lead
-  // carries it any more.
-  const years = enrollmentYear !== null && !enrollmentYears.includes(enrollmentYear)
-    ? [...enrollmentYears, enrollmentYear].sort((a, b) => b - a)
-    : enrollmentYears
+  // Year options: the years leads carry, the default admission year, and the
+  // one chosen even if no lead carries it any more.
+  const years = Array.from(
+    new Set([...enrollmentYears, defaultYear, ...(enrollmentYear !== null ? [enrollmentYear] : [])]),
+  ).sort((a, b) => b - a)
   const yearOptions = periodYears(today, anchor, enrollmentYears).map((year) => ({ value: String(year), label: String(year) }))
 
   return (
     <Popover
       trigger={
-        <FilterButton label={`Filter ${title}`} on={isFiltered(shown)} />
+        <FilterButton label={`Filter ${title}`} on={isFiltered(shown, defaultYear)} />
       }
       title={title}
       closeLabel="Close"

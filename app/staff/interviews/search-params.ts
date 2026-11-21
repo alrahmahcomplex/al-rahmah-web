@@ -34,10 +34,10 @@ export function parseInterviewSearch(params: SearchParams): InterviewScreenSearc
   }
 }
 
-// The year the screen opens on: the current year when it has registrations.
-// Interviews run ahead of the intake they are for, so when it has none, the
-// next year that has some; failing that the latest one, and with no
-// registrations at all, the current year.
+// The year the screen opens on: the current admission year when it has
+// registrations. Interviews run ahead of the intake they are for, so when it
+// has none, the next year that has some; failing that the latest one, and with
+// no registrations at all, the current admission year.
 export function defaultInterviewYear(years: readonly number[], currentYear: number): number {
   if (years.includes(currentYear)) return currentYear
   const later = years.filter((year) => year > currentYear)

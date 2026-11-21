@@ -68,6 +68,7 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
     mayCallBack(permissions) ? getOverdueCount(supabase) : null,
     canSeeSeats ? seatsOnOpening(supabase, today) : null,
     mayDecideDiscounts(permissions) ? countPendingDiscountRequests(supabase) : null,
+    // home_chart_counts still filters by created_at calendar year; #518 switches it to enrollment_year and currentAdmissionYear.
     canView ? getHomeChartCounts(supabase, Number(today.slice(0, 4))) : null,
   ])
 

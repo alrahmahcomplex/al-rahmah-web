@@ -34,6 +34,7 @@ export function ExportSheet({
   search,
   shownCount,
   years,
+  defaultYear = years[0],
 }: {
   options: ExportOptions
   // The list's search as the page shows it, for "The list as filtered now".
@@ -41,10 +42,11 @@ export function ExportSheet({
   // How many applicants the list shows; null when it couldn't be read.
   shownCount: number | null
   years: number[]
+  defaultYear?: number
 }) {
   const [open, setOpen] = useState(false)
   const [scope, setScope] = useState<ExportScope>("shown")
-  const [year, setYear] = useState(years[0])
+  const [year, setYear] = useState(years.includes(defaultYear) ? defaultYear : years[0])
   const [preset, setPreset] = useState(options.presets[0].key)
   const [ticked, setTicked] = useState<string[]>(options.presets[0].choices)
   const [counts, setCounts] = useState<ExportCounts>(null)

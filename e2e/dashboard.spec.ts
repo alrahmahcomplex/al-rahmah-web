@@ -1,7 +1,7 @@
 import { type Page } from "@playwright/test"
 import { expect, test } from "./staff-test"
 
-import { formatDate, tanzaniaToday } from "@/lib/school-calendar"
+import { currentAdmissionYear, defaultSeatsYear, formatDate, tanzaniaToday } from "@/lib/school-calendar"
 
 import { createThrowawayStaff } from "../tests/support/db"
 import { MANAGER, type FixtureStaff } from "../tests/support/fixtures"
@@ -27,14 +27,30 @@ async function choose(page: Page, select: string, option: string) {
   await chooseOption(page.getByRole("combobox", { name: select, exact: true }), option)
 }
 
-test("the Visited applicants tile shows all time by default", async ({ page }) => {
+const admissionYear = currentAdmissionYear()
+const defaultPeriod = `All time · Enrollment year ${admissionYear}`
+const resetLabel = `Show all time for ${admissionYear}`
+
+test("the Visited applicants tile opens on All time for the current admission year, with All years selectable", async ({ page }) => {
   await signIn(page, MANAGER)
 
   const panel = visitedPanel(page)
   await expect(panel).toBeVisible()
-  await expect(panel.getByTestId("visited-period")).toHaveText("All time · All years")
+  await expect(panel.getByTestId("visited-period")).toHaveText(defaultPeriod)
   await expect(panel.getByTestId("visited-count")).toHaveText(/^\d[\d,]*$/)
-  await expect(panel.getByRole("link", { name: "Show all time and all years" })).toHaveCount(0)
+  await expect(panel.getByRole("link", { name: resetLabel })).toHaveCount(0)
+
+  await panel.getByRole("button", { name: "Filter Visited applicants" }).click()
+  await choose(page, "Enrollment year", "All years")
+  await expect(page).toHaveURL(/[?&]visited_year=all/)
+  await expect(panel.getByTestId("visited-period")).toHaveText("All time · All years")
+  await page.keyboard.press("Escape")
+  await page.reload()
+  await expect(panel.getByTestId("visited-period")).toHaveText("All time · All years")
+
+  await panel.getByRole("link", { name: resetLabel }).click()
+  await expect(page).toHaveURL(/\/staff\/reports$/)
+  await expect(panel.getByTestId("visited-period")).toHaveText(defaultPeriod)
 })
 
 test("filters chosen from the filter icon go into the address, survive a reload and clear in one click", async ({ page }) => {
@@ -65,9 +81,9 @@ test("filters chosen from the filter icon go into the address, survive a reload 
   await expect(panel.getByTestId("visited-period")).toHaveText("September 2026 · Enrollment year 2031")
   await expect(panel.getByTestId("visited-count")).toHaveText("6")
 
-  await panel.getByRole("link", { name: "Show all time and all years" }).click()
+  await panel.getByRole("link", { name: resetLabel }).click()
   await expect(page).toHaveURL(/\/staff\/reports$/)
-  await expect(panel.getByTestId("visited-period")).toHaveText("All time · All years")
+  await expect(panel.getByTestId("visited-period")).toHaveText(defaultPeriod)
 })
 
 test("a shared address opens the same view, with the week named by its Monday", async ({ page }) => {
@@ -80,11 +96,11 @@ test("a shared address opens the same view, with the week named by its Monday", 
   await expect(panel.getByTestId("visited-count")).toHaveText("4")
 })
 
-test("an unreadable address falls back to All time and All years", async ({ page }) => {
+test("an unreadable address falls back to All time and the current admission year", async ({ page }) => {
   await signIn(page, MANAGER)
   await page.goto("/staff/reports?visited=fortnight:2026-02-30&visited_year=next")
 
-  await expect(visitedPanel(page).getByTestId("visited-period")).toHaveText("All time · All years")
+  await expect(visitedPanel(page).getByTestId("visited-period")).toHaveText(defaultPeriod)
 })
 
 test("the interview tiles each keep their own filters in the address", async ({ page }) => {
@@ -97,7 +113,7 @@ test("the interview tiles each keep their own filters in the address", async ({ 
     [passed, "passed"],
     [failed, "failed"],
   ] as const) {
-    await expect(panel.getByTestId(`${key}-period`)).toHaveText("All time · All years")
+    await expect(panel.getByTestId(`${key}-period`)).toHaveText(defaultPeriod)
     await expect(panel.getByTestId(`${key}-count`)).toHaveText(/^\d[\d,]*$/)
   }
 
@@ -128,7 +144,7 @@ const enrolledPanel = (page: Page) => page.getByRole("region", { name: "Enrolled
 test("the Enrolled students tile keeps its own filters in the address", async ({ page }) => {
   await signIn(page, MANAGER)
   const enrolled = enrolledPanel(page)
-  await expect(enrolled.getByTestId("enrolled-period")).toHaveText("All time · All years")
+  await expect(enrolled.getByTestId("enrolled-period")).toHaveText(defaultPeriod)
   await expect(enrolled.getByTestId("enrolled-count")).toHaveText(/^\d[\d,]*$/)
   await expect(enrolled.getByText("Counted by the date Enrolled was triggered")).toBeVisible()
 
@@ -198,9 +214,9 @@ test("changing the Applicants by enrollment class filters leaves the Visited app
   await expect(classes.getByTestId("classes-period")).toHaveText("28 Sept 2026 · Enrollment year 2031")
   await expect(classes.getByTestId("classes-total")).toHaveText("1")
 
-  await classes.getByRole("link", { name: "Show all time and all years" }).click()
+  await classes.getByRole("link", { name: resetLabel }).click()
   await expect(page).toHaveURL(/\/staff\/reports$/)
-  await expect(classes.getByTestId("classes-period")).toHaveText("All time · All years")
+  await expect(classes.getByTestId("classes-period")).toHaveText(defaultPeriod)
 })
 
 test("a role that reads leads and payments but lacks reports.view sees no statistics", async ({ page }) => {
@@ -252,32 +268,33 @@ test("the Manager sees Seats by class for 2031, counts only, with the link to th
   await expect(page.getByRole("list", { name: "STD 2 streams" }).getByRole("listitem")).toContainText("3 of 3")
 })
 
-test("Seats by class opens on the latest year with a Fee schedule and keeps a chosen year in the address", async ({ page }) => {
+test("Seats by class opens on the current admission year and keeps a chosen year in the address", async ({ page }) => {
   await signIn(page, MANAGER)
   await page.goto("/staff/reports?visited_year=2031")
   const panel = seatsPanel(page)
   await expect(panel.getByTestId("seats-period")).toHaveText(/^Now · Enrollment year \d{4}$/)
   const opened = Number((await panel.getByTestId("seats-period").textContent())!.slice(-4))
 
-  // The years with a Fee schedule, newest first; the panel opened on the first.
+  // The years with a Fee schedule, newest first; the panel opened on the default seats year.
   await panel.getByRole("button", { name: "Filter Seats by class" }).click()
   await page.getByRole("combobox", { name: "Enrollment year", exact: true }).click()
   const years = (await page.getByRole("option").allTextContents()).map(Number)
   expect(years).toContain(2027)
   expect(years).toContain(2031)
   expect(years).toEqual([...years].sort((a, b) => b - a))
-  expect(opened).toBe(years[0])
-  await page.getByRole("option", { name: "2027", exact: true }).click()
+  expect(opened).toBe(defaultSeatsYear(years, tanzaniaToday()))
+  const other = opened === 2031 ? 2027 : 2031
+  await page.getByRole("option", { name: String(other), exact: true }).click()
 
-  await expect(page).toHaveURL(/[?&]seats_year=2027/)
+  await expect(page).toHaveURL(new RegExp(`[?&]seats_year=${other}`))
   await expect(page).toHaveURL(/[?&]visited_year=2031/)
-  await expect(panel.getByTestId("seats-period")).toHaveText("Now · Enrollment year 2027")
+  await expect(panel.getByTestId("seats-period")).toHaveText(`Now · Enrollment year ${other}`)
   // The open filter keeps focus inside it, so close it to read the other panels.
   await page.keyboard.press("Escape")
   await expect(visitedPanel(page).getByTestId("visited-period")).toHaveText("All time · Enrollment year 2031")
 
   await page.reload()
-  await expect(panel.getByTestId("seats-period")).toHaveText("Now · Enrollment year 2027")
+  await expect(panel.getByTestId("seats-period")).toHaveText(`Now · Enrollment year ${other}`)
 })
 
 test("a role holding reports.view finds Reports in the sidebar and opens it (#241)", async ({ page }) => {

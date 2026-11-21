@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest"
 
+import { defaultSeatsYear, tanzaniaToday } from "@/lib/school-calendar"
 import { getSeatFiguresByClass, getSeatsByClass, type ClassStreamFigures, type SeatsByClass } from "@/lib/services/dashboard"
 import type { ClassStreams } from "@/lib/services/streams"
 
@@ -136,23 +137,25 @@ describe("Seats by class, for Home", () => {
 })
 
 describe("the year shown", () => {
-  test("opens on the latest year with a Fee schedule, and offers every year that has one", async () => {
+  test("opens on the default seats year for the current admission year, and offers every year with a Fee schedule", async () => {
+    const today = tanzaniaToday()
     for (const read of [getSeatsByClass, getSeatFiguresByClass]) {
-      const result = await read(await signedIn(MANAGER))
+      const result = await read(await signedIn(MANAGER), null, today)
       if (!result.ok) throw new Error(`seats refused: ${result.error}`)
       const { year, years } = result.data
       expect(years).toContain(YEAR)
       expect(years).toContain(2027)
       expect(years).toEqual([...years].sort((a, b) => b - a))
-      expect(year).toBe(years[0])
+      expect(year).toBe(defaultSeatsYear(years, today))
     }
   })
 
-  test("a year with no Fee schedule falls back to the latest that has one", async () => {
-    const result = await getSeatsByClass(await signedIn(MANAGER), 1999)
+  test("a year with no Fee schedule falls back to the default seats year", async () => {
+    const today = tanzaniaToday()
+    const result = await getSeatsByClass(await signedIn(MANAGER), 1999, today)
     if (!result.ok) throw new Error(`seats refused: ${result.error}`)
     expect(result.data.years).not.toContain(1999)
-    expect(result.data.year).toBe(result.data.years[0])
+    expect(result.data.year).toBe(defaultSeatsYear(result.data.years, today))
   })
 })
 

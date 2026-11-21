@@ -13,6 +13,24 @@ export function enrollmentYears(now: Date = new Date()): number[] {
   return [year, year + 1, year + 2]
 }
 
+// The school's current admission year for a Tanzania date (YYYY-MM-DD):
+// the calendar year before 1 June, and the next calendar year from 1 June.
+export function currentAdmissionYear(tanzaniaDate: string = tanzaniaToday()): number {
+  const year = Number(tanzaniaDate.slice(0, 4))
+  const month = Number(tanzaniaDate.slice(5, 7))
+  return month >= 6 ? year + 1 : year
+}
+
+// The year a seats view opens on: the latest year with a Fee schedule up to
+// the current admission year, or the earliest when every schedule is later.
+// Null when there is none.
+export function defaultSeatsYear(years: readonly number[], today: string = tanzaniaToday()): number | null {
+  if (years.length === 0) return null
+  const admissionYear = currentAdmissionYear(today)
+  const upToCurrent = years.filter((year) => year <= admissionYear)
+  return upToCurrent.length > 0 ? Math.max(...upToCurrent) : Math.min(...years)
+}
+
 // A YYYY-MM-DD date as a reader would say it, such as "29 Sep 2026".
 export function formatDate(date: string): string {
   const [year, month, day] = date.split("-").map(Number)

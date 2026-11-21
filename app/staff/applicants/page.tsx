@@ -2,7 +2,7 @@ import type { Metadata } from "next"
 
 import { ButtonLink, Card, Note, PageHeader, pageTitle } from "@/components/kit"
 import { nextStep, nextStepText } from "@/lib/lead-next-step"
-import { enrollmentYears, formatDate, tanzaniaToday } from "@/lib/school-calendar"
+import { currentAdmissionYear, enrollmentYears, formatDate, tanzaniaToday } from "@/lib/school-calendar"
 import { listNextStepFacts } from "@/lib/services/lead-next-steps"
 import { listGroupLinks } from "@/lib/services/group-links"
 import { searchLeads, type SiblingFollowUp } from "@/lib/services/leads"
@@ -128,6 +128,7 @@ export default async function ApplicantsPage({
                 search={listSearch}
                 shownCount={results.ok ? results.data.total : null}
                 years={enrollmentYears()}
+                defaultYear={currentAdmissionYear(today)}
               />
             )}
             {canRegister && (

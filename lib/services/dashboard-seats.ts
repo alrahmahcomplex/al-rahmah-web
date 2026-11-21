@@ -1,5 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 
+import { defaultSeatsYear, tanzaniaToday } from "@/lib/school-calendar"
+
 import { listFeeSchedules } from "./fees"
 import type { LeadClass } from "./leads"
 import type { Result } from "./result"
@@ -49,10 +51,16 @@ export type SeatsByClass = ShownYear & { streams: YearStreams | null }
 /** Reports' seats: counts by stream, every class in class order; empty when `year` is null. */
 export type SeatFiguresByClass = ShownYear & { classes: ClassStreamFigures[] }
 
-// The year to show: `year`, or the latest year with a Fee schedule when
-// `year` is left out or has none. Needs payments.view, checked here first, so
-// a staff member without it gets `forbidden` and no seat is read.
-async function shownYear(supabase: SupabaseClient, year: number | null | undefined): Promise<Result<ShownYear, "forbidden" | "unavailable">> {
+// The year to show: `year`, or the default seats year (the latest year with a
+// Fee schedule up to the current admission year, or the earliest when every
+// schedule is later) when `year` is left out or has none. Needs payments.view,
+// checked here first, so a staff member without it gets `forbidden` and no
+// seat is read.
+async function shownYear(
+  supabase: SupabaseClient,
+  year: number | null | undefined,
+  today: string = tanzaniaToday(),
+): Promise<Result<ShownYear, "forbidden" | "unavailable">> {
   const permitted = await supabase.rpc("has_permission", { permission: "payments.view" })
   if (permitted.error) {
     // 42501: not signed in, so the function may not be called at all.
@@ -65,12 +73,17 @@ async function shownYear(supabase: SupabaseClient, year: number | null | undefin
   const schedules = await listFeeSchedules(supabase)
   if (!schedules.ok) return schedules
   const years = schedules.data.map((schedule) => schedule.year).toSorted((a, b) => b - a)
-  return { ok: true, data: { year: year != null && years.includes(year) ? year : (years[0] ?? null), years } }
+  const chosen = year != null && years.includes(year) ? year : defaultSeatsYear(years, today)
+  return { ok: true, data: { year: chosen, years } }
 }
 
 /** Home's seats in `year` (see shownYear). */
-export async function getSeatsByClass(supabase: SupabaseClient, year?: number | null): Promise<Result<SeatsByClass, "forbidden" | "unavailable">> {
-  const shown = await shownYear(supabase, year)
+export async function getSeatsByClass(
+  supabase: SupabaseClient,
+  year?: number | null,
+  today?: string,
+): Promise<Result<SeatsByClass, "forbidden" | "unavailable">> {
+  const shown = await shownYear(supabase, year, today)
   if (!shown.ok) return shown
   if (shown.data.year === null) return { ok: true, data: { ...shown.data, streams: null } }
   const streams = await getYearStreams(supabase, shown.data.year)
@@ -82,8 +95,9 @@ export async function getSeatsByClass(supabase: SupabaseClient, year?: number | 
 export async function getSeatFiguresByClass(
   supabase: SupabaseClient,
   year?: number | null,
+  today?: string,
 ): Promise<Result<SeatFiguresByClass, "forbidden" | "unavailable">> {
-  const shown = await shownYear(supabase, year)
+  const shown = await shownYear(supabase, year, today)
   if (!shown.ok) return shown
   if (shown.data.year === null) return { ok: true, data: { ...shown.data, classes: [] } }
   const counted = await yearSeatFigures(supabase, shown.data.year)

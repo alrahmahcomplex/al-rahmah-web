@@ -1,7 +1,7 @@
 import type { Metadata } from "next"
 
 import { ButtonLink, Card, EmptyState, FilterPills, Note, PageHeader, pageTitle, Pagination } from "@/components/kit"
-import { tanzaniaToday } from "@/lib/school-calendar"
+import { currentAdmissionYear } from "@/lib/school-calendar"
 import type { InterviewFeeStatus } from "@/lib/services/interviews"
 import {
   listInterviews,
@@ -68,10 +68,10 @@ export default async function InterviewsPage({
     )
   }
 
-  const currentYear = Number(tanzaniaToday().slice(0, 4))
+  const admissionYear = currentAdmissionYear()
   const search: InterviewListSearch = {
     ...asked,
-    enrollmentYear: asked.enrollmentYear ?? defaultInterviewYear(years.data, currentYear),
+    enrollmentYear: asked.enrollmentYear ?? defaultInterviewYear(years.data, admissionYear),
   }
   const results = await listInterviews(supabase, search)
   // The Result sent column, for the interviews on this page.

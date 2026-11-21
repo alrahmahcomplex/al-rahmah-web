@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 
+import { currentAdmissionYear, tanzaniaToday } from "@/lib/school-calendar"
 import { getLeadsByClass, getMetricCount, getSeatFiguresByClass, listEnrollmentYears, type DashboardMetric } from "@/lib/services/dashboard"
 
 import "../reports.css"
@@ -37,18 +38,20 @@ export async function Dashboard({
   searchParams: SearchParams
   canOpenSeats: boolean
 }) {
+  const today = tanzaniaToday()
+  const defaultYear = currentAdmissionYear(today)
   const query = toURLSearchParams(searchParams)
-  const classFilters = parsePanelFilters(searchParams, CLASSES_KEY)
+  const classFilters = parsePanelFilters(searchParams, CLASSES_KEY, defaultYear)
   const [years, tiles, byClass, seats] = await Promise.all([
     listEnrollmentYears(supabase),
     Promise.all(
       METRIC_TILES.map(async (tile) => {
-        const filters = parsePanelFilters(searchParams, tile.key)
+        const filters = parsePanelFilters(searchParams, tile.key, defaultYear)
         return { ...tile, filters, count: await getMetricCount(supabase, tile.metric, filters) }
       }),
     ),
     getLeadsByClass(supabase, classFilters),
-    getSeatFiguresByClass(supabase, parseSeatsYear(searchParams)),
+    getSeatFiguresByClass(supabase, parseSeatsYear(searchParams), today),
   ])
   const enrollmentYears = years.ok ? years.data : []
 
@@ -64,6 +67,7 @@ export async function Dashboard({
             panelKey={tile.key}
             title={tile.title}
             filters={tile.filters}
+            defaultYear={defaultYear}
             enrollmentYears={enrollmentYears}
             searchParams={query}
             className="rp-tile"
@@ -85,6 +89,7 @@ export async function Dashboard({
           panelKey={CLASSES_KEY}
           title="Applicants by enrollment class"
           filters={classFilters}
+          defaultYear={defaultYear}
           enrollmentYears={enrollmentYears}
           searchParams={query}
           className="rp-side"

@@ -391,6 +391,7 @@ All of these are built once and shared. Parent pages and staff pages import the 
 - **Left-aligned** fields (`alignStart`) for long free text and the search field.
 - **Compact field:** 44px, 15px. The top-bar search is 40px, rests on Lavender Chrome and turns Paper on focus, with a 17px search icon 14px in and 40px left padding. Searching opens Applicants with the term.
 - Every field has a label: the open question's title, or an `sr-only` label where the icon and placeholder carry the meaning.
+- **Confirmation number** (`ConfirmationNumber`, #503): six 44 × 56 boxes, 16px corners, 8px apart (40 × 52 and 6px under 360px), Geist 600 24px tabular figures, orange caret, the field focus. A filled box gets the stronger line. One digit per box and the next box takes focus; Backspace in an empty box goes back and the arrow keys move; tapping a later box goes to the first empty one, so focus never skips ahead. It sends itself on the sixth digit, or on a paste or SMS autofill (`autocomplete="one-time-code"` on the first box), which spreads across the boxes. Right: the boxes turn green one by one, 70ms apart, then slide together into a 64px green circle with a tick. Wrong: red at once, a 420ms shake, then a red circle with a cross; the page puts a plain note under it with the next step. Under reduced motion only the colours change and the icon swaps. The group has an `sr-only` name and each box is "Digit n of 6".
 
 ### Choices
 From the Admission form, unchanged:

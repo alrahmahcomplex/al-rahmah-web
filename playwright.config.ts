@@ -21,6 +21,10 @@ const INVITE_BUDGET = { EMAIL_DAILY_CAP: "100000", STAFF_INVITE_RESERVE: "20" }
 // one local hour. The integration tests cover the limits themselves.
 const LINK_LIMITS = { PUBLIC_EMAIL_HOURLY_BUDGET: "100000" }
 
+// The fake SMS sender and the local Send SMS hook secret (#503,
+// supabase/config.toml): local Auth calls the hook on the e2e port.
+const SMS = { SMS_FAKE: "1", SEND_SMS_HOOK_SECRET: "v1,whsec_+MGBB5HlwmiVEtF39l8a73U9xuIKvoj/wVb5aIvOecM=" }
+
 export default defineConfig({
   testDir: "e2e",
   globalSetup: "./e2e/global-setup.ts",
@@ -58,7 +62,7 @@ export default defineConfig({
       reuseExistingServer: !process.env.CI,
       timeout: 300_000,
       // The site key is built into the page, so it is set for the build too.
-      env: { NEXT_PUBLIC_TURNSTILE_SITE_KEY: TURNSTILE_SITE_KEY, TURNSTILE_SECRET_KEY: TURNSTILE_PASSES, ...INVITE_BUDGET, ...LINK_LIMITS },
+      env: { NEXT_PUBLIC_TURNSTILE_SITE_KEY: TURNSTILE_SITE_KEY, TURNSTILE_SECRET_KEY: TURNSTILE_PASSES, ...INVITE_BUDGET, ...LINK_LIMITS, ...SMS },
     },
     {
       // The same build, started once the first server is up, with the secret
@@ -67,7 +71,7 @@ export default defineConfig({
       url: `http://localhost:${E2E_TURNSTILE_FAILS_PORT}`,
       reuseExistingServer: !process.env.CI,
       timeout: 120_000,
-      env: { NEXT_PUBLIC_TURNSTILE_SITE_KEY: TURNSTILE_SITE_KEY, TURNSTILE_SECRET_KEY: TURNSTILE_FAILS, ...INVITE_BUDGET, ...LINK_LIMITS },
+      env: { NEXT_PUBLIC_TURNSTILE_SITE_KEY: TURNSTILE_SITE_KEY, TURNSTILE_SECRET_KEY: TURNSTILE_FAILS, ...INVITE_BUDGET, ...LINK_LIMITS, ...SMS },
     },
   ],
 })

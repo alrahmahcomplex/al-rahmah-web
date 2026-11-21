@@ -98,7 +98,8 @@ async function requestLink(page: Page, address: string) {
   await page.getByLabel("Barua pepe").fill(address)
   // Turnstile's test site key passes on its own; wait for its token.
   await expect(page.locator('input[name="cf-turnstile-response"]')).toHaveValue(/.+/, { timeout: 20_000 })
-  await page.getByRole("button", { name: "Tuma kiungo kipya" }).click()
+  // "Tuma" on the forgot page (#503), "Tuma kiungo kipya" on an expired link.
+  await page.getByRole("button", { name: /^Tuma( kiungo kipya)?$/ }).click()
   await expect(page.getByRole("status")).toHaveText(SENT)
 }
 

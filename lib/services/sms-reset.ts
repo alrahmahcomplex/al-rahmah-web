@@ -1,0 +1,107 @@
+import type { SupabaseClient } from "@supabase/supabase-js"
+
+import { MINIMUM_PASSWORD_LENGTH } from "@/lib/password"
+import { withoutPlus } from "@/lib/phone"
+
+import { getAgentUser, type AgentAccessError } from "./agent-auth"
+import type { Result } from "./result"
+
+// A password reset by SMS (#503 slice 2b, prototype F1 to F3), for agents who
+// sign in with their mobile. Supabase Auth makes, stores and expires the
+// confirmation number; its Send SMS hook texts it (app/api/auth/send-sms).
+//
+// F1: ask for a number. Every outcome that might send gets the same reply,
+//     so the page never says whether a number has an account.
+// F2: check the number. A right one signs this browser in, as the reset
+//     email's link does; only an agent's login may stay signed in.
+// F3: save the new password on that session.
+
+export type SmsResetRequestError = "check-failed" | "unavailable"
+
+// Auth refusals that depend on whether the number has a login, or on how
+// recently it was texted: all of them read as "sent", like a real send.
+const SAME_AS_SENT = new Set([
+  "otp_disabled",
+  "signup_disabled",
+  "user_not_found",
+  "phone_provider_disabled",
+  "over_sms_send_rate_limit",
+  "sms_send_failed",
+  "hook_timeout",
+  "hook_timeout_after_retry",
+  "hook_payload_over_size_limit",
+  "hook_payload_invalid_content_type",
+  "unexpected_failure",
+])
+
+export async function requestResetSms(
+  supabase: SupabaseClient,
+  phone: string,
+  captchaToken: string,
+): Promise<Result<null, SmsResetRequestError>> {
+  let error: { code?: string; status?: number; message?: string } | null
+  try {
+    // shouldCreateUser: false, always: an unknown number never gets a login.
+    ;({ error } = await supabase.auth.signInWithOtp({ phone: withoutPlus(phone), options: { shouldCreateUser: false, captchaToken } }))
+  } catch (thrown) {
+    console.error("Reset SMS: Auth could not be reached", thrown)
+    return { ok: false, error: "unavailable" }
+  }
+  if (!error) return { ok: true, data: null }
+  if (error.code === "captcha_failed") return { ok: false, error: "check-failed" }
+  // Anything else Auth says still gets "sent": an answer that differs would
+  // tell a stranger something about the number. Unexpected ones are logged.
+  if (!error.code || !SAME_AS_SENT.has(error.code)) console.error("Reset SMS: unexpected answer from Auth", error)
+  return { ok: true, data: null }
+}
+
+export type SmsResetCheckError = "wrong-number" | "rate-limited" | "no-account" | Exclude<AgentAccessError, "not-agent"> | "unavailable"
+
+export async function checkResetNumber(supabase: SupabaseClient, phone: string, token: string): Promise<Result<null, SmsResetCheckError>> {
+  if (!/^\d{6}$/.test(token)) return { ok: false, error: "wrong-number" }
+  let answer: Awaited<ReturnType<SupabaseClient["auth"]["verifyOtp"]>>
+  try {
+    answer = await supabase.auth.verifyOtp({ phone: withoutPlus(phone), token, type: "sms" })
+  } catch (thrown) {
+    console.error("Reset SMS: Auth could not be reached", thrown)
+    return { ok: false, error: "unavailable" }
+  }
+  const { data, error } = answer
+  if (error || !data.user) {
+    const status = (error as { status?: number } | null)?.status ?? 0
+    if (status === 429 || error?.code === "over_request_rate_limit") return { ok: false, error: "rate-limited" }
+    // Auth gives one answer for a wrong number and an expired one.
+    if (status >= 400 && status < 500) return { ok: false, error: "wrong-number" }
+    console.error("Reset SMS: could not check a number", error)
+    return { ok: false, error: "unavailable" }
+  }
+
+  // Only an agent's login stays signed in. Staff logins carry no phone, but
+  // anyone else loses this browser's new session at once.
+  const agent = await getAgentUser(supabase)
+  if (agent.ok) return { ok: true, data: null }
+  await supabase.auth.signOut({ scope: "local" })
+  if (agent.error === "not-agent") return { ok: false, error: "no-account" }
+  return { ok: false, error: agent.error === "signed-out" ? "unavailable" : agent.error }
+}
+
+export type SmsResetSaveError = "password-too-short" | "signed-out" | "password-not-saved" | Exclude<AgentAccessError, "not-agent" | "signed-out"> | "no-account" | "unavailable"
+
+export async function saveResetPassword(supabase: SupabaseClient, password: string): Promise<Result<null, SmsResetSaveError>> {
+  if (password.length < MINIMUM_PASSWORD_LENGTH) return { ok: false, error: "password-too-short" }
+
+  // Rechecked here: the agent may have been switched off since F2.
+  const agent = await getAgentUser(supabase)
+  if (!agent.ok) {
+    if (agent.error === "signed-out") return { ok: false, error: "signed-out" }
+    await supabase.auth.signOut({ scope: "local" })
+    return { ok: false, error: agent.error === "not-agent" ? "no-account" : agent.error }
+  }
+
+  const { error } = await supabase.auth.updateUser({ password })
+  if (error) {
+    console.error("Reset SMS: could not save the new password", error)
+    return { ok: false, error: "password-not-saved" }
+  }
+  return { ok: true, data: null }
+}

@@ -1,0 +1,193 @@
+/* The confirmation-number boxes (#503, prototype v57): six boxes that send
+   themselves, a green wave into a tick, a red shake into a cross. Ported
+   from the prototype's .otpk classes; see confirmation-number.tsx. */
+
+.gf-otp {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  min-height: 64px;
+}
+.gf-otp-row {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+}
+.gf-otp-box {
+  width: 44px;
+  height: 56px;
+  border-radius: 16px;
+  border: 1.5px solid var(--gf-line);
+  background: var(--gf-paper);
+  text-align: center;
+  font: 600 24px/1 var(--font-sans), system-ui, sans-serif;
+  font-variant-numeric: tabular-nums;
+  color: var(--gf-ink);
+  caret-color: var(--gf-orange);
+  padding: 0;
+  margin: 0;
+  outline: none;
+  appearance: textfield;
+  transition:
+    border-color var(--gf-t-med) var(--gf-ease-out),
+    box-shadow var(--gf-t-med) var(--gf-ease-out),
+    background 200ms linear,
+    color 200ms linear,
+    transform 360ms var(--gf-ease-io),
+    opacity 260ms linear;
+}
+.gf-otp-box[data-filled] {
+  border-color: var(--gf-line-strong);
+}
+.gf-otp-box:focus {
+  border-color: var(--gf-indigo);
+  box-shadow: 0 0 0 4px var(--gf-line-soft);
+}
+.gf-otp[data-state="ok"] .gf-otp-box {
+  background: var(--gf-green-tint);
+  border-color: var(--gf-green);
+  color: var(--gf-green);
+  box-shadow: none;
+  transition-delay: calc(var(--i) * 70ms);
+}
+.gf-otp[data-state="bad"] .gf-otp-box {
+  background: var(--gf-red-tint);
+  border-color: var(--gf-red);
+  color: var(--gf-red);
+  box-shadow: none;
+}
+.gf-otp[data-state="bad"] .gf-otp-row {
+  animation: gf-otp-shake var(--gf-t-slow) cubic-bezier(0.36, 0.07, 0.19, 0.97);
+}
+@keyframes gf-otp-shake {
+  15%,
+  55% {
+    transform: translateX(-7px);
+  }
+  35%,
+  75% {
+    transform: translateX(7px);
+  }
+  90% {
+    transform: translateX(-2px);
+  }
+}
+.gf-otp[data-merged] .gf-otp-box {
+  transform: translateX(var(--dx, 0)) scale(0.5);
+  opacity: 0;
+  transition-delay: 0ms;
+}
+.gf-otp-result {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 64px;
+  height: 64px;
+  margin: -32px 0 0 -32px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  transform: scale(0.3);
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    transform var(--gf-t-slow) var(--gf-ease-out),
+    opacity 200ms linear;
+}
+.gf-otp-result svg {
+  width: 34px;
+  height: 34px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.gf-otp-result path {
+  stroke-dasharray: 40;
+  stroke-dashoffset: 40;
+}
+.gf-otp[data-merged] .gf-otp-result {
+  transform: none;
+  opacity: 1;
+  transition-delay: 160ms;
+}
+.gf-otp[data-merged] .gf-otp-result path {
+  stroke-dashoffset: 0;
+  transition: stroke-dashoffset 380ms var(--gf-ease-out) 360ms;
+}
+.gf-otp[data-state="ok"] .gf-otp-result {
+  background: var(--gf-green);
+  box-shadow: 0 10px 24px -10px rgb(15 122 61 / 0.6);
+}
+.gf-otp[data-state="bad"] .gf-otp-result {
+  background: var(--gf-red);
+  box-shadow: 0 10px 24px -10px rgb(200 30 30 / 0.5);
+}
+.gf-otp-result .gf-otp-cross,
+.gf-otp[data-state="bad"] .gf-otp-result .gf-otp-tick {
+  display: none;
+}
+.gf-otp[data-state="bad"] .gf-otp-result .gf-otp-cross {
+  display: block;
+}
+/* A reset jumps straight back to empty boxes. */
+.gf-otp[data-instant],
+.gf-otp[data-instant] * {
+  transition: none !important;
+  animation: none !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  .gf-otp-box,
+  .gf-otp-result,
+  .gf-otp-result path {
+    transition:
+      background 160ms linear,
+      border-color 160ms linear,
+      color 160ms linear !important;
+    transition-delay: 0ms !important;
+  }
+  .gf-otp[data-state="bad"] .gf-otp-row {
+    animation: none;
+  }
+  .gf-otp[data-merged] .gf-otp-box,
+  .gf-otp-result,
+  .gf-otp[data-merged] .gf-otp-result {
+    transform: none;
+  }
+  .gf-otp-result path {
+    stroke-dashoffset: 0;
+  }
+}
+html.rm .gf-otp-box,
+html.rm .gf-otp-result,
+html.rm .gf-otp-result path {
+  transition:
+    background 160ms linear,
+    border-color 160ms linear,
+    color 160ms linear !important;
+  transition-delay: 0ms !important;
+}
+html.rm .gf-otp[data-state="bad"] .gf-otp-row {
+  animation: none;
+}
+html.rm .gf-otp[data-merged] .gf-otp-box,
+html.rm .gf-otp-result,
+html.rm .gf-otp[data-merged] .gf-otp-result {
+  transform: none;
+}
+html.rm .gf-otp-result path {
+  stroke-dashoffset: 0;
+}
+@media (max-width: 360px) {
+  .gf-otp-row {
+    gap: 6px;
+  }
+  .gf-otp-box {
+    width: 40px;
+    height: 52px;
+    font-size: 22px;
+  }
+}

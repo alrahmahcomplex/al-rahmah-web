@@ -1,8 +1,19 @@
 "use client"
 
-import { useId, useState, type FormEvent } from "react"
+import { useId, useRef, useState, type FormEvent } from "react"
 
-import { CodeBox, FieldError, FullNameBox, hasTwoNames, PersonNameBoxes, StudentNameBoxes } from "@/components/guided-form"
+import {
+  CodeBox,
+  ConfirmationNumber,
+  FieldError,
+  FullNameBox,
+  hasTwoNames,
+  NoticeBox,
+  PersonNameBoxes,
+  StudentNameBoxes,
+  type ConfirmationNumberHandle,
+  type ConfirmationResult,
+} from "@/components/guided-form"
 import { Accordion, AvatarGroup, Avatar, Button, Card, Pagination, RoundButton, StepSlider, TabSwitch, Timeline, Tooltip, type AvatarTone, type TimelineItem } from "@/components/kit"
 
 // The parts the owner picked on prototype v38's Design system page (#402),
@@ -140,6 +151,37 @@ export function NamesCard() {
           <p className="kp-spec">Capitals and the hyphen by themselves: AAN132 becomes AAN-132.</p>
         </div>
       </form>
+    </Card>
+  )
+}
+
+// The prototype's demo numbers (v57): 123456 is right, anything else wrong.
+const RIGHT_DEMO_NUMBER = "123456"
+
+/** The confirmation-number boxes (#503), as the reset by SMS uses them. */
+export function ConfirmationNumberCard() {
+  const boxes = useRef<ConfirmationNumberHandle>(null)
+  const [result, setResult] = useState<ConfirmationResult | null>(null)
+  const check = async (code: string): Promise<ConfirmationResult> => {
+    setResult(null)
+    await new Promise((resolve) => setTimeout(resolve, 300))
+    return code === RIGHT_DEMO_NUMBER ? "ok" : "bad"
+  }
+  return (
+    <Card title="Confirmation number">
+      <p className="kp-spec">
+        Six boxes for a number sent by SMS. They send themselves on the sixth digit or a paste; focus never skips ahead. Try <b>{RIGHT_DEMO_NUMBER}</b>, or any other number.
+      </p>
+      <ConfirmationNumber ref={boxes} label="Confirmation number" digitLabel={(n) => `Digit ${n} of 6`} onComplete={check} onSettled={setResult} />
+      {result && (
+        <NoticeBox role={result === "ok" ? "status" : "alert"} tone={result === "ok" ? "good" : "info"}>
+          {result === "ok" ? "Right number. The next step opens by itself." : "That number isn't right. Check it, then try again."}
+          <br />
+          <button type="button" className="font-semibold underline underline-offset-2" onClick={() => (setResult(null), boxes.current?.reset())}>
+            Try again
+          </button>
+        </NoticeBox>
+      )}
     </Card>
   )
 }

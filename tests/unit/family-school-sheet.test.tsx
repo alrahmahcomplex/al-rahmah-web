@@ -129,6 +129,15 @@ describe("SchoolSheet", () => {
     expect(within(sheet()).getByRole("alert")).toHaveTextContent("Choose the country from the list.")
   })
 
+  it("refuses a typo in an empty country box on an old school abroad (#511)", async () => {
+    render(<Sheet school={{ kind: "school", name: "Green Hills", type: "private", region: "Outside Tanzania" }} />)
+    fireEvent.click(within(sheet()).getByRole("radio", { name: "Public" }))
+    fireEvent.input(within(sheet()).getByRole("combobox", { name: "Country" }), { target: { value: "Uganada" } })
+    await save()
+    expect(actions.savePreviousSchool).not.toHaveBeenCalled()
+    expect(within(sheet()).getByRole("alert")).toHaveTextContent("Choose the country from the list.")
+  })
+
   it("saves private or public alone on an old school abroad with no country, keeping its name as stored (#511)", async () => {
     render(<Sheet school={{ kind: "school", name: "Green Hills", type: "private", region: "Outside Tanzania" }} />)
     fireEvent.click(within(sheet()).getByRole("radio", { name: "Public" }))

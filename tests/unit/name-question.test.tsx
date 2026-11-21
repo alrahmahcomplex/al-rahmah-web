@@ -126,6 +126,19 @@ describe("SchoolQuestion at check-in, round 2 of #526", () => {
     expect(onDone).toHaveBeenCalledWith({ name: "IS", type: "public", region: "Outside Tanzania" })
   })
 
+  it("keeps the saved country while staff retype Outside Tanzania in the region box", async () => {
+    const ABROAD = { name: "EXAMPLE SCHOOL ABROAD", type: "private" as const, region: "Outside Tanzania", country: "Kenya" }
+    const onDone = vi.fn()
+    render(<SchoolQuestion id="s" first="YUSUF" saved={ABROAD} onDone={onDone} onNotKnown={() => {}} />)
+    const region = screen.getByRole("combobox", { name: "Region" })
+    await userEvent.clear(region)
+    await userEvent.type(region, "outs")
+    await userEvent.keyboard("{Enter}")
+    expect(screen.getByRole("combobox", { name: "Country" })).toHaveValue("Kenya")
+    await userEvent.click(screen.getByRole("button", { name: /Continue/ }))
+    expect(onDone).toHaveBeenCalledWith(ABROAD)
+  })
+
   it("for another school, the saved country counts only once picked again", async () => {
     const ABROAD = { name: "EXAMPLE SCHOOL ABROAD", type: "private" as const, region: "Outside Tanzania", country: "Kenya" }
     const onDone = vi.fn()

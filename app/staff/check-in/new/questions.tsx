@@ -37,7 +37,7 @@ import {
 } from "@/components/kit"
 import { Icon } from "@/components/icons"
 import type { LastNameFrom } from "@/lib/names"
-import { countriesSavedFirst, countryFlag, countryNeed, OUTSIDE_TANZANIA, regionsOutsideFirst, sameSchoolName } from "@/lib/places"
+import { countriesSavedFirst, countryFlag, countryNeed, OUTSIDE_TANZANIA, regionsOutsideFirst, sameSchoolName, schoolKey } from "@/lib/places"
 import { STAFF_REMINDER } from "@/lib/referral-notice"
 import { STUDENT_GENDERS, type DayOrBoarding, type LeadClass, type StudentGender } from "@/lib/services/leads"
 
@@ -291,8 +291,8 @@ export function SchoolQuestion({
   const [type, setType] = useState<"private" | "public" | null>(known?.type ?? null)
   const [region, setRegion] = useState(known?.region ?? "")
   const [country, setCountry] = useState(known?.region === OUTSIDE_TANZANIA ? (known.country ?? "") : "")
-  // Staff picked a country (it then counts for another school too), or changed the box at all.
-  const [countryPicked, setCountryPicked] = useState(false)
+  // The school staff last picked a country for (it counts for that school only), and whether they typed in the box.
+  const [countryPickedFor, setCountryPickedFor] = useState<string | null>(null)
   const [countryTouched, setCountryTouched] = useState(false)
   const countryOptions = useMemo(() => countriesSavedFirst(known?.country).map((c) => ({ value: c, label: c })), [known?.country])
   const [error, setError] = useState("")
@@ -326,7 +326,7 @@ export function SchoolQuestion({
     if (!region) return setError("Choose the region from the list.")
     // The lead's rule (#511): another school or a new region abroad needs its country picked, the saved one again
     // included; private or public alone, or an old school abroad with no country left as it is, needs none.
-    const need = countryNeed({ saved: known, name: n, region, country, picked: countryPicked, touched: countryTouched })
+    const need = countryNeed({ saved: known, name: n, region, country, pickedFor: countryPickedFor, touched: countryTouched })
     if (need === "missing") return setError("Choose the country from the list.")
     if (need === "again") return setError("Choose the country again for the new school.")
     onDone({ name: n, type, region, ...(out && country ? { country } : {}) })
@@ -340,6 +340,10 @@ export function SchoolQuestion({
         ref={formRef}
         noValidate
         onSubmit={submit}
+        // Typing in the country box counts as changing it, even when the text matches no country yet.
+        onInput={(e) => {
+          if (e.target instanceof HTMLElement && e.target.id === countryId) setCountryTouched(true)
+        }}
         // Staff who move to another box themselves keep their place: the school's name, or a list's search box
         // (its events reach the form through the portal). The planned box, and the region box the list hands
         // focus back to as it closes, don't cancel it.
@@ -392,7 +396,8 @@ export function SchoolQuestion({
             labels={REGION_LABELS}
             onValueChange={(v, how) => {
               setRegion(v)
-              if (v !== OUTSIDE_TANZANIA) setCountry("")
+              // Only a region in Tanzania clears the country: retyping Outside Tanzania keeps it.
+              if (v !== "" && v !== OUTSIDE_TANZANIA) setCountry("")
               setError("")
               if (v === OUTSIDE_TANZANIA && how !== "type") focusLater(countryId, regionId)
             }}
@@ -415,7 +420,7 @@ export function SchoolQuestion({
               onValueChange={(v) => {
                 setCountry(v)
                 setCountryTouched(true)
-                if (v) setCountryPicked(true)
+                if (v) setCountryPickedFor(schoolKey(name, region))
                 setError("")
               }}
             />

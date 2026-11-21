@@ -243,24 +243,35 @@ export function sameSchoolName(a: string | null | undefined, b: string | null | 
   return clean(a) === clean(b)
 }
 
+/** One school as staff see it, for tying a country pick to the school it was made for (#511). */
+export function schoolKey(name: string | null | undefined, region: string): string {
+  return `${(name ?? "").trim().replace(/\s+/g, " ").toUpperCase()}|${region}`
+}
+
+/** Whether the editor changed which school it is: another name (capitals and spacing aside) or another region. */
+export function schoolChanged(saved: { name: string; region: string } | null | undefined, name: string, region: string): boolean {
+  return !saved || !sameSchoolName(name, saved.name) || region !== saved.region
+}
+
 /**
  * Where a previous school's country stands in an editor (#511, lead's rule). `missing`: a school entered, or with
  * its name or region changed, Outside Tanzania needs a country picked. `again`: the saved country still shows for
- * another school or a new region, and counts once staff pick it again. Private or public alone, or a school saved
- * before the country list left as it is, needs nothing.
+ * another school or a new region, and counts once staff pick it again for that school (`pickedFor`, from
+ * schoolKey at the pick). Private or public alone, or a school saved before the country list left as it is, needs
+ * nothing. `touched`: staff typed in the box or changed it.
  */
 export function countryNeed(input: {
   saved: { name: string; region: string; country?: string | null } | null | undefined
   name: string
   region: string
   country: string
-  picked: boolean
+  pickedFor: string | null
   touched: boolean
 }): "ok" | "missing" | "again" {
-  const { saved, name, region, country, picked, touched } = input
+  const { saved, name, region, country, pickedFor, touched } = input
   if (region !== OUTSIDE_TANZANIA) return "ok"
-  const changed = !saved || !sameSchoolName(name, saved.name) || region !== saved.region
+  const changed = schoolChanged(saved, name, region)
   if (!country) return changed || touched ? "missing" : "ok"
-  if (changed && saved?.country && country === saved.country && !picked) return "again"
+  if (changed && saved?.country && country === saved.country && pickedFor !== schoolKey(name, region)) return "again"
   return "ok"
 }

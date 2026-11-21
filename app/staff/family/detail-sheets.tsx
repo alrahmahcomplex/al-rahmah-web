@@ -4,7 +4,7 @@ import { useEffect, useId, useMemo, useRef, useState } from "react"
 
 import { CapitalsBox, Icon as GuidedIcon, Reveal, TypeAheadField } from "@/components/guided-form"
 import { Button, ChoiceTiles, ClassPicker, FieldError, Note, Sheet, toast } from "@/components/kit"
-import { countriesSavedFirst, countryFlag, countryNeed, OUTSIDE_TANZANIA, regionsOutsideFirst, sameSchoolName } from "@/lib/places"
+import { countriesSavedFirst, countryFlag, countryNeed, OUTSIDE_TANZANIA, regionsOutsideFirst, sameSchoolName, schoolChanged, schoolKey } from "@/lib/places"
 import type { LeadPreviousSchool, PreviousSchoolType } from "@/lib/services/lead-details"
 import { DAY_OR_BOARDING, type DayOrBoarding, type LeadClass } from "@/lib/services/leads"
 
@@ -164,8 +164,8 @@ export function SchoolSheet({
   const [type, setType] = useState<PreviousSchoolType | null>(known?.type ?? null)
   const [region, setRegion] = useState(known?.region ?? "")
   const [country, setCountry] = useState(known?.region === OUTSIDE_TANZANIA ? (known.country ?? "") : "")
-  // Staff picked a country (it then counts for another school too), or changed the box at all (#511).
-  const [countryPicked, setCountryPicked] = useState(false)
+  // The school staff last picked a country for (it counts for that school only), and whether they typed in the box (#511).
+  const [countryPickedFor, setCountryPickedFor] = useState<string | null>(null)
   const [countryTouched, setCountryTouched] = useState(false)
   const countryOptions = useMemo(() => countriesSavedFirst(known?.country).map((c) => ({ value: c, label: c })), [known?.country])
   const { problem, setProblem, pending, run } = useSheetSave()
@@ -182,7 +182,7 @@ export function SchoolSheet({
     if (!region) return setProblem("Choose the region from the list.")
     // The lead's rule (#511): another school or a new region abroad needs its country picked, the saved one again
     // included; private or public alone keeps the saved one, or none on a school saved before the country list.
-    const need = countryNeed({ saved: known, name: n, region, country, picked: countryPicked, touched: countryTouched })
+    const need = countryNeed({ saved: known, name: n, region, country, pickedFor: countryPickedFor, touched: countryTouched })
     if (need === "missing") return setProblem("Choose the country from the list.")
     if (need === "again") return setProblem("Choose the country again for the new school.")
     // The same name in other capitals is the same school: the record keeps it as it is.
@@ -195,7 +195,8 @@ export function SchoolSheet({
             name: savedName,
             type,
             region,
-            ...(out && country ? { country } : {}),
+            // Private or public alone sends no country: the record keeps the one stored, a colleague's correction included.
+            ...(out && country && (schoolChanged(known, n, region) || countryTouched) ? { country } : {}),
           })
           return outcome.status === "saved" ? outcome : { status: "refused", field: null, message: outcome.message }
         } catch {
@@ -268,7 +269,8 @@ export function SchoolSheet({
             aria-describedby={problem ? `${id}-error` : undefined}
           />
           <Reveal open={out}>
-            <div className="fam-form pt-1">
+            {/* Typing in the country box counts as changing it, even when the text matches no country yet. */}
+            <div className="fam-form pt-1" onInput={() => setCountryTouched(true)}>
               <p className="fam-q" id={`${id}-country`}>
                 Which country is the school in?
               </p>
@@ -281,7 +283,7 @@ export function SchoolSheet({
                 onValueChange={(next) => {
                   setCountry(next)
                   setCountryTouched(true)
-                  if (next) setCountryPicked(true)
+                  if (next) setCountryPickedFor(schoolKey(name, region))
                   setProblem(null)
                 }}
                 lead={(value) => (value ? flag(value) : <GuidedIcon name="globe" small />)}

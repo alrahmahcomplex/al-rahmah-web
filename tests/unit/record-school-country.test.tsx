@@ -55,11 +55,26 @@ describe("PreviousSchoolRow", () => {
     expect(actions.savePreviousSchool).toHaveBeenCalledWith("lead", { kind: "school", name: "ANOTHER SCHOOL ABROAD", type: "private", region: "Outside Tanzania", country: "Kenya" })
   })
 
-  it("private or public alone keeps the saved country with no pick", async () => {
+  it("private or public alone needs no pick and sends no country, so the record keeps the one stored", async () => {
     editor(KENYA)
     fireEvent.click(screen.getByRole("radio", { name: "Public" }))
     await save()
-    expect(actions.savePreviousSchool).toHaveBeenCalledWith("lead", { kind: "school", name: "EXAMPLE SCHOOL ABROAD", type: "public", region: "Outside Tanzania", country: "Kenya" })
+    expect(actions.savePreviousSchool).toHaveBeenCalledWith("lead", { kind: "school", name: "EXAMPLE SCHOOL ABROAD", type: "public", region: "Outside Tanzania" })
+  })
+
+  it("a pick counts for the school it was made for: renamed again, the country is asked again", async () => {
+    editor(KENYA)
+    rename("ANOTHER SCHOOL ABROAD")
+    await userEvent.click(screen.getByRole("button", { name: "Show all countries" }))
+    await userEvent.click((await screen.findAllByRole("option"))[0])
+    rename("A THIRD SCHOOL ABROAD")
+    await save()
+    expect(actions.savePreviousSchool).not.toHaveBeenCalled()
+    expect(screen.getByRole("alert")).toHaveTextContent("Choose the country again for the new school.")
+    // Other capitals and spacing are the same school: the pick still counts.
+    rename("another  school abroad")
+    await save()
+    expect(actions.savePreviousSchool).toHaveBeenCalledWith("lead", expect.objectContaining({ country: "Kenya" }))
   })
 
   it("a country typed off the list is refused, not saved as the old one", async () => {

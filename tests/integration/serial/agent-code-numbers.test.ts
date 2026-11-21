@@ -2,30 +2,25 @@ import { randomInt, randomUUID } from "node:crypto"
 import { Client } from "pg"
 import { describe, expect, test } from "vitest"
 
-import { inRolledBackTransaction, secretClient } from "../../support/db"
+import { actAsStaff, inRolledBackTransaction, secretClient } from "../../support/db"
+import { MANAGER } from "../../support/fixtures"
 
 // Discount codes in the v38 format (#404), held to ABC-123 (#462): three
-// letters from the name, a hyphen, and the next number after the last
-// generated code (ABC-123, then XYZ-124), from 001 to 999 and round again.
-// The numbers come from the sequence agent_code_numbers, so creations at the
-// same moment get different numbers without waiting for each other.
+// letters from the name, a hyphen, and the number after the highest any agent
+// code holds (#521): ABC-123, then XYZ-124. Once 999 is held, the lowest
+// number no agent holds; once every number is held, the lowest whose code is
+// free. Creations at the same moment get different numbers without waiting
+// for each other: each only tries the lock on a number another holds.
 //
-// A sequence's position is not rolled back with a transaction, so a test that
-// moves it puts it back afterwards (`atNumber`). That is safe only while no
-// other file creates agents, which is why these tests run in the serial
-// folder. Each moves it far above any code other tests make, so the numbers it
-// expects are free.
+// Most tests start from no agent records at all (`onlyTestAgents`), in a
+// rolled-back transaction, so the numbers they expect don't depend on other
+// tests' agents. The tests with two connections commit nothing. They live in
+// the serial folder because a creation elsewhere could take the numbers they
+// expect.
 
 function phone() {
   return `+2557${String(randomInt(10_000_000, 100_000_000))}`
 }
-
-// A number no code holds yet: far above any other test's.
-const farNumber = () => randomInt(500_000, 900_000_000)
-
-// The three digits a code gets from the sequence's number n: 001 to 999 and
-// round again.
-const digits = (n: number) => String(((n - 1) % 999) + 1).padStart(3, "0")
 
 async function signUp(sql: Client, fullName: string, code: string | null = null) {
   await sql.query("select set_config('request.jwt.claims', $1, true)", [JSON.stringify({ role: "service_role" })])
@@ -50,214 +45,268 @@ async function create(sql: Client, fullName: string, code: string | null = null)
   return rows[0].code
 }
 
-type Position = { last_value: string; is_called: boolean }
-const position = async (sql: Client) => (await sql.query<Position>("select last_value, is_called from public.agent_code_numbers")).rows[0]
+const numberOf = (code: string) => code.split("-")[1]
 
-// The last number taken from the sequence.
-async function counter(sql: Client) {
-  const at = await position(sql)
-  return Number(at.last_value) - (at.is_called ? 0 : 1)
+// Runs one statement past every trigger, so a code it saves holds no number
+// lock: as if saved before #521, or by another transaction long finished.
+async function pastTriggers(sql: Client, query: string, params: unknown[] = []) {
+  await sql.query("set local session_replication_role = replica")
+  try {
+    return await sql.query<{ id: string }>(query, params)
+  } finally {
+    await sql.query("set local session_replication_role = origin")
+  }
 }
 
-const setCounter = (sql: Client, n: number) => sql.query("select setval('public.agent_code_numbers', $1, true)", [n])
+// Removes every agent record in `sql`'s rolled-back transaction, so the
+// numbers held are only the test's own.
+const onlyTestAgents = (sql: Client) => pastTriggers(sql, "delete from public.marketing_agents")
 
-// Runs `work` in a rolled-back transaction with the sequence's last number
-// set to `n`, then puts the sequence back where it was.
-async function atNumber<T>(n: number, work: (sql: Client) => Promise<T>): Promise<T> {
-  const keeper = new Client({ connectionString: process.env.SUPABASE_DB_URL })
-  await keeper.connect()
-  const was = await position(keeper)
-  try {
-    return await inRolledBackTransaction(async (sql) => {
-      await setCounter(sql, n)
-      return work(sql)
-    })
-  } finally {
-    await keeper.query("select setval('public.agent_code_numbers', $1, $2)", [was.last_value, was.is_called])
-    await keeper.end()
+// Plants agent records with these codes, past every trigger.
+async function plant(sql: Client, codes: string[]) {
+  await pastTriggers(
+    sql,
+    `insert into public.marketing_agents (full_name, phone, code)
+     select 'Planted Agent', '+2556' || lpad((row_number() over () + $2::int)::text, 8, '0'), c
+     from unnest($1::text[]) c`,
+    [codes, randomInt(0, 90_000_000)],
+  )
+}
+
+const threeDigits = (n: number) => String(n).padStart(3, "0")
+const codesFor = (letters: string, numbers: number[]) => numbers.map((n) => `${letters}-${threeDigits(n)}`)
+const oneTo999 = Array.from({ length: 999 }, (_, i) => i + 1)
+
+async function retire(sql: Client, code: string) {
+  await sql.query("select public.set_audit_actor('system')")
+  const { rows } = await sql.query<{ id: string }>("select id from public.marketing_agents where code = $1", [code])
+  await sql.query("select public.record_agent_status_change($1, 'retired', 'Test: retired', null)", [rows[0].id])
+}
+
+// Whether `sql`'s transaction holds the lock on number `n`.
+async function holdsNumber(sql: Client, n: number) {
+  const { rows } = await sql.query<{ held: boolean }>(
+    `select exists (
+       select 1 from pg_locks l
+       where l.locktype = 'advisory' and l.pid = pg_backend_pid() and l.objsubid = 1
+         and ((l.classid::bigint << 32) | l.objid::bigint) = hashtextextended('agent-code-number:' || $1::int, 0)
+     ) as held`,
+    [n],
+  )
+  return rows[0].held
+}
+
+// The Manager's import, confirmed as the check screen saw it: each row's
+// expected verdict is its verdict now.
+async function confirmImport(sql: Client, rows: { code: string; full_name: string }[]) {
+  const sent = rows.map((row, i) => ({ sheet_row: i + 2, phone: null, whatsapp: null, email: null, ...row }))
+  const { rows: checked } = await sql.query<{ rows: unknown }>(
+    `select jsonb_agg(e.value || jsonb_build_object('expected', v.verdict)) as rows
+     from jsonb_array_elements($1::jsonb) e
+     join public.agent_import_verdicts($1::jsonb) v on v.sheet_row = (e.value ->> 'sheet_row')::integer`,
+    [JSON.stringify(sent)],
+  )
+  await actAsStaff(sql, MANAGER.id)
+  const { rows: answer } = await sql.query<{ answer: { outcome: string; created: number } }>(
+    "select public.confirm_agent_import('agents-521.csv', $2, $1::jsonb) as answer",
+    [JSON.stringify(checked[0].rows), sent.length],
+  )
+  await sql.query("reset role")
+  return answer[0].answer
+}
+
+// A connection with its own open transaction, where a wait on a lock fails
+// the test instead of passing late.
+async function openTransaction() {
+  const sql = new Client({ connectionString: process.env.SUPABASE_DB_URL })
+  await sql.connect()
+  await sql.query("set statement_timeout = '5s'")
+  await sql.query("begin")
+  return sql
+}
+
+async function closeAll(...connections: Client[]) {
+  for (const sql of connections) {
+    await sql.query("rollback").catch(() => {})
+    await sql.end()
   }
 }
 
 describe("the Discount code format", () => {
-  test("a new code is the three initials and the next number after the last code: QVW-123, then XYZ-124", async () => {
-    // Rare initials, so no other test's lead carries these codes.
-    await atNumber(122, async (sql) => {
-      const first = await signUp(sql, "QUDRA VUAI WEMA")
-      expect(first).toMatchObject({ outcome: "registered", code: "QVW-123" })
-      const second = await signUp(sql, "XAVIER YUSUF ZUBERI")
-      expect(second).toMatchObject({ outcome: "registered", code: "XYZ-124" })
-      expect(await counter(sql)).toBe(124)
+  test("a new code is the three initials and the number after the highest: QVW-123, then XYZ-124", async () => {
+    await inRolledBackTransaction(async (sql) => {
+      await onlyTestAgents(sql)
+      await plant(sql, ["QQQ-122"])
+      expect(await signUp(sql, "QUDRA VUAI WEMA")).toMatchObject({ outcome: "registered", code: "QVW-123" })
+      expect(await signUp(sql, "XAVIER YUSUF ZUBERI")).toMatchObject({ outcome: "registered", code: "XYZ-124" })
     })
   })
 
-  test("the number always has three digits: after 999 it starts again at 001", async () => {
-    // Small numbers may be taken by seeded codes; a rare prefix keeps them free.
-    await atNumber(6, async (sql) => {
-      expect(await create(sql, "ZAWADI XENIA QUINN")).toBe("ZXQ-007")
-      await setCounter(sql, 998)
-      expect(await create(sql, "ZAWADI XENIA QUINN")).toBe("ZXQ-999")
+  test("with no agent at all, the first code ends in 001", async () => {
+    await inRolledBackTransaction(async (sql) => {
+      await onlyTestAgents(sql)
       expect(await create(sql, "ZAWADI XENIA QUINN")).toBe("ZXQ-001")
-      expect(await counter(sql)).toBe(1000)
     })
   })
 
   test("the staff Create agent path gets the same format, and a name short of three initials is filled from its next letters, then X", async () => {
-    const n = farNumber()
-    await atNumber(n, async (sql) => {
-      expect(await create(sql, "Juma Doe")).toBe(`JDU-${digits(n + 1)}`)
-      expect(await create(sql, "Madonna")).toBe(`MAD-${digits(n + 2)}`)
-      expect(await create(sql, "Ox")).toBe(`OXX-${digits(n + 3)}`)
-      expect(await create(sql, "Émile Ali Juma")).toBe(`AJM-${digits(n + 4)}`)
+    await inRolledBackTransaction(async (sql) => {
+      await onlyTestAgents(sql)
+      await plant(sql, ["QQQ-700"])
+      expect(await create(sql, "Juma Doe")).toBe("JDU-701")
+      expect(await create(sql, "Madonna")).toBe("MAD-702")
+      expect(await create(sql, "Ox")).toBe("OXX-703")
+      expect(await create(sql, "Émile Ali Juma")).toBe("AJM-704")
     })
   })
 
-  test("the one number left for a set of initials is found, however far round", async () => {
-    await atNumber(farNumber(), async (sql) => {
-      await sql.query("select public.set_audit_actor('system')")
-      await sql.query(
-        `insert into public.marketing_agents (full_name, phone, code)
-         select 'Taken Prefix', '+2556' || lpad((k + $1::int)::text, 8, '0'), 'ZXQ-' || lpad(k::text, 3, '0')
-         from generate_series(1, 999) k where k <> 500`,
-        [randomInt(0, 90_000_000)],
-      )
+  test("the number always has three digits: once 999 is held a code takes the lowest number no agent holds", async () => {
+    await inRolledBackTransaction(async (sql) => {
+      await onlyTestAgents(sql)
+      await plant(sql, ["QQQ-006"])
+      expect(await create(sql, "ZAWADI XENIA QUINN")).toBe("ZXQ-007")
+      await plant(sql, ["QQQ-998"])
+      expect(await create(sql, "ZAWADI XENIA QUINN")).toBe("ZXQ-999")
+      expect(await create(sql, "ZAWADI XENIA QUINN")).toBe("ZXQ-001")
+      expect(await create(sql, "BAKARI ALI JUMA")).toBe("BAJ-002")
+    })
+  })
+
+  test("with 999 the highest number held, the next sign-ups take the lowest free numbers, never one already held", async () => {
+    await inRolledBackTransaction(async (sql) => {
+      await onlyTestAgents(sql)
+      await plant(sql, codesFor("QVW", [1, 2, 3, 5]))
+      // The Manager types the highest number there is.
+      expect(await create(sql, "ZAWADI XENIA QUINN", "ZXQ-999")).toBe("ZXQ-999")
+      expect(await signUp(sql, "XAVIER YUSUF ZUBERI")).toMatchObject({ outcome: "registered", code: "XYZ-004" })
+      expect(await signUp(sql, "XAVIER YUSUF ZUBERI")).toMatchObject({ outcome: "registered", code: "XYZ-006" })
+    })
+  })
+
+  test("once 999 is held, a retired record's number is never taken again", async () => {
+    await inRolledBackTransaction(async (sql) => {
+      await onlyTestAgents(sql)
+      await plant(sql, codesFor("QVW", [1, 999]))
+      await retire(sql, "QVW-001")
+      expect(await create(sql, "ZAWADI XENIA QUINN")).toBe("ZXQ-002")
+    })
+  })
+
+  test("with every number held, numbers repeat: the lowest whose code with these letters is free", async () => {
+    await inRolledBackTransaction(async (sql) => {
+      await onlyTestAgents(sql)
+      // ZXQ holds 001 and 002, other letters every other number.
+      await plant(sql, [...codesFor("ZXQ", [1, 2]), ...codesFor("QQQ", oneTo999.slice(2))])
+      expect(await create(sql, "ZAWADI XENIA QUINN")).toBe("ZXQ-003")
+    })
+  })
+
+  test("with every number held, the one number left for a set of initials is found", async () => {
+    await inRolledBackTransaction(async (sql) => {
+      await onlyTestAgents(sql)
+      await plant(sql, [...codesFor("ZXQ", oneTo999.filter((n) => n !== 500)), "QQQ-500"])
       expect(await create(sql, "ZAWADI XENIA QUINN")).toBe("ZXQ-500")
     })
   })
 
-  test("a free number is still found when other creations take the numbers it would have tried", async () => {
-    await atNumber(farNumber(), async (sql) => {
-      await sql.query("select public.set_audit_actor('system')")
-      await sql.query(
-        `insert into public.marketing_agents (full_name, phone, code)
-         select 'Taken Prefix', '+2556' || lpad((k + $1::int)::text, 8, '0'), 'ZXQ-' || lpad(k::text, 3, '0')
-         from generate_series(1, 999) k where k <> 500`,
-        [randomInt(0, 90_000_000)],
-      )
-      // Stepping 999 at a time, as if other creations took every number in
-      // between, the sequence offers the same taken number 999 times over.
-      await sql.query("alter sequence public.agent_code_numbers increment by 999")
-      try {
-        expect(await create(sql, "ZAWADI XENIA QUINN")).toBe("ZXQ-500")
-      } finally {
-        await sql.query("alter sequence public.agent_code_numbers increment by 1")
-      }
-    })
-  })
-
   test("every set of initials has 999 codes; when all are taken, the creation is refused", async () => {
-    await atNumber(farNumber(), async (sql) => {
-      await sql.query("select public.set_audit_actor('system')")
-      await sql.query(
-        `insert into public.marketing_agents (full_name, phone, code)
-         select 'Taken Prefix', '+2556' || lpad((k + $1::int)::text, 8, '0'), 'ZXQ-' || lpad(k::text, 3, '0')
-         from generate_series(1, 999) k`,
-        [randomInt(0, 90_000_000)],
-      )
+    await inRolledBackTransaction(async (sql) => {
+      await onlyTestAgents(sql)
+      await plant(sql, codesFor("ZXQ", oneTo999))
       await expect(create(sql, "ZAWADI XENIA QUINN")).rejects.toThrow(/no_free_code/)
     })
   })
 
-  test("a typed code takes no number; a generated code another record holds is skipped", async () => {
-    const n = farNumber()
-    await atNumber(n, async (sql) => {
-      // Codes staff typed, or an import carried, with higher numbers.
-      expect(await create(sql, "ZAWADI XENIA QUINN", `ZXQ-${digits(n + 1)}`)).toBe(`ZXQ-${digits(n + 1)}`)
-      expect(await create(sql, "BAKARI ALI JUMA", `BAJ-${digits(n + 3)}`)).toBe(`BAJ-${digits(n + 3)}`)
-      expect(await counter(sql)).toBe(n)
-
-      // The next ZXQ code would be n + 1, which is taken: it moves on to n + 2.
-      expect(await create(sql, "ZAWADI XENIA QUINN")).toBe(`ZXQ-${digits(n + 2)}`)
-      // BAJ at n + 3 is taken too: n + 4. Skipped numbers are not handed out again.
-      expect(await create(sql, "BAKARI ALI JUMA")).toBe(`BAJ-${digits(n + 4)}`)
-      expect(await counter(sql)).toBe(n + 4)
-      // Another prefix carries on from there.
-      expect(await create(sql, "AMINA BAKARI CHANDE")).toBe(`ABC-${digits(n + 5)}`)
-    })
-  })
-
-  test("a long run of taken codes is passed over", async () => {
-    await atNumber(100, async (sql) => {
-      await sql.query("select public.set_audit_actor('system')")
-      // 150 typed codes in a row, ZXQ-101 to ZXQ-250, none of which moves the sequence.
-      const planted = await sql.query(
-        `insert into public.marketing_agents (full_name, phone, code)
-         select 'Taken Run', '+2556' || lpad((k + $1::int)::text, 8, '0'), 'ZXQ-' || (100 + k)
-         from generate_series(1, 150) k`,
-        [randomInt(0, 90_000_000)],
-      )
-      expect(planted.rowCount).toBe(150)
-      expect(await create(sql, "ZAWADI XENIA QUINN")).toBe("ZXQ-251")
-    })
-  })
-
-  test("a generated code whose twin a Promo code holds is skipped, so the form can tell them apart", async () => {
-    await atNumber(300, async (sql) => {
+  test("a generated code whose twin a Promo code holds is skipped, and its number is not held", async () => {
+    await inRolledBackTransaction(async (sql) => {
+      await onlyTestAgents(sql)
+      await plant(sql, ["QQQ-300"])
       await sql.query("select public.set_audit_actor('system')")
       await sql.query("insert into public.promo_codes (code, name, amount) values ('ZXQ301', 'Twin of an agent code', 1000)")
       expect(await create(sql, "ZAWADI XENIA QUINN")).toBe("ZXQ-302")
+      // Other creations may still take 301 for other letters.
+      expect(await holdsNumber(sql, 301)).toBe(false)
+      expect(await holdsNumber(sql, 302)).toBe(true)
     })
   })
 
-  test("a retired record's code is never generated again", async () => {
-    const n = farNumber()
-    await atNumber(n, async (sql) => {
-      const old = await create(sql, "ZAWADI XENIA QUINN")
-      expect(old).toBe(`ZXQ-${digits(n + 1)}`)
-      const { rows } = await sql.query<{ id: string }>("select id from public.marketing_agents where code = $1", [old])
-      await sql.query("select public.record_agent_status_change($1, 'retired', 'Test: retired', null)", [rows[0].id])
-      await setCounter(sql, n)
-      expect(await create(sql, "ZAWADI XENIA QUINN")).toBe(`ZXQ-${digits(n + 2)}`)
-    })
-  })
-
-  test("a generated code a lead already carries is skipped", async () => {
-    const n = farNumber()
-    await atNumber(n, async (sql) => {
+  test("a generated code a lead already carries is skipped, below 999 and once it is held", async () => {
+    await inRolledBackTransaction(async (sql) => {
+      await onlyTestAgents(sql)
+      await plant(sql, ["QQQ-600"])
       await sql.query("select public.set_audit_actor('system')")
-      // A copy of a seeded lead, on a free Admission Number, carrying the
-      // code the next ZXQ agent would get.
-      const planted = await sql.query(
-        `insert into public.leads (admission_number, student_name, class_name, enrollment_year, day_or_boarding, guardian_contact_id, status, visit_date, referral_code,
-                                   custodian_relationship, custodian_relationship_description)
-         select (select 'ADMSN-' || lpad(g::text, 5, '0') from generate_series(0, 99999) g
-                 where not exists (select 1 from public.leads x where x.admission_number = 'ADMSN-' || lpad(g::text, 5, '0'))
-                 order by random() limit 1),
-                'Coded Pupil', l.class_name, l.enrollment_year, l.day_or_boarding, l.guardian_contact_id, l.status, l.visit_date, $1,
-                l.custodian_relationship, l.custodian_relationship_description
-         from public.leads l limit 1`,
-        [`ZXQ-${digits(n + 1)}`],
-      )
-      expect(planted.rowCount).toBe(1)
-      expect(await create(sql, "ZAWADI XENIA QUINN")).toBe(`ZXQ-${digits(n + 2)}`)
+      // Copies of a seeded lead, on free Admission Numbers, carrying the
+      // codes the next ZXQ agents would get.
+      for (const code of ["ZXQ-601", "ZXQ-001"]) {
+        const planted = await sql.query(
+          `insert into public.leads (admission_number, student_name, class_name, enrollment_year, day_or_boarding, guardian_contact_id, status, visit_date, referral_code,
+                                     custodian_relationship, custodian_relationship_description)
+           select (select 'ADMSN-' || lpad(g::text, 5, '0') from generate_series(0, 99999) g
+                   where not exists (select 1 from public.leads x where x.admission_number = 'ADMSN-' || lpad(g::text, 5, '0'))
+                   order by random() limit 1),
+                  'Coded Pupil', l.class_name, l.enrollment_year, l.day_or_boarding, l.guardian_contact_id, l.status, l.visit_date, $1,
+                  l.custodian_relationship, l.custodian_relationship_description
+           from public.leads l limit 1`,
+          [code],
+        )
+        expect(planted.rowCount).toBe(1)
+      }
+      expect(await create(sql, "ZAWADI XENIA QUINN")).toBe("ZXQ-602")
+      // Once 999 is held the lowest free number is 001, which a lead carries as ZXQ-001.
+      await plant(sql, ["QVW-999"])
+      expect(await create(sql, "ZAWADI XENIA QUINN")).toBe("ZXQ-002")
     })
   })
 
   test("two sign-ups at the same moment get different numbers, and neither waits for the other", async () => {
-    const open = async () => {
-      const sql = new Client({ connectionString: process.env.SUPABASE_DB_URL })
-      await sql.connect()
-      await sql.query("begin")
-      return sql
-    }
-    const a = await open()
-    const b = await open()
+    const a = await openTransaction()
+    const b = await openTransaction()
     try {
       // The first is still open when the second signs up: the second gets
       // its number at once, a different one.
       const first = await signUp(a, `Amina Bakari Concurrent${randomUUID().slice(0, 4)}`)
       const second = await signUp(b, `Xavier Yusuf Concurrent${randomUUID().slice(0, 4)}`)
-      await b.query("commit")
-      await a.query("commit")
-
-      const number = (code: string) => Number(code.split("-")[1])
       expect(first.outcome).toBe("registered")
       expect(second.outcome).toBe("registered")
-      expect(number(second.code)).toBeGreaterThan(number(first.code))
+      expect(numberOf(second.code)).not.toBe(numberOf(first.code))
     } finally {
-      await a.query("rollback").catch(() => {})
-      await b.query("rollback").catch(() => {})
-      await a.end()
-      await b.end()
+      await closeAll(a, b)
+    }
+  })
+
+  test("once 999 is held, two sign-ups at the same moment get different numbers, and neither waits for the other", async () => {
+    const a = await openTransaction()
+    const b = await openTransaction()
+    try {
+      // Each sees 999 held, by a record of its own: both look for the lowest
+      // free number, and the second passes over the one the first holds.
+      await plant(a, ["AAA-999"])
+      await plant(b, ["BBB-999"])
+      const first = await signUp(a, `Amina Bakari Wrapped${randomUUID().slice(0, 4)}`)
+      const second = await signUp(b, `Xavier Yusuf Wrapped${randomUUID().slice(0, 4)}`)
+      expect(first.outcome).toBe("registered")
+      expect(second.outcome).toBe("registered")
+      expect(numberOf(first.code)).not.toBe("999")
+      expect(numberOf(second.code)).not.toBe(numberOf(first.code))
+    } finally {
+      await closeAll(a, b)
+    }
+  })
+
+  test("with every number held, two sign-ups at the same moment still get different numbers", async () => {
+    const a = await openTransaction()
+    const b = await openTransaction()
+    try {
+      // Each sees every number held, by records of its own.
+      await plant(a, codesFor("AAA", oneTo999))
+      await plant(b, codesFor("BBB", oneTo999))
+      const first = await signUp(a, `Amina Bakari Repeat${randomUUID().slice(0, 4)}`)
+      const second = await signUp(b, `Xavier Yusuf Repeat${randomUUID().slice(0, 4)}`)
+      expect(first.outcome).toBe("registered")
+      expect(second.outcome).toBe("registered")
+      expect(numberOf(second.code)).not.toBe(numberOf(first.code))
+    } finally {
+      await closeAll(a, b)
     }
   })
 
@@ -278,36 +327,116 @@ describe("the Discount code format", () => {
       expect(error).toBeNull()
       return (data as { code: string }).code
     })
-    const numbers = codes.map((code) => Number(code.split("-")[1]))
-    expect(new Set(numbers).size).toBe(6)
+    expect(new Set(codes.map(numberOf)).size).toBe(6)
     for (const code of codes) expect(code).toMatch(/^PAN-\d{3}$/)
   })
 })
 
-describe("the last number", () => {
-  test("is the number in the newest record's code shaped like a generated one, retired records included", async () => {
+describe("the next number comes after the highest any agent code holds (#521)", () => {
+  test("an import counts at once: with QVW-150 imported, the next sign-up gets XYZ-151", async () => {
     await inRolledBackTransaction(async (sql) => {
-      await sql.query("select public.set_audit_actor('system')")
-      // Records stored before codes were held to ABC-123 (#462), planted past
-      // the triggers that hold new codes to it.
-      await sql.query("set local session_replication_role = replica")
-      const insert = (code: string, at: string) =>
-        sql.query<{ id: string }>(
-          "insert into public.marketing_agents (full_name, phone, code, registered_at) values ('Last Number', $1, $2, $3) returning id",
-          [phone(), code, at],
-        )
-      await insert("MAK-042", "2999-01-01")
-      // Newer, but not in the generated shape: four letters, or no number.
-      await insert("ABCD-999", "2999-01-02")
-      await insert("MAMA.SALMA", "2999-01-03")
-      expect(Number((await sql.query("select public.last_agent_code_number() as n")).rows[0].n)).toBe(42)
-
-      const retired = await insert("RE-0077", "2999-01-04")
-      await sql.query("select public.record_agent_status_change($1, 'retired', 'Test: retired', null)", [retired.rows[0].id])
-      expect(Number((await sql.query("select public.last_agent_code_number() as n")).rows[0].n)).toBe(77)
+      await onlyTestAgents(sql)
+      await plant(sql, ["QQQ-140"])
+      // The highest row first: the lower code after it changes nothing.
+      const imported = await confirmImport(sql, [
+        { code: "QVW-150", full_name: "QUDRA VUAI WEMA" },
+        { code: "ZXQ-120", full_name: "ZAWADI XENIA QUINN" },
+      ])
+      expect(imported).toMatchObject({ outcome: "imported", created: 2 })
+      expect(await signUp(sql, "XAVIER YUSUF ZUBERI")).toMatchObject({ outcome: "registered", code: "XYZ-151" })
     })
   })
 
+  test("a code the Manager types counts at once; a lower one changes nothing", async () => {
+    await inRolledBackTransaction(async (sql) => {
+      await onlyTestAgents(sql)
+      await plant(sql, ["QQQ-400"])
+      expect(await create(sql, "ZAWADI XENIA QUINN", "ZXQ-450")).toBe("ZXQ-450")
+      expect(await create(sql, "BAKARI ALI JUMA")).toBe("BAJ-451")
+      expect(await create(sql, "QUDRA VUAI WEMA", "QVW-420")).toBe("QVW-420")
+      expect(await signUp(sql, "XAVIER YUSUF ZUBERI")).toMatchObject({ outcome: "registered", code: "XYZ-452" })
+    })
+  })
+
+  test("codes saved before #521 count, retired ones included, and only codes in the ABC-123 shape", async () => {
+    await inRolledBackTransaction(async (sql) => {
+      await onlyTestAgents(sql)
+      await plant(sql, ["ZXQ-460", "RE-0990", "ABCD-999", "QVW-470"])
+      await retire(sql, "QVW-470")
+      expect(Number((await sql.query("select public.highest_agent_code_number() as n")).rows[0].n)).toBe(470)
+      expect(await signUp(sql, "XAVIER YUSUF ZUBERI")).toMatchObject({ outcome: "registered", code: "XYZ-471" })
+    })
+  })
+
+  test("a sign-up during an import gets a number at once, never the import's", async () => {
+    const importing = await openTransaction()
+    const signing = await openTransaction()
+    try {
+      // The import is still open, holding its locks, when the agent signs up.
+      expect(await confirmImport(importing, [{ code: "QVW-650", full_name: "QUDRA VUAI WEMA" }])).toMatchObject({ outcome: "imported" })
+      expect(await holdsNumber(importing, 650)).toBe(true)
+      const signed = await signUp(signing, "XAVIER YUSUF ZUBERI")
+      expect(signed.outcome).toBe("registered")
+      expect(numberOf(signed.code)).not.toBe("650")
+    } finally {
+      await closeAll(importing, signing)
+    }
+  })
+})
+
+describe("while the old function may still be running (the migration itself)", () => {
+  test("a creation starts above the last number the old function took, then takes the ones between", async () => {
+    // The sequence's position is not rolled back with a transaction: put it back.
+    const keeper = new Client({ connectionString: process.env.SUPABASE_DB_URL })
+    await keeper.connect()
+    const { rows: was } = await keeper.query<{ last_value: string; is_called: boolean }>("select last_value, is_called from public.agent_code_numbers")
+    try {
+      await keeper.query("select setval('public.agent_code_numbers', 152, true)")
+      await inRolledBackTransaction(async (sql) => {
+        await onlyTestAgents(sql)
+        await plant(sql, ["QQQ-150"])
+        // An old call may be saving 151 or 152 right now.
+        expect(await create(sql, "ZAWADI XENIA QUINN")).toBe("ZXQ-153")
+        // With the old function's last number at 999, the numbers above the
+        // highest held still come first, lowest of them first.
+        await keeper.query("select setval('public.agent_code_numbers', 999, true)")
+        expect(await create(sql, "ZAWADI XENIA QUINN")).toBe("ZXQ-154")
+      })
+    } finally {
+      await keeper.query("select setval('public.agent_code_numbers', $1, $2)", [was[0].last_value, was[0].is_called])
+      await keeper.end()
+    }
+  })
+})
+
+describe("a typed code and a sign-up saving the same number", () => {
+  test("the import waits for the sign-up, then holds the number, so a later sign-up can't take it", async () => {
+    const signing = await openTransaction()
+    const importing = await openTransaction()
+    const later = await openTransaction()
+    try {
+      const first = await signUp(signing, `Amina Bakari Held${randomUUID().slice(0, 4)}`)
+      expect(first.outcome).toBe("registered")
+      const held = numberOf(first.code)
+
+      // The import brings a code with the number the open sign-up holds.
+      const importDone = confirmImport(importing, [{ code: `QVW-${held}`, full_name: "QUDRA VUAI WEMA" }])
+      const stillWaiting = await Promise.race([importDone.then(() => false), new Promise((resolve) => setTimeout(() => resolve(true), 500))])
+      expect(stillWaiting).toBe(true)
+
+      // The sign-up gives up; the import goes on, holding the number while open.
+      await signing.query("rollback")
+      expect(await importDone).toMatchObject({ outcome: "imported" })
+      const second = await signUp(later, `Xavier Yusuf Held${randomUUID().slice(0, 4)}`)
+      expect(second.outcome).toBe("registered")
+      expect(numberOf(second.code)).not.toBe(held)
+    } finally {
+      await closeAll(signing, importing, later)
+    }
+  })
+})
+
+describe("a code's number", () => {
   test("reads a code's number only when it has the generated shape", async () => {
     await inRolledBackTransaction(async (sql) => {
       const { rows } = await sql.query(
@@ -318,24 +447,15 @@ describe("the last number", () => {
     })
   })
 
-  test("no client role may read the sequence or take a number from it", async () => {
+  test("no client role may call what reads or holds the numbers", async () => {
     await inRolledBackTransaction(async (sql) => {
-      const { rows } = await sql.query(
-        `select r.role, has_sequence_privilege(r.role, 'public.agent_code_numbers', 'USAGE, SELECT, UPDATE') as allowed
-         from unnest(array['anon', 'authenticated', 'service_role']) as r(role)`,
+      const callable = await sql.query(
+        `select f, r.role
+         from unnest(array['public.highest_agent_code_number()', 'public.hold_agent_code_number()']) as f,
+              unnest(array['anon', 'authenticated', 'service_role']) as r(role)
+         where has_function_privilege(r.role, f, 'EXECUTE')`,
       )
-      expect(rows).toEqual([
-        { role: "anon", allowed: false },
-        { role: "authenticated", allowed: false },
-        { role: "service_role", allowed: false },
-      ])
-      // Nor PUBLIC, which every role inherits: no grant to it is left.
-      const toPublic = await sql.query(
-        `select count(*)::int as n
-         from pg_class c, aclexplode(coalesce(c.relacl, acldefault('S', c.relowner))) a
-         where c.oid = 'public.agent_code_numbers'::regclass and a.grantee = 0`,
-      )
-      expect(toPublic.rows[0].n).toBe(0)
+      expect(callable.rows).toEqual([])
     })
   })
 })

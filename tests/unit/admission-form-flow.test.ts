@@ -10,6 +10,7 @@ import {
   paramToKey,
   restoreDone,
   stepProblems,
+  studentName,
   wireChild,
   wireParent,
   yearOf,
@@ -18,9 +19,9 @@ import {
 
 const YEARS = [2026, 2027] as const
 const father = { fatherFirst: "SALIM", fatherMiddle: "OMARI", fatherLast: "MFANO" }
-const neema: ChildDraft = { card: 3, firstName: "NEEMA", ...father, gender: "Girl", className: "FORM 1", enrollmentYear: 2027, dayOrBoarding: "Day" }
-const juma: ChildDraft = { card: 5, firstName: "JUMA", ...father, gender: "", className: "", enrollmentYear: null, dayOrBoarding: "" }
-const parent = { ...EMPTY_PARENT, firstName: "ASHA", middleName: "ALI", lastName: "MFANO", relationship: "Mother", phone: "0712 345 678" }
+const neema: ChildDraft = { card: 3, firstName: "NEEMA", ...father, lastNameFrom: "father_last", gender: "Girl", className: "FORM 1", enrollmentYear: 2027, dayOrBoarding: "Day" }
+const juma: ChildDraft = { card: 5, firstName: "JUMA", ...father, lastNameFrom: "father_last", gender: "", className: "", enrollmentYear: null, dayOrBoarding: "" }
+const parent = { ...EMPTY_PARENT, custodian: "other" as const, firstName: "ASHA", middleName: "ALI", lastName: "MFANO", relationship: "Mother", phone: "0712 345 678" }
 
 describe("the Admission form's order of questions", () => {
   it("asks each student's name, boy or girl, class and Day or Boarding, then another student, the custodian, the code, the fee and the send", () => {
@@ -89,11 +90,19 @@ describe("the names the page sends (the names contract, #400)", () => {
       fatherFirst: "SALIM",
       fatherMiddle: "OMARI",
       fatherLast: "MFANO",
+      lastNameFrom: "father_last",
       gender: "Girl",
       className: "FORM 1",
       enrollmentYear: 2027,
       dayOrBoarding: "Day",
     })
+  })
+
+  it("sends the last-name choice, and the name it builds ends with the father's middle name when picked (#513)", () => {
+    const middle = { ...neema, lastNameFrom: "father_middle" as const }
+    expect(wireChild(middle)).toMatchObject({ fatherMiddle: "OMARI", fatherLast: "MFANO", lastNameFrom: "father_middle" })
+    expect(studentName(middle)).toBe("NEEMA SALIM OMARI")
+    expect(studentName(neema)).toBe("NEEMA SALIM MFANO")
   })
 
   it("sends the custodian's three names", () => {
@@ -108,16 +117,22 @@ describe("the names the page sends (the names contract, #400)", () => {
     })
   })
 
-  it("with the father switch on, sends the first student's father as the custodian, relationship Father", () => {
-    const switched = { ...parent, fatherCustodian: true, relationship: "Mother" }
+  it("with The father picked, sends the first student's father as the custodian, relationship Father", () => {
+    const switched = { ...parent, custodian: "father" as const, relationship: "Mother" }
     const second = { ...neema, card: 9, fatherFirst: "HAMISI", fatherMiddle: "BAKARI", fatherLast: "JUMA" }
     expect(wireParent(switched, [neema, second])).toMatchObject({ firstName: "SALIM", middleName: "OMARI", lastName: "MFANO", relationship: "Father" })
   })
 
   it("asks no custodian names and no relationship while the father is the custodian", () => {
-    const entries = { parent: { ...EMPTY_PARENT, fatherCustodian: true, relationship: "Father", phone: "0712 345 678" }, children: [neema], discountCode: "" }
+    const entries = { parent: { ...EMPTY_PARENT, custodian: "father" as const, relationship: "Father", phone: "0712 345 678" }, children: [neema], discountCode: "" }
     expect(stepProblems("pname", entries, YEARS)).toEqual([])
     expect(stepProblems("rel", entries, YEARS)).toEqual([])
+  })
+
+  it("stops on the custodian question until The father or Someone else is picked, on no box", () => {
+    const entries = { parent: { ...parent, custodian: "" as const }, children: [neema], discountCode: "" }
+    expect(stepProblems("pname", entries, YEARS)).toEqual([{ field: "contact_name", child: null }])
+    expect(firstOpenable(entries, new Set<StepKey>(["name:3", "gender:3", "class:3", "board:3", "more", "pname"]), YEARS)).toBe("pname")
   })
 
   it("names each empty custodian box", () => {

@@ -46,6 +46,8 @@ describe("reading the posted Admission form", () => {
           {
             fullName: "ZAWADI JUMA FIXTURE",
             nameParts: { firstName: "Zawadi", fatherFirst: "Juma", fatherMiddle: "Ali", fatherLast: "Fixture" },
+            // Left out by the page, the father's last name (a page from before #513).
+            lastNameFrom: "father_last",
             className: "STD 2",
             enrollmentYear: 2027,
             gender: "Girl", dayOrBoarding: "Day",
@@ -178,6 +180,7 @@ describe("names sent in their parts (#400)", () => {
             // The student's name leaves out the father's middle name.
             fullName: "ZAWADI HASSAN MOHAMED",
             nameParts: { firstName: "zawadi", fatherFirst: "Hassan", fatherMiddle: "Ali", fatherLast: "Mohamed" },
+            lastNameFrom: "father_last",
             className: "STD 2",
             enrollmentYear: 2027,
             gender: "Girl", dayOrBoarding: "Day",
@@ -185,6 +188,24 @@ describe("names sent in their parts (#400)", () => {
         ],
       },
     })
+  })
+
+  it("ends the student's name with the father's middle name when the family picked it (#513)", () => {
+    const parsed = parse(form({ parent, children: [{ ...child, lastNameFrom: "father_middle" }, { ...child, firstName: "Asha", lastNameFrom: "father_last" }] }))
+    expect(parsed.ok && parsed.data.children.map((c) => [c.fullName, c.lastNameFrom])).toEqual([
+      ["ZAWADI HASSAN ALI", "father_middle"],
+      ["ASHA HASSAN MOHAMED", "father_last"],
+    ])
+  })
+
+  it.each([["mother"], [1], [null]])("treats a last-name choice of %s as an unreadable form", (lastNameFrom) => {
+    expect(parse(form({ parent, children: [{ ...child, lastNameFrom }] }))).toEqual({ ok: false, error: { field: "payload", child: null } })
+  })
+
+  it("names the same student twice by the names their choices build", () => {
+    // ZAWADI HASSAN ALI twice: one by his middle name, one whose father's last name is ALI.
+    const twice = parse(form({ parent, children: [{ ...child, lastNameFrom: "father_middle" }, { ...child, fatherMiddle: "Omari", fatherLast: "Ali" }] }))
+    expect(twice).toEqual({ ok: false, error: { field: "duplicate_child", child: 1 } })
   })
 
   it.each([

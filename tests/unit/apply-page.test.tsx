@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from "@testing-library/react"
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { forwardRef, useImperativeHandle, type ImgHTMLAttributes } from "react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
@@ -60,6 +60,8 @@ beforeEach(() => {
   // Folds and taps answer at once, with no animation to wait for.
   document.documentElement.classList.add("rm")
   window.scrollTo = vi.fn() as unknown as typeof window.scrollTo
+  // jsdom has no element scrolling; the page keeps the caret's box in view with it (#513).
+  Element.prototype.scrollBy = vi.fn() as unknown as typeof Element.prototype.scrollBy
   live = { applications: null, discount: null }
   vi.stubGlobal(
     "fetch",
@@ -88,6 +90,8 @@ const W = {
     no: "Hapana, endelea",
     yes: "Ndiyo, ongeza mwanafunzi",
     pname: "Msimamizi ni nani?",
+    father: /^Baba/,
+    someone: /^Mtu mwingine/,
     student: "Jina la mwanafunzi",
     first: "Jina la kwanza",
     mother: "Mama",
@@ -104,6 +108,8 @@ const W = {
     no: "No, continue",
     yes: "Yes, add a student",
     pname: "Who is the custodian?",
+    father: /^The father/,
+    someone: /^Someone else/,
     student: "Student's name",
     first: "First name",
     mother: "Mother",
@@ -157,8 +163,14 @@ async function answerStudent(user: User, name: string, lang: "sw" | "en", { clas
   else await user.click(open().getByRole("button", { name: W[lang].next }))
 }
 
-async function answerCustodian(user: User, lang: "sw" | "en") {
+/** Picks Someone else on the custodian question (#513), which opens the three name boxes. */
+async function pickSomeoneElse(user: User, lang: "sw" | "en") {
   await waitForQuestion(W[lang].pname)
+  await user.click(open().getByRole("radio", { name: W[lang].someone }))
+}
+
+async function answerCustodian(user: User, lang: "sw" | "en") {
+  await pickSomeoneElse(user, lang)
   await user.type(nameBox(lang, "first"), "Amina Hassani Mfano")
   await user.click(open().getByRole("button", { name: W[lang].next }))
   await user.click(open().getByRole("radio", { name: W[lang].mother }))
@@ -199,7 +211,7 @@ function remembered(code: string) {
 }
 
 // A draft's names, in the boxes' shape.
-const DRAFT_PARENT = { firstName: "ASHA", middleName: "ALI", lastName: "MFANO", fatherCustodian: false }
+const DRAFT_PARENT = { firstName: "ASHA", middleName: "ALI", lastName: "MFANO", custodian: "other" }
 const DRAFT_CHILD = { firstName: "ZAWADI", fatherFirst: "JUMA", fatherMiddle: "ALI", fatherLast: "MFANO", gender: "Girl" }
 
 function renderPage(state: "first" | "sw" | "en") {
@@ -301,7 +313,12 @@ describe("the Admission form page", { timeout: 30_000 }, () => {
     expect(screen.getByRole("heading", { level: 3, name: "Msimamizi" })).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Badilisha Taarifa, NEEMA SALIM MFANO" })).toBeInTheDocument()
     expect(open().getByText("Mtu anayemlea NEEMA na kulipa ada ya shule.")).toBeInTheDocument()
-    expect(open().getByRole("switch", { name: /Baba ndiye msimamizi/ })).not.toBeChecked()
+    // Two buttons first (#513): nothing picked, and no name boxes or Continue to reach yet.
+    expect(open().getAllByRole("radio").map((r) => r.closest("label")?.textContent)).toEqual(["BabaSALIM OMARI MFANO", "Mtu mwingineMama, mlezi au mtu mwingine"])
+    expect(open().getAllByRole("radio").some((r) => (r as HTMLInputElement).checked)).toBe(false)
+    expect(document.getElementById("custodian-names")).toHaveAttribute("inert")
+    await user.click(open().getByRole("radio", { name: /^Mtu mwingine/ }))
+    expect(document.getElementById("custodian-names")).not.toHaveAttribute("inert")
     await user.type(nameBox("sw", "first"), "Asha Ali Mfano")
     await user.click(open().getByRole("button", { name: "Endelea" }))
     await waitForQuestion("ASHA MFANO ni nani kwa NEEMA?")
@@ -348,20 +365,47 @@ describe("the Admission form page", { timeout: 30_000 }, () => {
     expect(screen.getByText(/REHEMA JUMA MFANO/)).toBeInTheDocument()
   })
 
-  it("Back opens the question before, and Start over shows on the first question only, answered or not", async () => {
+  it("Back opens the question before, and Start over moves to the right of the bar from the second question, with the section chip above the bar", async () => {
     const user = userEvent.setup()
     render(form("en"))
-    expect(screen.getByRole("button", { name: "Start over" })).toBeInTheDocument()
+    const bar = () => document.querySelector(".gf-bar-row")
+    expect(screen.getByRole("button", { name: "Start over" }).closest(".gf-navslot")).not.toBeNull()
     expect(document.querySelector('button[aria-label="Back"]')).toHaveAttribute("aria-hidden", "true")
+    expect(bar()).not.toHaveClass("gf-chip-up")
 
     await user.type(nameBox("en"), `Zawadi ${FATHER}`)
     await user.click(open().getByRole("button", { name: "Continue" }))
     await waitForQuestion("Is ZAWADI a boy or a girl?")
-    expect(document.querySelector('button[aria-label="Start over"]')).toHaveAttribute("aria-hidden", "true")
+    // #513: Back takes the left slot and Start over shows on the right, still one button.
+    expect(screen.getAllByRole("button", { name: "Start over" })).toHaveLength(1)
+    expect(screen.getByRole("button", { name: "Start over" }).closest(".gf-navslot")).toBeNull()
+    expect(bar()).toHaveClass("gf-chip-up")
+    // It asks first, as on the first question.
+    await user.click(screen.getByRole("button", { name: "Start over" }))
+    const sheet = await screen.findByRole("dialog", { name: "Start over?" })
+    await user.click(within(sheet).getByRole("button", { name: "No, keep my answers" }))
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull())
+
     await user.click(screen.getByRole("button", { name: "Back" }))
     await waitForQuestion("What is the student's name?")
     expect(nameBox("en")).toHaveValue("ZAWADI")
-    expect(screen.getByRole("button", { name: "Start over" })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Start over" }).closest(".gf-navslot")).not.toBeNull()
+    expect(bar()).not.toHaveClass("gf-chip-up")
+  })
+
+  it("Start over on the right clears a form answered a long way in, back to the first question", async () => {
+    const user = userEvent.setup()
+    render(form("en"))
+    await answerStudent(user, "Zawadi", "en")
+    await user.click(await screen.findByRole("button", { name: "No, continue" }))
+    await waitForQuestion("Who is the custodian?")
+    await user.click(screen.getByRole("button", { name: "Start over" }))
+    const sheet = await screen.findByRole("dialog", { name: "Start over?" })
+    await user.click(within(sheet).getByRole("button", { name: "Yes, clear the form" }))
+    await waitForQuestion("What is the student's name?")
+    expect(nameBox("en")).toHaveValue("")
+    expect(window.sessionStorage.length).toBe(0)
+    expect(document.querySelector(".gf-bar-row")).not.toHaveClass("gf-chip-up")
   })
 
   it("Start over on an empty form says there is nothing to clear", async () => {
@@ -433,9 +477,15 @@ describe("the Admission form page", { timeout: 30_000 }, () => {
     await user.click(open().getByRole("radio", { name: /Day/ }))
     await user.click(await screen.findByRole("button", { name: "No, continue" }))
     await waitForQuestion("Who is the custodian?")
+    // Enter on the buttons with nobody picked says to choose (#513).
+    open().getByRole("radio", { name: /^The father/ }).focus()
+    await user.keyboard("{Enter}")
+    expect(open().getByText("Choose who the custodian is.")).toBeInTheDocument()
+    await user.click(open().getByRole("radio", { name: /^Someone else/ }))
+    expect(screen.queryByText("Choose who the custodian is.")).not.toBeInTheDocument()
     await user.type(nameBox("en", "first"), "Amina")
     await user.click(open().getByRole("button", { name: "Continue" }))
-    expect(open().getByText("Type all three of the custodian's names, or turn on the switch if it is the father.")).toBeInTheDocument()
+    expect(open().getByText("Type all three of the custodian's names.")).toBeInTheDocument()
     await user.type(open().getByRole("textbox", { name: "Middle name" }), "Hassani Mfano")
     await user.click(open().getByRole("button", { name: "Continue" }))
     await waitForQuestion("Who is AMINA MFANO to ZAWADI?")
@@ -490,6 +540,7 @@ describe("the Admission form page", { timeout: 30_000 }, () => {
     await user.click(open().getByRole("button", { name: "Hapana, endelea" }))
     await waitForQuestion("Msimamizi ni nani?")
     expect(open().getByText("Mtu anayewalea wanafunzi na kulipa ada ya shule.")).toBeInTheDocument()
+    await pickSomeoneElse(user, "sw")
     await user.type(nameBox("sw", "first"), "Asha Ali Mfano")
     await user.click(open().getByRole("button", { name: "Endelea" }))
     await waitForQuestion("ASHA MFANO ni nani kwa wanafunzi hawa?")
@@ -546,7 +597,7 @@ describe("the Admission form page", { timeout: 30_000 }, () => {
     // The names in their parts, as the names contract on #400 asks.
     expect(body.parent).toEqual({ firstName: "AMINA", middleName: "HASSANI", lastName: "MFANO", relationship: "Mother", phone: "0700 000 900" })
     expect(body.children).toEqual([
-      { firstName: "ZAWADI", fatherFirst: "JUMA", fatherMiddle: "ALI", fatherLast: "MFANO", gender: "Girl", className: "STD 2", enrollmentYear: DEFAULT_YEAR, dayOrBoarding: "Day" },
+      { firstName: "ZAWADI", fatherFirst: "JUMA", fatherMiddle: "ALI", fatherLast: "MFANO", lastNameFrom: "father_last", gender: "Girl", className: "STD 2", enrollmentYear: DEFAULT_YEAR, dayOrBoarding: "Day" },
     ])
     expect(body.discountCode).toBeUndefined()
 
@@ -757,15 +808,15 @@ describe("the Admission form page", { timeout: 30_000 }, () => {
     expect(screen.getByText(/not every student on it was received/)).toBeInTheDocument()
   })
 
-  it("with the father switch on, skips the relationship, names the father on the phone question and sends him as the custodian", async () => {
+  it("with The father picked, skips the relationship, names the father on the phone question and sends him as the custodian", async () => {
     stubs.submit.mockResolvedValue({ status: "unavailable" })
     const user = userEvent.setup()
     render(form("en"))
     await answerStudent(user, "Zawadi", "en")
     await user.click(await screen.findByRole("button", { name: "No, continue" }))
     await waitForQuestion("Who is the custodian?")
-    const father = open().getByRole("switch", { name: /The father is the custodian/ })
-    expect(father).toHaveAccessibleDescription(/JUMA ALI MFANO/)
+    const father = open().getByRole("radio", { name: /^The father/ })
+    expect(father.closest("label")).toHaveTextContent("The fatherJUMA ALI MFANO")
 
     await user.click(father)
     await waitForQuestion("What is JUMA's phone number?")
@@ -785,8 +836,8 @@ describe("the Admission form page", { timeout: 30_000 }, () => {
     await user.click(screen.getByRole("button", { name: "Change Number" }))
     await user.click(screen.getByRole("button", { name: "Back" }))
     await waitForQuestion("Who is the custodian?")
-    // Off again: the name boxes open and the relationship is asked again.
-    await user.click(open().getByRole("switch", { name: /The father is the custodian/ }))
+    // Someone else: the name boxes open and the relationship is asked again.
+    await user.click(open().getByRole("radio", { name: /^Someone else/ }))
     await waitFor(() => expect(nameBox("en", "first")).toHaveFocus())
     await user.type(nameBox("en", "first"), "Amina Hassani Mfano")
     await user.click(open().getByRole("button", { name: "Continue" }))
@@ -794,7 +845,7 @@ describe("the Admission form page", { timeout: 30_000 }, () => {
     expect(open().getByRole("radio", { name: "Father" })).not.toBeChecked()
   })
 
-  it("turning the father switch off and on answers the relationship at once, so a Change link during the pause never strands the form", async () => {
+  it("switching to Someone else and back to The father answers the relationship at once, so a Change link during the pause never strands the form", async () => {
     const user = userEvent.setup()
     render(form("en"))
     await answerStudent(user, "Zawadi", "en")
@@ -806,25 +857,27 @@ describe("the Admission form page", { timeout: 30_000 }, () => {
     document.documentElement.classList.remove("rm")
     await user.click(screen.getAllByRole("button", { name: "Change Name" }).at(-1)!)
     await waitForQuestion("Who is the custodian?")
-    const father = open().getByRole("switch", { name: /The father is the custodian/ })
-    await user.click(father)
-    await user.click(father)
-    await user.click(father)
-    // Within the pause: go and change the phone, then come back on Continue.
-    await user.click(screen.getByRole("button", { name: "Change Number" }))
-    await waitForQuestion("What is JUMA's phone number?")
+    await user.click(open().getByRole("radio", { name: /^The father/ }))
+    await user.click(open().getByRole("radio", { name: /^Someone else/ }))
+    await user.click(open().getByRole("radio", { name: /^The father/ }))
+    // Within the pause: go and change the student's name, a Change link that
+    // stays on the page, then come back on Continue. The relationship is
+    // answered (Father), so Continue goes on to the phone, open again for him.
+    await user.click(screen.getByRole("button", { name: "Change Details, ZAWADI JUMA MFANO" }))
+    await user.click(screen.getAllByRole("button", { name: "Change Name" })[0])
+    await waitForQuestion("What is the student's name?")
     await user.click(open().getByRole("button", { name: "Continue" }))
-    await waitForQuestion("Have a discount code?")
+    await waitForQuestion("What is JUMA's phone number?")
   })
 
-  it("opens the father's box when the database refuses the custodian's name with the switch on", async () => {
+  it("opens the father's box when the database refuses the custodian's name with The father picked", async () => {
     stubs.submit.mockResolvedValue({ status: "invalid", field: "contact_name", child: null, part: "contact_middle_name" })
     const user = userEvent.setup()
     render(form("en"))
     await answerStudent(user, "Zawadi", "en")
     await user.click(await screen.findByRole("button", { name: "No, continue" }))
     await waitForQuestion("Who is the custodian?")
-    await user.click(open().getByRole("switch", { name: /The father is the custodian/ }))
+    await user.click(open().getByRole("radio", { name: /^The father/ }))
     await waitForQuestion("What is JUMA's phone number?")
     await user.type(open().getByRole("textbox"), "0700 000 900")
     await user.click(open().getByRole("button", { name: "Continue" }))
@@ -835,6 +888,105 @@ describe("the Admission form page", { timeout: 30_000 }, () => {
     await waitForQuestion("What is the student's name?")
     expect(open().getByRole("textbox", { name: "Middle name" })).toHaveAttribute("aria-invalid", "true")
     expect(open().getByRole("textbox", { name: "Last name" })).not.toHaveAttribute("aria-invalid", "true")
+  })
+
+  it("switching from Someone else to The father opens the phone question again, so the number is confirmed for him", async () => {
+    const user = userEvent.setup()
+    render(form("en"))
+    await answerStudent(user, "Zawadi", "en")
+    await user.click(await screen.findByRole("button", { name: "No, continue" }))
+    await answerCustodian(user, "en")
+    await user.click(open().getByRole("button", { name: "Skip, no code" }))
+    await user.click(open().getByRole("button", { name: "Continue" }))
+    await waitForQuestion("Check, then send")
+
+    await user.click(screen.getAllByRole("button", { name: "Change Name" }).at(-1)!)
+    await waitForQuestion("Who is the custodian?")
+    await user.click(open().getByRole("radio", { name: /^The father/ }))
+    await waitForQuestion("What is JUMA's phone number?")
+    expect(open().getByRole("textbox")).toHaveValue("0700 000 900")
+  })
+
+  it("a click on The father again, with no pointer (a screen reader), answers the reopened question", async () => {
+    const user = userEvent.setup()
+    render(form("en"))
+    await answerStudent(user, "Zawadi", "en")
+    await user.click(await screen.findByRole("button", { name: "No, continue" }))
+    await waitForQuestion("Who is the custodian?")
+    await user.click(open().getByRole("radio", { name: /^The father/ }))
+    await waitForQuestion("What is JUMA's phone number?")
+    await user.click(screen.getByRole("button", { name: "Back" }))
+    await waitForQuestion("Who is the custodian?")
+    fireEvent.click(open().getByRole("radio", { name: /^The father/ }))
+    await waitForQuestion("What is JUMA's phone number?")
+  })
+
+  it("Someone else picked right after a second tap on The father stays on the custodian question", async () => {
+    const user = userEvent.setup()
+    render(form("en"))
+    await answerStudent(user, "Zawadi", "en")
+    await user.click(await screen.findByRole("button", { name: "No, continue" }))
+    await pickSomeoneElse(user, "en")
+    await user.type(nameBox("en", "first"), "Amina Hassani Mfano")
+    // The pause before moving on is real here (no reduced motion).
+    document.documentElement.classList.remove("rm")
+    await user.click(open().getByRole("radio", { name: /^The father/ }))
+    await new Promise((resolve) => setTimeout(resolve, 150))
+    await user.click(open().getByRole("radio", { name: /^The father/ }))
+    await user.click(open().getByRole("radio", { name: /^Someone else/ }))
+    await new Promise((resolve) => setTimeout(resolve, 700))
+    expect(open().getByRole("heading", { name: "Who is the custodian?" })).toBeInTheDocument()
+  })
+
+  it("tapping The father again on a reopened custodian question answers it", async () => {
+    const user = userEvent.setup()
+    render(form("en"))
+    await answerStudent(user, "Zawadi", "en")
+    await user.click(await screen.findByRole("button", { name: "No, continue" }))
+    await waitForQuestion("Who is the custodian?")
+    await user.click(open().getByRole("radio", { name: /^The father/ }))
+    await waitForQuestion("What is JUMA's phone number?")
+    await user.click(screen.getByRole("button", { name: "Back" }))
+    await waitForQuestion("Who is the custodian?")
+    expect(open().getByRole("radio", { name: /^The father/ })).toBeChecked()
+    // No Continue shows for The father: a tap on him moves on, and so does Space.
+    await user.click(open().getByRole("radio", { name: /^The father/ }))
+    await waitForQuestion("What is JUMA's phone number?")
+    await user.click(screen.getByRole("button", { name: "Back" }))
+    await waitForQuestion("Who is the custodian?")
+    open().getByRole("radio", { name: /^The father/ }).focus()
+    await user.keyboard(" ")
+    await waitForQuestion("What is JUMA's phone number?")
+  })
+
+  it("asks which of the father's names ends the student's name once his middle and last are in, and sends the choice (#513)", async () => {
+    stubs.submit.mockResolvedValue({ status: "unavailable" })
+    const user = userEvent.setup()
+    render(form("en"))
+    const choice = open().getByRole("radiogroup", { name: "Student's last name" })
+    // Folded away until the father's middle and last names are in.
+    expect(choice.closest(".gf-reveal")).toHaveAttribute("inert")
+    await user.type(nameBox("en"), `Zawadi ${FATHER}`)
+    expect(choice.closest(".gf-reveal")).not.toHaveAttribute("inert")
+    expect(within(choice).getByRole("radio", { name: /^Father's last name/ })).toBeChecked()
+    expect(within(choice).getAllByRole("radio").map((r) => r.closest("label")?.textContent)).toEqual(["Father's last nameMFANO", "Father's middle nameALI"])
+    await user.click(within(choice).getByRole("radio", { name: /^Father's middle name/ }))
+    expect(open().getByText("Student's full name:", { exact: false })).toHaveTextContent("ZAWADI JUMA ALI")
+    await user.click(open().getByRole("button", { name: "Continue" }))
+    await waitForQuestion("Is ZAWADI a boy or a girl?")
+    expect(document.querySelector("#step-name-1 .gf-sum-w")).toHaveTextContent("ZAWADI JUMA ALI")
+    await answerGender(user, "en")
+    await waitFor(() => expect(open().getByRole("button", { name: "Choose another class" })).toBeInTheDocument())
+    await pickClass(user, "STD 2", "en")
+    await waitFor(() => expect(open().getByRole("radio", { name: /Day/ })).toBeInTheDocument())
+    await user.click(open().getByRole("radio", { name: /Day/ }))
+    await user.click(await screen.findByRole("button", { name: "No, continue" }))
+    await answerCustodian(user, "en")
+    await user.click(open().getByRole("button", { name: "Skip, no code" }))
+    await user.click(open().getByRole("button", { name: "Continue" }))
+    await send(user, "Send application")
+    await waitFor(() => expect(stubs.submit).toHaveBeenCalled())
+    expect(sentBody().children[0]).toMatchObject({ fatherMiddle: "ALI", fatherLast: "MFANO", lastNameFrom: "father_middle" })
   })
 
   it("reads the student's full name out as the boxes fill", async () => {

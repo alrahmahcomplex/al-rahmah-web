@@ -1,6 +1,6 @@
 import { normalizeDiscountCode } from "@/lib/referral-link"
 import { FORM_NOTICE_VERSION } from "@/lib/referral-notice"
-import { personFullName, studentFullName, type PersonNameParts, type StudentNameParts } from "@/lib/names"
+import { LAST_NAME_FROM, personFullName, studentFullName, type LastNameFrom, type PersonNameParts, type StudentNameParts } from "@/lib/names"
 import { tanzaniaToday } from "@/lib/school-calendar"
 import { DAY_OR_BOARDING, LEAD_CLASSES, RELATIONSHIPS, STUDENT_GENDERS, type NewContact, type NewStudent, type StudentGender } from "@/lib/services/leads"
 
@@ -16,7 +16,9 @@ export const MAX_CHILDREN = 8
 // parts since #403 and parseAdmissionForm refuses the old one box. The
 // service still takes `fullName` alone, for tests that build forms directly.
 export type AdmissionParent = NewContact & { nameParts?: PersonNameParts }
-export type AdmissionChild = NewStudent & { nameParts?: StudentNameParts }
+// `lastNameFrom` goes only with `nameParts`: which of the father's names ends
+// the student's name (#513). The database takes his last name when it is left out.
+export type AdmissionChild = NewStudent & { nameParts?: StudentNameParts; lastNameFrom?: LastNameFrom }
 
 export type AdmissionForm = {
   // Made by the form when it mounts, kept until a confirmation shows.
@@ -227,12 +229,15 @@ export function parseAdmissionForm(
     const dayOrBoarding = text(c.dayOrBoarding)
     // Left out, Boy or girl is a problem on the student's own question.
     const gender = c.gender === undefined ? "" : text(c.gender)
-    if (name === null || className === null || dayOrBoarding === null || gender === null || typeof c.enrollmentYear !== "number") {
+    // Left out (a page from before #513), the father's last name.
+    const lastNameFrom = c.lastNameFrom === undefined ? "father_last" : (LAST_NAME_FROM as readonly unknown[]).includes(c.lastNameFrom) ? (c.lastNameFrom as LastNameFrom) : null
+    if (name === null || className === null || dayOrBoarding === null || gender === null || lastNameFrom === null || typeof c.enrollmentYear !== "number") {
       return { ok: false, error: payload }
     }
     cleanChildren.push({
-      fullName: studentFullName(name.parts),
+      fullName: studentFullName(name.parts, lastNameFrom),
       nameParts: name.parts,
+      lastNameFrom,
       ...(gender ? { gender: gender as StudentGender } : {}),
       className: className as AdmissionChild["className"],
       enrollmentYear: c.enrollmentYear,

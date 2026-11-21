@@ -1,4 +1,5 @@
 import { MAX_CHILDREN } from "@/lib/admission-form"
+import { LAST_NAME_FROM, type LastNameFrom } from "@/lib/names"
 import { DAY_OR_BOARDING, LEAD_CLASSES, RELATIONSHIPS, STUDENT_GENDERS } from "@/lib/services/leads"
 
 // The Admission form's draft, kept in the tab's sessionStorage so Back, a
@@ -17,18 +18,25 @@ export const DRAFT_KEY = "al-rahmah:admission-form-draft"
 // 2: adds `done`, for the one-question-at-a-time form. 3: names in their
 // boxes and the father switch (prototype v38, #403). A version 2 draft comes
 // back with its names empty, so the form opens on the first name again and
-// keeps the other answers.
-const VERSION = 3
+// keeps the other answers. 4: the custodian's two buttons and the last-name
+// choice (#513); a version 3 draft's father switch becomes The father.
+const VERSION = 4
+const SWITCH_VERSION = 3
 const NAMELESS_VERSION = 2
 const MAX_TEXT = 200
 
-// The custodian's three names, unless `fatherCustodian` says the first
-// student's father is the custodian: then they stay as typed but are not sent.
+// Who the custodian is (#513): nobody picked yet, the first student's father,
+// or someone else, whose three names are typed.
+export type Custodian = "" | "father" | "other"
+export const CUSTODIANS = ["father", "other"] as const
+
+// The custodian's three names, unless `custodian` is the first student's
+// father: then they stay as typed but are not sent.
 export type ParentDraft = {
   firstName: string
   middleName: string
   lastName: string
-  fatherCustodian: boolean
+  custodian: Custodian
   relationship: string
   relationshipDescription: string
   phone: string
@@ -42,6 +50,8 @@ export type ChildDraft = {
   fatherFirst: string
   fatherMiddle: string
   fatherLast: string
+  // Which of the father's names ends the student's name (#513).
+  lastNameFrom: LastNameFrom
   // Boy or girl (#449). A draft from before the question comes back without
   // one, and the form opens on it.
   gender: string
@@ -59,7 +69,7 @@ export const EMPTY_PARENT: ParentDraft = {
   firstName: "",
   middleName: "",
   lastName: "",
-  fatherCustodian: false,
+  custodian: "",
   relationship: "",
   relationshipDescription: "",
   phone: "",
@@ -69,7 +79,7 @@ export const EMPTY_PARENT: ParentDraft = {
 // `card` counts up within one form from 1, the same on the server and in the
 // browser, so the field ids built from it match when the page hydrates.
 export function emptyChild(card: number): ChildDraft {
-  return { card, firstName: "", fatherFirst: "", fatherMiddle: "", fatherLast: "", gender: "", className: "", enrollmentYear: null, dayOrBoarding: "" }
+  return { card, firstName: "", fatherFirst: "", fatherMiddle: "", fatherLast: "", lastNameFrom: "father_last", gender: "", className: "", enrollmentYear: null, dayOrBoarding: "" }
 }
 
 // A question's name in the draft: a student's (`class-3`) or the form's own.
@@ -106,17 +116,25 @@ export function parseDraft(raw: string | null, years: readonly number[]): Draft 
   }
   if (!value || typeof value !== "object") return null
   const { version, parent, children, discountCode, linkCode, done } = value as Record<string, unknown>
-  if (version !== VERSION && version !== NAMELESS_VERSION) return null
+  if (version !== VERSION && version !== SWITCH_VERSION && version !== NAMELESS_VERSION) return null
   // A version 2 draft's one-box names don't split into the boxes reliably.
-  const named = version === VERSION
+  const named = version !== NAMELESS_VERSION
 
   const p = parent && typeof parent === "object" ? (parent as Record<string, unknown>) : {}
   const name = (value: unknown) => (named ? text(value) : "")
+  const names = { firstName: name(p.firstName), middleName: name(p.middleName), lastName: name(p.lastName) }
+  // Version 3 had a switch: on is The father; off with a name typed is Someone else.
+  const custodian: Custodian =
+    version === VERSION
+      ? (oneOf(p.custodian, CUSTODIANS) as Custodian)
+      : named && p.fatherCustodian === true
+        ? "father"
+        : Object.values(names).some((part) => part.trim())
+          ? "other"
+          : ""
   const cleanParent: ParentDraft = {
-    firstName: name(p.firstName),
-    middleName: name(p.middleName),
-    lastName: name(p.lastName),
-    fatherCustodian: named && p.fatherCustodian === true,
+    ...names,
+    custodian,
     relationship: oneOf(p.relationship, RELATIONSHIPS),
     relationshipDescription: text(p.relationshipDescription),
     phone: text(p.phone),
@@ -133,6 +151,7 @@ export function parseDraft(raw: string | null, years: readonly number[]): Draft 
       fatherFirst: name(c.fatherFirst),
       fatherMiddle: name(c.fatherMiddle),
       fatherLast: name(c.fatherLast),
+      lastNameFrom: (oneOf(c.lastNameFrom, LAST_NAME_FROM) || "father_last") as LastNameFrom,
       gender: oneOf(c.gender, STUDENT_GENDERS),
       className: oneOf(c.className, LEAD_CLASSES),
       enrollmentYear: year,
@@ -159,7 +178,8 @@ export function readDraft(years: readonly number[]): Draft | null {
 // Referral link, which the page fills in on its own.
 export function isEmptyDraft(draft: Draft): boolean {
   const { parent, children } = draft
-  const parentEmpty = Object.values(parent).every((value) => value === "" || value === false)
+  const parentEmpty = Object.values(parent).every((value) => value === "")
+  // The last-name choice alone doesn't count: it starts as the father's last name.
   const childrenEmpty = children.every(
     (child) =>
       !child.firstName && !child.fatherFirst && !child.fatherMiddle && !child.fatherLast && !child.gender && !child.className && child.enrollmentYear === null && !child.dayOrBoarding,
@@ -181,11 +201,12 @@ export function writeDraft(draft: Draft) {
       JSON.stringify({
         version: VERSION,
         parent,
-        children: children.map(({ firstName, fatherFirst, fatherMiddle, fatherLast, gender, className, enrollmentYear, dayOrBoarding }) => ({
+        children: children.map(({ firstName, fatherFirst, fatherMiddle, fatherLast, lastNameFrom, gender, className, enrollmentYear, dayOrBoarding }) => ({
           firstName,
           fatherFirst,
           fatherMiddle,
           fatherLast,
+          lastNameFrom,
           gender,
           className,
           enrollmentYear,

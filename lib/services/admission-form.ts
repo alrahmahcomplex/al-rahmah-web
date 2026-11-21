@@ -39,7 +39,8 @@ import type { Result } from "./result"
 // before or after a deploy that changed the notice is the same send.
 //
 // Names come in their parts (prototype v38, #400) or in the live form's one
-// box; the database builds and stores the full names from the parts. A part
+// box; the database builds and stores the full names from the parts, the
+// student's from the last-name choice that comes with them (#513). A part
 // it refuses comes back as the child's `student_name` or the parent's
 // `contact_name`, with `part` naming the box.
 //
@@ -97,6 +98,8 @@ export function payloadHash({ parent, children, discountCode }: Pick<AdmissionFo
         : []),
       // Only when given, so a form sent before the question keeps its key.
       ...(c.gender ? [{ gender: c.gender }] : []),
+      // Only the father's middle name, so a form built as before #513 keeps its key.
+      ...(c.nameParts && c.lastNameFrom === "father_middle" ? [{ lastNameFrom: c.lastNameFrom }] : []),
     ]),
   })
   return createHash("sha256").update(canonical).digest("hex")
@@ -111,6 +114,8 @@ function studentDetails(child: AdmissionChild, discountCode: string | undefined)
           father_first: parts.fatherFirst,
           father_middle: parts.fatherMiddle,
           father_last: parts.fatherLast,
+          // The database builds the student's name from it, with the parts only.
+          ...(child.lastNameFrom ? { last_name_from: child.lastNameFrom } : {}),
         }
       : { full_name: child.fullName }),
     class_name: child.className,

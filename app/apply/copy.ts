@@ -42,6 +42,8 @@ type Copy = {
   // The name boxes' placeholders, which are also their names for a screen reader.
   names: { first: string; middle: string; last: string; student: string; father: string }
   fullNameLine: string
+  // Which of the father's names ends the student's name (#513).
+  lastName: { group: string; last: string; middle: string }
   // Boy or girl (prototype v41, #449).
   genderQ: (name: string) => string
   genderHint: string
@@ -75,7 +77,12 @@ type Copy = {
   parentBlock: string
   custodianQ: string
   custodianHint: (student: string | null) => string
-  fatherIsCustodian: string
+  // The two buttons (#513): The father, with his names under it, or Someone else.
+  custodianFather: string
+  custodianFatherUnnamed: string
+  custodianOther: string
+  custodianOtherLine: string
+  chooseCustodian: string
   parentName: string
   relQ: (custodian: string, student: string | null) => string
   relQMany: (custodian: string) => string
@@ -198,6 +205,7 @@ export const COPY: Record<Language, Copy> = {
     studentNameHint: "Kama lilivyo kwenye cheti cha kuzaliwa.",
     names: { first: "Jina la kwanza", middle: "Jina la kati", last: "Jina la mwisho", student: "Jina la mwanafunzi", father: "Jina la baba" },
     fullNameLine: "Jina kamili la mwanafunzi:",
+    lastName: { group: "Jina la mwisho la mwanafunzi", last: "Jina la mwisho la baba", middle: "Jina la kati la baba" },
     genderQ: (name) => (name ? `${name} ni mvulana au msichana?` : "Mvulana au msichana?"),
     genderHint: "Madarasa ni ya wavulana, ya wasichana au ya wote, hivyo tunampangia kila mwanafunzi darasa linalomfaa.",
     genderName: "Mvulana au msichana",
@@ -230,7 +238,11 @@ export const COPY: Record<Language, Copy> = {
     custodianQ: "Msimamizi ni nani?",
     custodianHint: (student) =>
       student ? `Mtu anayemlea ${student} na kulipa ada ya shule.` : "Mtu anayewalea wanafunzi na kulipa ada ya shule.",
-    fatherIsCustodian: "Baba ndiye msimamizi",
+    custodianFather: "Baba",
+    custodianFatherUnnamed: "Baba wa mwanafunzi",
+    custodianOther: "Mtu mwingine",
+    custodianOtherLine: "Mama, mlezi au mtu mwingine",
+    chooseCustodian: "Chagua msimamizi ni nani.",
     parentName: "Jina kamili la msimamizi",
     relQ: (custodian, student) => `${custodian || "Msimamizi"} ni nani kwa ${student || "mwanafunzi"}?`,
     relQMany: (custodian) => `${custodian || "Msimamizi"} ni nani kwa wanafunzi hawa?`,
@@ -305,7 +317,7 @@ export const COPY: Record<Language, Copy> = {
       payload: "Hatukuweza kusoma fomu. Pakia ukurasa upya kisha ujaribu tena.",
     },
     studentNameMissing: "Andika jina la mwanafunzi na majina yote matatu ya baba.",
-    custodianNameMissing: "Andika majina yote matatu ya msimamizi, au washa kitufe kama ni baba.",
+    custodianNameMissing: "Andika majina yote matatu ya msimamizi.",
     duplicateChild: (name) => `${name} yupo mara mbili kwenye fomu hii. Ondoa mmoja, au sahihisha jina.`,
     checkPending: "Subiri ukaguzi wa usalama ukamilike, kisha utume.",
     rateLimited: "Umejaribu mara nyingi mno. Subiri dakika chache kisha ujaribu tena. Majibu yako bado yapo.",
@@ -375,6 +387,7 @@ export const COPY: Record<Language, Copy> = {
     studentNameHint: "As it is on the birth certificate.",
     names: { first: "First name", middle: "Middle name", last: "Last name", student: "Student's name", father: "Father's name" },
     fullNameLine: "Student's full name:",
+    lastName: { group: "Student's last name", last: "Father's last name", middle: "Father's middle name" },
     genderQ: (name) => (name ? `Is ${name} a boy or a girl?` : "Boy or girl?"),
     genderHint: "Classes are for boys, for girls or for both, so we place each child in the right one.",
     genderName: "Boy or girl",
@@ -407,7 +420,11 @@ export const COPY: Record<Language, Copy> = {
     custodianQ: "Who is the custodian?",
     custodianHint: (student) =>
       student ? `The person who looks after ${student} and pays the school fees.` : "The person who looks after the students and pays the school fees.",
-    fatherIsCustodian: "The father is the custodian",
+    custodianFather: "The father",
+    custodianFatherUnnamed: "The student's father",
+    custodianOther: "Someone else",
+    custodianOtherLine: "Mother, guardian or another person",
+    chooseCustodian: "Choose who the custodian is.",
     parentName: "Custodian's full name",
     relQ: (custodian, student) => `Who is ${custodian || "the custodian"} to ${student || "the student"}?`,
     relQMany: (custodian) => `Who is ${custodian || "the custodian"} to the students?`,
@@ -482,7 +499,7 @@ export const COPY: Record<Language, Copy> = {
       payload: "We couldn't read the form. Reload the page and try again.",
     },
     studentNameMissing: "Type the student's name and all three of the father's names.",
-    custodianNameMissing: "Type all three of the custodian's names, or turn on the switch if it is the father.",
+    custodianNameMissing: "Type all three of the custodian's names.",
     duplicateChild: (name) => `${name} is on this form twice. Remove one, or correct the name.`,
     checkPending: "Wait a moment for the security check to finish, then send.",
     rateLimited: "Too many tries. Wait a few minutes, then try again. Everything you typed is still here.",

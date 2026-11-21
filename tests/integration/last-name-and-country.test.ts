@@ -94,7 +94,6 @@ describe("the country list", () => {
       "public.previous_school_country(text)",
       "public.registration_last_name_from(jsonb, integer)",
       "public.registration_previous_school_country(jsonb, text, integer)",
-      "public.last_name_from_fits(text, text, public.student_last_name_from)",
     ]
     const rows = await inRolledBackTransaction(
       async (sql) =>
@@ -106,7 +105,7 @@ describe("the country list", () => {
           )
         ).rows,
     )
-    expect(rows).toHaveLength(15)
+    expect(rows).toHaveLength(12)
     expect(rows.filter((r) => r.allowed)).toEqual([])
   })
 })
@@ -276,52 +275,146 @@ describe("check-in of an Admission form family", () => {
 })
 
 describe("corrections on the record", () => {
-  test("the choice changes with the name it builds, and can be cleared", async () => {
+  test("name parts build both student and father names through registration_name and store the choice", async () => {
     const s = student()
     const row = await registered(s)
     const client = await signedIn(ADMISSIONS)
-    expect(await updateLeadDetails(client, row.id, { fullName: studentFullName(s, "father_middle"), lastNameFrom: "father_middle" })).toEqual({ ok: true, data: null })
-    expect(await rowOf(row.id)).toMatchObject({ student_name: studentFullName(s, "father_middle"), last_name_from: "father_middle" })
+
+    const compound = { firstName: s.firstName, fatherFirst: s.fatherFirst, fatherMiddle: s.fatherMiddle, fatherLast: `BIN ${s.fatherLast}` }
+    expect(await updateLeadDetails(client, row.id, { nameParts: { ...compound, lastNameFrom: "father_middle" } })).toEqual({ ok: true, data: null })
+    expect(await rowOf(row.id)).toMatchObject({
+      student_name: studentFullName(compound, "father_middle"),
+      father_full_name: fatherFullName(compound),
+      last_name_from: "father_middle",
+    })
     const read = await getLeadFatherAndSchool(client, row.id)
     expect(read.ok && read.data.lastNameFrom).toBe("father_middle")
-    expect(await updateLeadDetails(client, row.id, { lastNameFrom: null })).toEqual({ ok: true, data: null })
-    expect((await rowOf(row.id)).last_name_from).toBeNull()
+
+    // Leaving lastNameFrom out on the parts path defaults to father_last.
+    expect(await updateLeadDetails(client, row.id, { nameParts: compound })).toEqual({ ok: true, data: null })
+    expect(await rowOf(row.id)).toMatchObject({
+      student_name: studentFullName(compound, "father_last"),
+      father_full_name: fatherFullName(compound),
+      last_name_from: "father_last",
+    })
   })
 
-  test("a one-box name correction never leaves a choice that would build the old name", async () => {
-    const s = student({ lastNameFrom: "father_middle" })
-    const row = await registered(s)
-    const client = await signedIn(ADMISSIONS)
-
-    // Corrected to end with the father's last name: the choice follows the name.
-    expect(await updateLeadDetails(client, row.id, { fullName: studentFullName(s) })).toEqual({ ok: true, data: null })
-    expect(await rowOf(row.id)).toMatchObject({ student_name: studentFullName(s), last_name_from: "father_last" })
-    // And back.
-    expect(await updateLeadDetails(client, row.id, { fullName: studentFullName(s, "father_middle").toLowerCase() })).toEqual({ ok: true, data: null })
-    expect((await rowOf(row.id)).last_name_from).toBe("father_middle")
-    // A name that ends with neither holds no choice.
-    expect(await updateLeadDetails(client, row.id, { fullName: `${s.firstName} ${s.fatherFirst} ${word()}` })).toEqual({ ok: true, data: null })
-    expect((await rowOf(row.id)).last_name_from).toBeNull()
-  })
-
-  test("a corrected father's name that no longer ends the student's name clears the choice", async () => {
-    const s = student({ lastNameFrom: "father_middle" })
-    const row = await registered(s)
-    const corrected = `${s.fatherFirst} ${word()} ${s.fatherLast}`
-    expect(await correctFatherFullName(await signedIn(ADMISSIONS), row.id, { fatherFullName: corrected })).toEqual({ ok: true, data: null })
-    expect(await rowOf(row.id)).toMatchObject({ student_name: studentFullName(s, "father_middle"), father_full_name: corrected, last_name_from: null })
-  })
-
-  test("a changed choice is refused without the name it builds, or with a name it does not build", async () => {
+  test("last_name_from is refused unless it comes with name parts, and parts cannot be mixed with one-box names", async () => {
     const s = student()
     const row = await registered(s)
     const client = await signedIn(ADMISSIONS)
-    const refused = { ok: false, error: { kind: "invalid", field: "last_name_from" } }
-    expect(await updateLeadDetails(client, row.id, { lastNameFrom: "father_middle" })).toEqual(refused)
-    expect(await updateLeadDetails(client, row.id, { fullName: studentFullName(s), lastNameFrom: "father_middle" })).toEqual(refused)
+
+    for (const changes of [
+      { last_name_from: "father_middle" },
+      { last_name_from: "father_last" },
+      { last_name_from: null },
+      { full_name: studentFullName(s, "father_middle"), last_name_from: "father_middle" },
+    ]) {
+      const { error } = await client.rpc("update_lead_details", { lead_id: row.id, changes })
+      expect(error?.message).toBe("invalid")
+      expect(JSON.parse(error?.details ?? "{}")).toEqual({ field: "last_name_from" })
+    }
+
+    // Incomplete name parts and mixing parts with one-box fields are refused.
+    const incomplete = await client.rpc("update_lead_details", { lead_id: row.id, changes: { first_name: s.firstName } })
+    expect(incomplete.error?.message).toBe("invalid")
+    expect(JSON.parse(incomplete.error?.details ?? "{}")).toEqual({ field: "father_first" })
+
+    const withFull = await client.rpc("update_lead_details", {
+      lead_id: row.id,
+      changes: {
+        first_name: s.firstName,
+        father_first: s.fatherFirst,
+        father_middle: s.fatherMiddle,
+        father_last: s.fatherLast,
+        full_name: studentFullName(s),
+      },
+    })
+    expect(withFull.error?.message).toBe("invalid")
+    expect(JSON.parse(withFull.error?.details ?? "{}")).toEqual({ field: "student_name" })
+
+    const withFather = await client.rpc("update_lead_details", {
+      lead_id: row.id,
+      changes: {
+        first_name: s.firstName,
+        father_first: s.fatherFirst,
+        father_middle: s.fatherMiddle,
+        father_last: s.fatherLast,
+        father_full_name: fatherFullName(s),
+      },
+    })
+    expect(withFather.error?.message).toBe("invalid")
+    expect(JSON.parse(withFather.error?.details ?? "{}")).toEqual({ field: "father_full_name" })
+
     expect(await rowOf(row.id)).toMatchObject({ student_name: studentFullName(s), last_name_from: "father_last" })
-    // The stored choice sent again alone changes nothing and is accepted.
-    expect(await updateLeadDetails(client, row.id, { lastNameFrom: "father_last" })).toEqual({ ok: true, data: null })
+  })
+
+  test("a one-box full_name change clears last_name_from, while an unchanged full_name keeps it", async () => {
+    const s = student({ lastNameFrom: "father_middle" })
+    const row = await registered(s)
+    const client = await signedIn(ADMISSIONS)
+
+    // Saving another field with the unchanged full_name (as the record form does) keeps the choice.
+    expect(await updateLeadDetails(client, row.id, { fullName: row.student_name, className: "STD 6" })).toEqual({ ok: true, data: null })
+    expect(await rowOf(row.id)).toMatchObject({ student_name: row.student_name, last_name_from: "father_middle" })
+
+    // Changing full_name through the one-box path clears last_name_from to null.
+    const renamed = studentFullName(s, "father_last")
+    expect(await updateLeadDetails(client, row.id, { fullName: renamed })).toEqual({ ok: true, data: null })
+    expect(await rowOf(row.id)).toMatchObject({ student_name: renamed, last_name_from: null })
+  })
+
+  test("a father_full_name change, including a typo answer and write_typo_spelling on siblings, changes neither student_name nor last_name_from", async () => {
+    const father = { fatherFirst: "ALI", fatherMiddle: "OMARI", fatherLast: `BIN ${word()}` }
+    const s1 = student({ ...father, firstName: word(), lastNameFrom: "father_middle" })
+    const s2 = student({ ...father, firstName: word(), lastNameFrom: "father_middle", siblingOf: { student: 1 } })
+    const saved = await register([s1, s2])
+    if (!saved.ok || saved.data.kind !== "created") throw new Error(JSON.stringify(saved))
+    const [r1, r2] = [await rowOf(saved.data.students[0].admissionNumber), await rowOf(saved.data.students[1].admissionNumber)]
+    const client = await signedIn(ADMISSIONS)
+
+    // Close spelling (one letter different in the middle name) triggers the typo question.
+    const typoSpelling = `${father.fatherFirst} OMARY ${father.fatherLast}`
+    const asked = await correctFatherFullName(client, r1.id, { fatherFullName: typoSpelling })
+    expect(asked).toMatchObject({ ok: false, error: { kind: "father-name-question" } })
+
+    // Picking the sibling's spelling changes neither student_name nor last_name_from.
+    expect(await correctFatherFullName(client, r1.id, { fatherFullName: typoSpelling, answer: "typo", spelling: fatherFullName(s1) })).toEqual({
+      ok: true,
+      data: null,
+    })
+    expect(await rowOf(r1.id)).toMatchObject({
+      student_name: studentFullName(s1, "father_middle"),
+      father_full_name: fatherFullName(s1),
+      last_name_from: "father_middle",
+    })
+
+    // Picking the new spelling writes it to the sibling too (write_typo_spelling), leaving both student names and choices intact.
+    expect(await correctFatherFullName(client, r1.id, { fatherFullName: typoSpelling, answer: "typo", spelling: typoSpelling })).toEqual({
+      ok: true,
+      data: null,
+    })
+    expect(await rowOf(r1.id)).toMatchObject({
+      student_name: studentFullName(s1, "father_middle"),
+      father_full_name: typoSpelling,
+      last_name_from: "father_middle",
+    })
+    expect(await rowOf(r2.id)).toMatchObject({
+      student_name: studentFullName(s2, "father_middle"),
+      father_full_name: typoSpelling,
+      last_name_from: "father_middle",
+    })
+
+    // A plain father_full_name change on an unlinked lead also keeps student_name and last_name_from.
+    const solo = student({ lastNameFrom: "father_middle" })
+    const soloRow = await registered(solo)
+    const differentFather = `${solo.fatherFirst} ${word()} ${solo.fatherLast}`
+    expect(await correctFatherFullName(client, soloRow.id, { fatherFullName: differentFather })).toEqual({ ok: true, data: null })
+    expect(await rowOf(soloRow.id)).toMatchObject({
+      student_name: studentFullName(solo, "father_middle"),
+      father_full_name: differentFather,
+      last_name_from: "father_middle",
+    })
   })
 
   test("a country is kept while the region stays Outside Tanzania, cleared with any other, and refused with one", async () => {

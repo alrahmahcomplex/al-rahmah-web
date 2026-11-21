@@ -29,9 +29,10 @@ export function completion(options: readonly TypeAheadOption[], typed: string): 
   return first && first.label.length > fold(typed).length ? first : null
 }
 
-/** The rest of the completion drawn after the typed letters, exactly as they were typed. Empty when it doesn't continue them. */
+/** The rest of the completion drawn after the typed letters, ignoring case, leading spaces and runs of spaces. Empty when it doesn't continue them. */
 export function restOf(typed: string, label: string): string {
-  return typed !== "" && label.length > typed.length && label.toLowerCase().startsWith(typed.toLowerCase()) ? label.slice(typed.length) : ""
+  const t = fold(typed)
+  return t !== "" && label.length > t.length && label.toLowerCase().startsWith(t) ? label.slice(t.length) : ""
 }
 
 /**

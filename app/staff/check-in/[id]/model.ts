@@ -50,24 +50,39 @@ const normal = (v: string) => words(v).join(" ")
 /**
  * The four name parts from the stored names: the child's own name is the
  * first word of its name, the father's three from his full name (or, when the
- * lead holds none, the words after the first). Complete only when the father
- * has exactly three names and the student's name they make is the one stored,
- * so check-in changes no name staff haven't seen. The last-name choice the
- * lead holds (#511) says which of the father's names ends it; with none, his
- * last name.
+ * lead holds none, the words after the first). Complete when a last-name
+ * choice (the stored one tried first, then the other) and a middle/last split
+ * of the father's words reproduce the stored student name, so check-in changes
+ * no name staff haven't seen and compound names like BIN HASSAN work (#511).
  */
 export function formName(studentName: string, fatherFullName: string | null, lastNameFrom: LastNameFrom | null = null): { name: StudentNameAnswer; complete: boolean } {
   const own = words(studentName)
   const father = fatherFullName ? words(fatherFullName) : own.slice(1)
-  const name: StudentNameAnswer = {
+  const firstChoice: LastNameFrom = lastNameFrom ?? "father_last"
+  const fallback: StudentNameAnswer = {
     firstName: own[0] ?? "",
     fatherFirst: father[0] ?? "",
     fatherMiddle: father.length > 2 ? father.slice(1, -1).join(" ") : "",
     fatherLast: father.length > 1 ? father[father.length - 1] : "",
-    lastNameFrom: lastNameFrom ?? "father_last",
+    lastNameFrom: firstChoice,
   }
-  const rebuilt = builtName(name)
-  return { name, complete: father.length === 3 && !!name.firstName && rebuilt === normal(studentName) }
+  const target = normal(studentName)
+  if (fatherFullName && father.length >= 3 && fallback.firstName) {
+    const choices: LastNameFrom[] = firstChoice === "father_middle" ? ["father_middle", "father_last"] : ["father_last", "father_middle"]
+    for (const choice of choices) {
+      for (let split = 2; split < father.length; split++) {
+        const candidate: StudentNameAnswer = {
+          firstName: fallback.firstName,
+          fatherFirst: father[0],
+          fatherMiddle: father.slice(1, split).join(" "),
+          fatherLast: father.slice(split).join(" "),
+          lastNameFrom: choice,
+        }
+        if (builtName(candidate) === target) return { name: candidate, complete: true }
+      }
+    }
+  }
+  return { name: fallback, complete: false }
 }
 
 /** A person's one stored name in the three boxes: first, middle names, last. */

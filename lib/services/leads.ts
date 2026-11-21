@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 
-import type { LastNameFrom } from "@/lib/names"
+import type { LastNameFrom, StudentNameParts } from "@/lib/names"
 
 import type { Result } from "./result"
 import type { SiblingBasis } from "./sibling-groups"
@@ -980,9 +980,12 @@ export async function countLeadsByYear(
 // ---------------------------------------------------------------------------
 
 // The student's details a correction may change. A field left out keeps its
-// value.
-// `lastNameFrom` is sent with the name it builds (#511); null clears it.
-export type LeadDetailsChanges = Partial<NewStudent> & { lastNameFrom?: LastNameFrom | null }
+// value. `nameParts` builds both the student's and the father's names through
+// registration_name and stores `lastNameFrom` (#511); a one-box `fullName`
+// change clears `lastNameFrom`.
+export type LeadDetailsChanges = Partial<NewStudent> & {
+  nameParts?: StudentNameParts & { lastNameFrom?: LastNameFrom }
+}
 
 // The parent/guardian details a correction may change. A field left out keeps
 // its value; an empty WhatsApp number means the same as the phone.
@@ -1059,16 +1062,25 @@ export async function updateLeadDetails(
   id: string,
   changes: LeadDetailsChanges,
 ): Promise<Result<null, CorrectionError>> {
+  const parts = changes.nameParts
   return correction(
     supabase.rpc("update_lead_details", {
       lead_id: id,
       changes: given({
         full_name: changes.fullName,
+        ...(parts
+          ? {
+              first_name: parts.firstName,
+              father_first: parts.fatherFirst,
+              father_middle: parts.fatherMiddle,
+              father_last: parts.fatherLast,
+              ...(parts.lastNameFrom !== undefined ? { last_name_from: parts.lastNameFrom } : {}),
+            }
+          : {}),
         class_name: changes.className,
         enrollment_year: changes.enrollmentYear,
         day_or_boarding: changes.dayOrBoarding,
         gender: changes.gender,
-        last_name_from: changes.lastNameFrom,
       }),
     }),
     "correct a lead's details",

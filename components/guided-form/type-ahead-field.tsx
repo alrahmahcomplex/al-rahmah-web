@@ -118,6 +118,16 @@ export function TypeAheadField({
   // Esc hides the faint match until the next letter.
   const [dismissed, setDismissed] = useState(false)
   const [open, setOpen] = useState(false)
+  // Tab out of the field or its list moves focus after React commits the pick, so any conditional field (such as Country) is already mounted.
+  const pendingLeave = useRef<{ backwards: boolean } | null>(null)
+  const [leaveTick, setLeaveTick] = useState(0)
+
+  useLayoutEffect(() => {
+    if (!pendingLeave.current) return
+    const { backwards } = pendingLeave.current
+    pendingLeave.current = null
+    focusBeside(boxRef.current, backwards)
+  }, [leaveTick])
 
   // A value set from outside (a draft, Start over) shows its label. One this
   // box sent itself, such as "" while a picked name is edited, keeps the text.
@@ -154,8 +164,12 @@ export function TypeAheadField({
     if (match) {
       const caretAtEnd = box.selectionStart === box.value.length && box.selectionEnd === box.value.length
       if (takesCompletion(event.key, { shift: event.shiftKey, caretAtEnd, fits: startsWith(options, text).length })) {
-        if (event.key !== "Tab") event.preventDefault()
+        event.preventDefault()
         take(match, "key")
+        if (event.key === "Tab") {
+          pendingLeave.current = { backwards: false }
+          setLeaveTick((n) => n + 1)
+        }
         return
       }
     }
@@ -253,9 +267,10 @@ export function TypeAheadField({
             if (focusBox) boxRef.current?.focus({ preventScroll: true })
           }}
           onLeave={(option, backwards) => {
+            pendingLeave.current = { backwards }
             setOpen(false)
             if (option) take(option, "pick")
-            focusBeside(boxRef.current, backwards)
+            setLeaveTick((n) => n + 1)
           }}
         />
       )}
@@ -435,11 +450,15 @@ function TypeAheadList({ anchor, listId, options, pinned, value, optionLead, lab
             </>
           )}
         </div>
+        {/* The faint match is drawn, not typed into the search box, so a screen reader hears it here before Tab or Right arrow takes it. */}
+        <span className="sr-only" aria-live="polite" data-ta-search-suggestion="">
+          {match ? match.label : ""}
+        </span>
         <input
           ref={searchRef}
           type="text"
           role="combobox"
-          aria-autocomplete="both"
+          aria-autocomplete="list"
           aria-expanded="true"
           aria-controls={listId}
           aria-activedescendant={shown[at] ? `${listId}-${at}` : undefined}

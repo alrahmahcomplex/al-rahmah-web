@@ -214,6 +214,17 @@ describe("TypeAheadField", () => {
     }
   })
 
+  it("shows the faint completion after leading spaces and keeps the typed text in the box", async () => {
+    const { container } = render(<Region />)
+    const box = screen.getByRole("combobox", { name: "Region" })
+    await userEvent.type(box, "  pw")
+    expect(box).toHaveValue("  pw")
+    expect(container.querySelector(".gf-ta-typed")).toHaveTextContent("  pw", { normalizeWhitespace: false })
+    expect(container.querySelector(".gf-ta-rest")).toHaveTextContent("ani")
+    await userEvent.keyboard("{ArrowRight}")
+    expect(box).toHaveValue("Pwani")
+  })
+
   it("picks with a click", async () => {
     render(<Region />)
     await userEvent.click(screen.getByRole("button", { name: "Show all regions" }))
@@ -232,6 +243,43 @@ function Row() {
   )
 }
 
+const COUNTRY_OPTIONS: TypeAheadOption[] = [
+  { value: "Kenya", label: "Kenya" },
+  { value: "Uganda", label: "Uganda" },
+]
+const COUNTRY_LABELS = {
+  field: "Country",
+  placeholder: "Type or choose a country",
+  showAll: "Show all countries",
+  search: "Search countries",
+  list: "Countries",
+  none: (q: string) => `No country matches “${q}”.`,
+}
+
+function RegionWithCountry() {
+  const [region, setRegion] = useState("")
+  const [country, setCountry] = useState("")
+  return (
+    <>
+      <input aria-label="Before" />
+      <TypeAheadField
+        options={OPTIONS}
+        pinned="Outside Tanzania"
+        value={region}
+        onValueChange={(v) => {
+          setRegion(v)
+          if (v !== "Outside Tanzania") setCountry("")
+        }}
+        labels={LABELS}
+      />
+      {region === "Outside Tanzania" && (
+        <TypeAheadField options={COUNTRY_OPTIONS} value={country} onValueChange={setCountry} labels={COUNTRY_LABELS} />
+      )}
+      <input aria-label="After" />
+    </>
+  )
+}
+
 describe("TypeAheadField, Tab from the list's search", () => {
   const openAndType = async (letters: string) => {
     render(<Row />)
@@ -245,6 +293,24 @@ describe("TypeAheadField, Tab from the list's search", () => {
     expect(screen.queryByRole("listbox")).toBeNull()
     expect(screen.getByRole("combobox", { name: "Region" })).toHaveValue("Kagera")
     expect(screen.getByLabelText("After")).toHaveFocus()
+  })
+
+  it("lands on the conditional country field after picking Outside Tanzania with Tab", async () => {
+    render(<RegionWithCountry />)
+    await userEvent.click(screen.getByRole("button", { name: "Show all regions" }))
+    await userEvent.type(screen.getByRole("combobox", { name: "Search regions" }), "out")
+    await userEvent.tab()
+    expect(screen.queryByRole("listbox")).toBeNull()
+    expect(screen.getByRole("combobox", { name: "Region" })).toHaveValue("Outside Tanzania (Other Country)")
+    expect(screen.getByRole("combobox", { name: "Country" })).toHaveFocus()
+  })
+
+  it("lands on the conditional country field after taking Outside Tanzania with Tab in the main box", async () => {
+    render(<RegionWithCountry />)
+    await userEvent.type(screen.getByRole("combobox", { name: "Region" }), "out")
+    await userEvent.tab()
+    expect(screen.getByRole("combobox", { name: "Region" })).toHaveValue("Outside Tanzania (Other Country)")
+    expect(screen.getByRole("combobox", { name: "Country" })).toHaveFocus()
   })
 
   it("moves on without picking when nothing matches", async () => {
@@ -276,6 +342,21 @@ describe("TypeAheadField for a screen reader", () => {
     expect(box).toHaveValue("kag")
     expect(said).toHaveTextContent("Kagera")
     await userEvent.keyboard("{Escape}")
+    expect(said).toHaveTextContent("")
+  })
+
+  it("uses aria-autocomplete=list and a polite live region on the popup search", async () => {
+    render(<Region />)
+    await userEvent.click(screen.getByRole("button", { name: "Show all regions" }))
+    const find = screen.getByRole("combobox", { name: "Search regions" })
+    expect(find).toHaveAttribute("aria-autocomplete", "list")
+    const said = document.body.querySelector("[data-ta-search-suggestion]")
+    expect(said).toHaveAttribute("aria-live", "polite")
+    expect(said).toHaveTextContent("")
+    await userEvent.type(find, "kag")
+    expect(find).toHaveValue("kag")
+    expect(said).toHaveTextContent("Kagera")
+    await userEvent.clear(find)
     expect(said).toHaveTextContent("")
   })
 })

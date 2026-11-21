@@ -11,13 +11,12 @@
 --    Null on a lead whose name was never typed in parts (a one-box name,
 --    an import, a lead from before #400). No row is backfilled: the names
 --    already stored stay as they are.
---    A stored choice always agrees with the names beside it
---    (last_name_from_fits). update_lead_details refuses a choice that does
---    not build the name sent with it, or a changed one sent without a name;
---    and when a correction changes the student's or the father's name with
---    no choice sent, it keeps the stored choice if it still fits, takes the
---    other one if that fits, and clears it otherwise. So a name corrected
---    in one box never leaves a choice that would build the old name again.
+--    update_lead_details refuses last_name_from unless it comes with name
+--    parts (first_name, father_first, father_middle, father_last), which
+--    build student_name and father_full_name through registration_name. A
+--    one-box full_name change sets last_name_from to null. A
+--    father_full_name change, including a typo answer and write_typo_spelling
+--    on siblings, changes neither the student's name nor last_name_from.
 -- 2. previous_school_country: a school Outside Tanzania names its country,
 --    one of previous_school_countries(). Any other region, or none, has no
 --    country: a constraint keeps it so, and registration refuses a country
@@ -46,7 +45,7 @@
 -- them, register_students and complete_admission_visit as 20270118100100,
 -- create_lead and admission_form_family as 20270117100100, and
 -- update_lead_details as 20261230100100; then dropping the two columns, the
--- type and the five new functions.
+-- type and the four new functions.
 
 do $migration$
 begin
@@ -165,36 +164,6 @@ end;
 $fn$;
 
 revoke execute on function public.registration_last_name_from(jsonb, integer) from public, anon, authenticated, service_role;
-
--- last_name_from_fits(student_name, father_full_name, choice): whether the
--- student's name ends with the father's name the choice names: his last
--- word for `father_last`, the words between his first and last for
--- `father_middle`. Ignores case and spacing. False when the father's name
--- has too few words. Internal.
-create function public.last_name_from_fits(student_name text, father_full_name text, choice public.student_last_name_from)
-returns boolean
-language sql
-immutable
-set search_path = ''
-as $fn$
-    select case
-        when part is null or part = '' then false
-        else right(pupil, char_length(part) + 1) = ' ' || part
-    end
-    from (
-        select upper(regexp_replace(btrim(coalesce(last_name_from_fits.student_name, '')), '\s+', ' ', 'g')) as pupil,
-               case
-                   when last_name_from_fits.choice = 'father_last' and cardinality(w) >= 2 then w[cardinality(w)]
-                   when last_name_from_fits.choice = 'father_middle' and cardinality(w) >= 3
-                       then array_to_string(w[2:cardinality(w) - 1], ' ')
-               end as part
-        from (
-            select regexp_split_to_array(upper(btrim(coalesce(last_name_from_fits.father_full_name, ''))), '\s+') as w
-        ) words
-    ) parts;
-$fn$;
-
-revoke execute on function public.last_name_from_fits(text, text, public.student_last_name_from) from public, anon, authenticated, service_role;
 
 -- registration_name(details, student): as 20261223100100 made it, with the
 -- last-name choice: the student's name is their own name, the father's
@@ -2115,6 +2084,8 @@ declare
     school_region text;
     school_not_known boolean;
     school_country text;
+    has_parts boolean;
+    named record;
     last_from public.student_last_name_from;
     father_name text;
     father_source public.father_name_source;
@@ -2139,11 +2110,69 @@ begin
     end if;
     perform public.assert_lead_open(lead.id);
 
+    -- Name parts (first_name, father_first, father_middle, father_last, with
+    -- optional last_name_from) build student_name and father_full_name through
+    -- registration_name. last_name_from is refused without name parts. A
+    -- one-box full_name change clears last_name_from; a father_full_name
+    -- change leaves both student_name and last_name_from untouched (#511).
+    has_parts := changes ?| array['first_name', 'father_first', 'father_middle', 'father_last'];
+    if changes ? 'last_name_from' and not has_parts then
+        raise exception 'invalid' using detail = jsonb_build_object('field', 'last_name_from')::text;
+    end if;
+
     pupil_name := lead.student_name;
-    if changes ? 'full_name' then
-        pupil_name := btrim(coalesce(changes ->> 'full_name', ''));
-        if pupil_name = '' then
+    last_from := lead.last_name_from;
+    father_name := lead.father_full_name;
+    father_source := lead.father_full_name_source;
+
+    if has_parts then
+        if changes ? 'full_name' then
             raise exception 'invalid' using detail = jsonb_build_object('field', 'student_name')::text;
+        end if;
+        if changes ? 'father_full_name' then
+            raise exception 'invalid' using detail = jsonb_build_object('field', 'father_full_name')::text;
+        end if;
+        select * into named from public.registration_name(changes, null);
+        pupil_name := named.student_name;
+        last_from := public.registration_last_name_from(changes, null);
+        father_name := named.father_full_name;
+        father_source := case
+            when father_name is not distinct from lead.father_full_name
+                 and lead.father_full_name_source in ('entered', 'edited', 'typo_confirmed')
+                then lead.father_full_name_source
+            else 'edited'
+        end;
+        effective_father := father_name;
+    else
+        if changes ? 'full_name' then
+            pupil_name := btrim(coalesce(changes ->> 'full_name', ''));
+            if pupil_name = '' then
+                raise exception 'invalid' using detail = jsonb_build_object('field', 'student_name')::text;
+            end if;
+            if pupil_name is distinct from lead.student_name then
+                last_from := null;
+            end if;
+        end if;
+
+        -- The father's full name (#301). Left out, it stays, or follows a
+        -- corrected student name while it was derived or backfilled (the
+        -- derive trigger does that on the update below).
+        if changes ? 'father_full_name' then
+            father_name := public.clean_father_name(changes ->> 'father_full_name');
+            if father_name is null or char_length(father_name) > 200 then
+                raise exception 'invalid' using detail = jsonb_build_object('field', 'father_full_name')::text;
+            end if;
+            father_source := case
+                when father_name is not distinct from lead.father_full_name
+                     and lead.father_full_name_source in ('edited', 'typo_confirmed')
+                    then lead.father_full_name_source
+                else 'edited'
+            end;
+            effective_father := father_name;
+        elsif pupil_name is distinct from lead.student_name and lead.father_full_name_source in ('derived', 'backfilled') then
+            effective_father := public.derive_father_full_name(pupil_name);
+        else
+            effective_father := lead.father_full_name;
         end if;
     end if;
 
@@ -2295,45 +2324,6 @@ begin
         school_country := null;
     end if;
 
-    -- Which of the father's names is the student's last name (#511).
-    -- Staff send it with the name it builds; null clears it. It is
-    -- checked against the names further down, once the father's is known.
-    last_from := lead.last_name_from;
-    if changes ? 'last_name_from' then
-        if jsonb_typeof(changes -> 'last_name_from') = 'null' then
-            last_from := null;
-        else
-            begin
-                last_from := (changes ->> 'last_name_from')::public.student_last_name_from;
-            exception when invalid_text_representation then
-                raise exception 'invalid' using detail = jsonb_build_object('field', 'last_name_from')::text;
-            end;
-        end if;
-    end if;
-
-    -- The father's full name (#301). Left out, it stays, or follows a
-    -- corrected student name while it was derived or backfilled (the
-    -- derive trigger does that on the update below).
-    father_name := lead.father_full_name;
-    father_source := lead.father_full_name_source;
-    if changes ? 'father_full_name' then
-        father_name := public.clean_father_name(changes ->> 'father_full_name');
-        if father_name is null or char_length(father_name) > 200 then
-            raise exception 'invalid' using detail = jsonb_build_object('field', 'father_full_name')::text;
-        end if;
-        father_source := case
-            when father_name is not distinct from lead.father_full_name
-                 and lead.father_full_name_source in ('edited', 'typo_confirmed')
-                then lead.father_full_name_source
-            else 'edited'
-        end;
-        effective_father := father_name;
-    elsif pupil_name is distinct from lead.student_name and lead.father_full_name_source in ('derived', 'backfilled') then
-        effective_father := public.derive_father_full_name(pupil_name);
-    else
-        effective_father := lead.father_full_name;
-    end if;
-
     father_answer := nullif(btrim(coalesce(changes ->> 'father_name_answer', '')), '');
     if father_answer is not null and father_answer not in ('typo', 'different') then
         raise exception 'invalid' using detail = jsonb_build_object('field', 'father_name_answer')::text;
@@ -2381,28 +2371,6 @@ begin
         end if;
     elsif father_answer is not null then
         raise exception 'invalid' using detail = jsonb_build_object('field', 'father_name_answer')::text;
-    end if;
-
-    -- The last-name choice agrees with the names saved beside it (#511).
-    if changes ? 'last_name_from' and last_from is not null
-       and (last_from is distinct from lead.last_name_from or changes ? 'full_name') then
-        -- A choice sent: with the name it builds, and building it.
-        if not (changes ? 'full_name')
-           or not public.last_name_from_fits(pupil_name, effective_father, last_from) then
-            raise exception 'invalid' using detail = jsonb_build_object('field', 'last_name_from')::text;
-        end if;
-    elsif not (changes ? 'last_name_from') and last_from is not null
-          and (pupil_name is distinct from lead.student_name
-               or effective_father is distinct from lead.father_full_name) then
-        -- A name corrected with no choice sent: the stored choice stays
-        -- only while it still builds the name; else the other one, else none.
-        last_from := case
-            when public.last_name_from_fits(pupil_name, effective_father, last_from) then last_from
-            when last_from = 'father_middle'
-                 and public.last_name_from_fits(pupil_name, effective_father, 'father_last') then 'father_last'
-            when last_from = 'father_last'
-                 and public.last_name_from_fits(pupil_name, effective_father, 'father_middle') then 'father_middle'
-        end;
     end if;
 
     if typo_mode then

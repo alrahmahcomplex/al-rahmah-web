@@ -32,9 +32,12 @@ describe("the faint completion", () => {
     expect(completion(options, "pwani")).toBeNull()
   })
 
-  it("draws the rest after exactly what was typed", () => {
+  it("draws the rest after what was typed, ignoring leading and repeated spaces", () => {
     expect(restOf("kag", "Kagera")).toBe("era")
     expect(restOf("KAG", "Kagera")).toBe("era")
+    expect(restOf("  pw", "Pwani")).toBe("ani")
+    expect(restOf("dar  es", "Dar es Salaam")).toBe(" Salaam")
+    expect(restOf("   ", "Pwani")).toBe("")
     expect(restOf("kx", "Kagera")).toBe("")
     expect(restOf("", "Kagera")).toBe("")
   })

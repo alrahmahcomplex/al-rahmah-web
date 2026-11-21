@@ -152,7 +152,8 @@ test("The family's choice of the father's middle name ends the student's name, a
   const q = openQuestion(page)
   await nameBox(page, "en").fill(who.childTyped)
   // MWANAFUNZI MAJARIBIO BABA <suffix>: the father's middle name is BABA.
-  await q.getByRole("radio", { name: /^Father's middle name/ }).check()
+  await tile(q, /^Father's middle name/).click()
+  await expect(q.getByRole("radio", { name: /^Father's middle name/ })).toBeChecked()
   await expect(q.getByText("Student's full name:")).toContainText("MWANAFUNZI MAJARIBIO BABA")
   await q.getByRole("button", { name: WORDS.en.continue }).click()
   await answerGender(page, "en")

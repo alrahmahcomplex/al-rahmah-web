@@ -35,6 +35,8 @@ type Copy = {
   // Once, right after the password is set (state 4): the title and the line
   // above the button on to the list.
   approved: string
+  // O-N17, after self-confirm (#503).
+  ready: string
   signedInNote: string
   statuses: Record<AgentStudentStatus, string>
   notActive: string
@@ -82,6 +84,7 @@ export const STUDENTS_COPY: Record<Language, Copy> = {
     openWhatsApp: "Fungua WhatsApp",
     all: "Wote",
     approved: "Umeidhinishwa!",
+    ready: "Akaunti yako iko tayari!",
     signedInNote: "Umeingia. Gusa kitufe hapa chini uone wanafunzi wote uliowaleta.",
     emptyNote: "Familia ikitumia code yako, utaona hapa kila hatua yake: kujisajili, kutembelea shule, usaili na kujiunga.",
     statuses: {
@@ -144,6 +147,7 @@ export const STUDENTS_COPY: Record<Language, Copy> = {
     openWhatsApp: "Open WhatsApp",
     all: "All",
     approved: "You're approved!",
+    ready: "Your account is ready!",
     signedInNote: "You're signed in. Tap the button below to see all the students you referred.",
     emptyNote: "When a family uses your code, you'll see each step here: applying, visiting the school, the interview and enrolling.",
     statuses: {

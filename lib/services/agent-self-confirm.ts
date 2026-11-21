@@ -229,6 +229,10 @@ export async function createPhoneLogin(
     console.error("Self-confirm: could not create the phone login", error)
     return { ok: false, error: "unavailable" }
   }
+  // The marker has done its work at the insert; nothing reads it again, but
+  // it is cleared so it never sits on the login.
+  const cleared = await supabase.auth.admin.updateUserById(data.user.id, { user_metadata: { kind: "agent", self_confirm_attempt: null } })
+  if (cleared.error) console.error("Self-confirm: could not clear the login's marker", cleared.error)
   return { ok: true, data: { userId: data.user.id } }
 }
 

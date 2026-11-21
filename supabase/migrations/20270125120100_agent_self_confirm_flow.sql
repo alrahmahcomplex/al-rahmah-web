@@ -411,8 +411,10 @@ grant execute on function public.record_self_confirm_invite(uuid, text, text) to
 -- user_metadata, for that same mobile, whose agent can still self-confirm.
 -- Null otherwise. Auth writes app_metadata only after the insert, so the
 -- marker rides in user_metadata, which Auth inserts with the row; at insert
--- it can only come from the secret key, since sign-ups are off. Only the
--- insert triggers read it.
+-- it can only come from the secret key, since sign-ups are off.
+-- INSERT ONLY: a signed-in person can rewrite their own user_metadata
+-- (updateUser), so nothing may read this marker except the two INSERT
+-- triggers below, and the app clears it once the login is made.
 create function public.self_confirm_attempt_for(new_user auth.users)
 returns uuid
 language sql
@@ -440,7 +442,8 @@ security definer
 set search_path = ''
 as $$
 begin
-    -- A phone login from a proven self-confirm attempt (#503).
+    -- A phone login from a proven self-confirm attempt (#503). Insert only:
+    -- the marker it reads is user_metadata, which a login can rewrite later.
     if new.email is null and public.self_confirm_attempt_for(new) is not null then
         return new;
     end if;

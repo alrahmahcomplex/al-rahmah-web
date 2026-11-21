@@ -138,7 +138,8 @@ export async function finishSelfConfirm(_previous: FinishState, formData: FormDa
   const jar = await cookies()
   jar.delete({ name: BROWSER_COOKIE, path: COOKIE_PATH })
   if (!signedIn.ok) redirect("/auth")
-  jar.set(WELCOME_COOKIE, made.data.userId, {
+  // ".self": the welcome says the account is ready (O-N17).
+  jar.set(WELCOME_COOKIE, `${made.data.userId}.self`, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",

@@ -15,7 +15,7 @@ import {
 import { createAgent } from "@/lib/services/marketing-agents"
 import type { SmsSender } from "@/lib/services/sms"
 
-import { asSystem, secretClient, signedIn } from "../../support/db"
+import { anonClient, asSystem, secretClient, signedIn, TEST_CAPTCHA_TOKEN } from "../../support/db"
 import { MANAGER } from "../../support/fixtures"
 
 // Agent self-confirm by mobile (#503 slice 3) against local Supabase. Serial:
@@ -301,5 +301,59 @@ describe("email instead", () => {
       return r.rows[0]
     })
     expect(after).toEqual({ linked_to_phone: true, invite_logins: 0 })
+  })
+})
+
+describe("the login marker", () => {
+  // A finished self-confirm by mobile: the agent, their attempt and login.
+  async function selfConfirmed() {
+    const agent = await agentOnRecord()
+    const browser = randomUUID()
+    const started = await start(agent, browser)
+    if (started.kind !== "ready") throw new Error("not ready")
+    const sms = keptSender()
+    await sendConfirmationNumber(secretClient(), sms.send, { attempt: started.attempt, browser }, words, ENV)
+    await checkConfirmationNumber(secretClient(), { attempt: started.attempt, browser, digits: sms.lastDigits() }, ENV)
+    const login = await createPhoneLogin(secretClient(), { attempt: started.attempt, phone: agent.phone!, password: "self-confirm-password" }, 6)
+    if (!login.ok) throw new Error("no login")
+    return { agent, attempt: started.attempt, userId: login.data.userId }
+  }
+
+  test("is cleared from the login once it is made", async () => {
+    const done = await selfConfirmed()
+    const marker = await asSystem(async (sql) => {
+      const row = await sql.query<{ marker: string | null }>("select raw_user_meta_data ->> 'self_confirm_attempt' as marker from auth.users where id = $1", [done.userId])
+      return row.rows[0].marker
+    })
+    expect(marker).toBeNull()
+  })
+
+  test("a signed-in agent who writes another attempt into their own user_metadata links nothing and changes nothing", async () => {
+    const intruder = await selfConfirmed()
+    // Another agent, whose attempt is proven but not finished.
+    const other = await agentOnRecord()
+    const browser = randomUUID()
+    const started = await start(other, browser)
+    if (started.kind !== "ready") throw new Error("not ready")
+    const sms = keptSender()
+    await sendConfirmationNumber(secretClient(), sms.send, { attempt: started.attempt, browser }, words, ENV)
+    await checkConfirmationNumber(secretClient(), { attempt: started.attempt, browser, digits: sms.lastDigits() }, ENV)
+
+    const session = anonClient()
+    const signed = await session.auth.signInWithPassword({ phone: intruder.agent.phone!.slice(1), password: "self-confirm-password", options: { captchaToken: TEST_CAPTCHA_TOKEN } })
+    expect(signed.error).toBeNull()
+    const rewrote = await session.auth.updateUser({ data: { self_confirm_attempt: started.attempt } })
+    expect(rewrote.error).toBeNull()
+
+    const after = await asSystem(async (sql) => {
+      const row = await sql.query<{ other_user: string | null; intruder_user: string | null; other_state: string }>(
+        `select (select user_id from public.marketing_agents where id = $1) as other_user,
+                (select user_id from public.marketing_agents where id = $2) as intruder_user,
+                (select state from public.agent_confirm_attempts where id = $3) as other_state`,
+        [other.id, intruder.agent.id, started.attempt],
+      )
+      return row.rows[0]
+    })
+    expect(after).toEqual({ other_user: null, intruder_user: intruder.userId, other_state: "proven" })
   })
 })

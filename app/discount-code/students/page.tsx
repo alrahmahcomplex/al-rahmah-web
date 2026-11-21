@@ -76,7 +76,9 @@ export default async function AgentStudentsPage({ searchParams }: { searchParams
   const copy = STUDENTS_COPY[language]
   const params = await searchParams
   const welcome = (await cookies()).get(WELCOME_COOKIE)?.value
-  if (welcome && welcome === (await verifiedUserId(supabase))) return <Welcome language={language} />
+  // The login's user id, with ".self" after self-confirm (#503), whose welcome has its own title.
+  const [welcomed, how] = (welcome ?? "").split(".")
+  if (welcomed && welcomed === (await verifiedUserId(supabase))) return <Welcome language={language} selfConfirmed={how === "self"} />
 
   const search = typeof params.q === "string" ? params.q.slice(0, 100) : ""
   const step = stepFrom(params.step)
@@ -263,16 +265,17 @@ export default async function AgentStudentsPage({ searchParams }: { searchParams
   )
 }
 
-// State 4, once, right after the password is set: approved, signed in, and
+// State 4, once, right after the password is set: approved (or, after
+// self-confirm, O-N17: the account is ready), signed in, and
 // the one orange button on to the list at this same address.
-function Welcome({ language }: { language: Language }) {
+function Welcome({ language, selfConfirmed }: { language: Language; selfConfirmed: boolean }) {
   const copy = STUDENTS_COPY[language]
   const share = DISCOUNT_COPY[language]
   return (
     <AccountShell language={language} wide>
       <section className="flex flex-col items-center gap-4 text-center">
         <FinishMark />
-        <h2 className="font-exo text-[26px] leading-[1.18] font-extrabold tracking-[-0.01em] text-balance text-blue-600 italic">{copy.approved}</h2>
+        <h2 className="font-exo text-[26px] leading-[1.18] font-extrabold tracking-[-0.01em] text-balance text-blue-600 italic">{selfConfirmed ? copy.ready : copy.approved}</h2>
         <p className="text-[15px] text-slate-700">{copy.signedInNote}</p>
         <form action={continueToStudents} className="w-full">
         <button

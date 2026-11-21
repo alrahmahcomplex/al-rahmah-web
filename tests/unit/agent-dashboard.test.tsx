@@ -82,6 +82,19 @@ describe("the reminders", () => {
     expect(await screen.findByText("Habari! Mtoto 7")).toBeInTheDocument()
   })
 
+  it("hands keyboard focus to the first reminder it reveals", async () => {
+    const user = userEvent.setup()
+    render(<Reminders items={reminders(7)} words={words(7)} />)
+    screen.getByRole("button", { name: "Ona wote (7)" }).focus()
+    await user.keyboard("{Enter}")
+
+    const sixth = screen.getAllByRole("listitem")[5]
+    expect(sixth).toHaveTextContent("Mtoto 6")
+    expect(sixth.querySelector("button")).toHaveFocus()
+    await user.keyboard("{Enter}")
+    expect(await screen.findByText("Habari! Mtoto 6")).toBeInTheDocument()
+  })
+
   it("offers no 'Ona wote' with five or fewer", () => {
     render(<Reminders items={reminders(5)} words={words(5)} />)
     expect(screen.getAllByRole("listitem")).toHaveLength(5)

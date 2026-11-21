@@ -1,7 +1,7 @@
 "use client"
 
 import { Check, ChevronRight, Copy, MessageCircle, Share2 } from "lucide-react"
-import { useRef, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 
 import { BottomSheet } from "@/components/guided-form"
@@ -161,6 +161,15 @@ export const REMINDERS_SHOWN = 5
 export function Reminders({ items, words }: { items: ReminderItem[]; words: ReminderWords }) {
   const [shown, setShown] = useState<number | null>(null)
   const [all, setAll] = useState(false)
+  const list = useRef<HTMLUListElement>(null)
+  const expanded = useRef(false)
+  // "Ona wote" goes away when pressed: focus moves on to the first reminder
+  // it revealed, so a keyboard user carries on from there.
+  useEffect(() => {
+    if (!all || expanded.current) return
+    expanded.current = true
+    list.current?.querySelectorAll<HTMLButtonElement>("li button")[REMINDERS_SHOWN]?.focus()
+  }, [all])
   const box = useRef<HTMLParagraphElement>(null)
   const item = shown === null ? null : items[shown]
   const listed = all ? items : items.slice(0, REMINDERS_SHOWN)
@@ -169,7 +178,7 @@ export function Reminders({ items, words }: { items: ReminderItem[]; words: Remi
   return (
     <section className="flex flex-col gap-3">
       <h2 className="font-exo text-[17px] leading-tight font-extrabold text-blue-600 italic">{words.heading}</h2>
-      <ul className="flex flex-col gap-2.5">
+      <ul ref={list} className="flex flex-col gap-2.5">
         {listed.map((reminder, index) => (
           <li key={index} className="flex flex-col gap-2 rounded-[20px] border-[1.5px] border-orange-500/35 bg-[#fffaf4] px-4 py-3">
             <p className="text-base leading-snug font-semibold wrap-anywhere text-slate-800">

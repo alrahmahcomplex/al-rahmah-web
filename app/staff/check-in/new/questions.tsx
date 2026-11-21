@@ -3,13 +3,17 @@
 import { useEffect, useId, useRef, useState, type FormEvent, type MouseEvent, type ReactNode } from "react"
 
 import {
+  CapitalsBox,
   CodePicker,
   ContinuePill,
   FullNameBox,
   Hint,
+  Icon as GuidedIcon,
+  LastNameChoice,
   PersonNameBoxes,
   QuestionTitle,
   StudentNameBoxes,
+  TypeAheadField,
   cleanName,
   formatCode,
   hasTwoNames,
@@ -19,7 +23,6 @@ import {
 } from "@/components/guided-form"
 import {
   Button,
-  ChipButtons,
   ChoiceTiles,
   ClassPicker,
   DefaultTile,
@@ -28,13 +31,13 @@ import {
   GuidedReveal,
   Note,
   Sheet,
-  Switch,
   Table,
   Tag,
   TextLink,
 } from "@/components/kit"
 import { Icon } from "@/components/icons"
-import { OUTSIDE_TANZANIA } from "@/lib/places"
+import type { LastNameFrom } from "@/lib/names"
+import { COUNTRY_NAMES, countryFlag, OUTSIDE_TANZANIA, regionsOutsideFirst } from "@/lib/places"
 import { STAFF_REMINDER } from "@/lib/referral-notice"
 import { STUDENT_GENDERS, type DayOrBoarding, type LeadClass, type StudentGender } from "@/lib/services/leads"
 
@@ -72,9 +75,25 @@ import { listCodesToPick } from "./code-actions"
 export const PICK_MS = 240
 
 const NAME_LABELS = { first: "First name", middle: "Middle name", last: "Last name" }
+const LAST_NAME_LABELS = { group: "Student’s last name", last: "Father’s last name", middle: "Father’s middle name" }
 const EMPTY_STUDENT: StudentName = { firstName: "", fatherFirst: "", fatherMiddle: "", fatherLast: "" }
 const EMPTY_PERSON: PersonName = { firstName: "", middleName: "", lastName: "" }
 const STUDENT_KEYS = ["firstName", "fatherFirst", "fatherMiddle", "fatherLast"] as const
+
+const OUTSIDE_LABEL = "Outside Tanzania (Other Country)"
+const REGION_OPTIONS = regionsOutsideFirst(REGIONS).map((r) => ({ value: r, label: r === OUTSIDE_TANZANIA ? OUTSIDE_LABEL : r }))
+const COUNTRY_OPTIONS = COUNTRY_NAMES.map((c) => ({ value: c, label: c }))
+const flag = (country: string) => <span className="gf-flag">{countryFlag(country)}</span>
+const listLabels = (one: string, many: string) => ({
+  field: one[0].toUpperCase() + one.slice(1),
+  placeholder: `Type or choose a ${one}`,
+  showAll: `Show all ${many}`,
+  search: `Search ${many}`,
+  list: many[0].toUpperCase() + many.slice(1),
+  none: (q: string) => `No ${one} matches “${q}”.`,
+})
+const REGION_LABELS = listLabels("region", "regions")
+const COUNTRY_LABELS = listLabels("country", "countries")
 
 /** A radio group that answers on a pick, and when the chosen option is pressed again after Change. */
 function again(saved: string | undefined, onPick: (v: string) => void) {
@@ -86,8 +105,8 @@ function again(saved: string | undefined, onPick: (v: string) => void) {
 
 export function NameQuestion({ id, next, saved, onDone }: { id: string; next: boolean; saved?: StudentNameAnswer; onDone: (name: StudentNameAnswer) => void }) {
   const [name, setName] = useState<StudentName>(saved ?? EMPTY_STUDENT)
-  // The last-name choice the answer holds (#511): kept through a save of the same question, so the name doesn't change.
-  const lastNameFrom = saved?.lastNameFrom ?? "father_last"
+  // Which of the father's names ends the student's name (#511, prototype v50): his last name by default.
+  const [lastNameFrom, setLastNameFrom] = useState<LastNameFrom>(saved?.lastNameFrom ?? "father_last")
   const [bad, setBad] = useState<keyof StudentName | null>(null)
   const titleId = `${id}-title`
   const errId = `${id}-error`
@@ -110,7 +129,7 @@ export function NameQuestion({ id, next, saved, onDone }: { id: string; next: bo
     <>
       <QuestionTitle id={titleId}>{next ? "What is the next student’s name?" : "What is the student’s name?"}</QuestionTitle>
       <Hint>As it is on the birth certificate.</Hint>
-      <form noValidate onSubmit={submit}>
+      <form noValidate onSubmit={submit} className="rs-col">
         <StudentNameBoxes
           id={id}
           aria-labelledby={titleId}
@@ -123,6 +142,7 @@ export function NameQuestion({ id, next, saved, onDone }: { id: string; next: bo
             setBad(null)
           }}
         />
+        <LastNameChoice name={`${id}-ln`} father={name} value={lastNameFrom} onChange={setLastNameFrom} labels={LAST_NAME_LABELS} />
         <p className="gf-hint rs-live" aria-live="polite">
           {full && (
             <>
@@ -251,46 +271,73 @@ export function BoardQuestion({ id, first, saved, onPick }: { id: string; first:
   )
 }
 
-export function SchoolQuestion({ id, first, saved, onDone, onNotKnown }: { id: string; first: string; saved?: SchoolAnswer; onDone: (s: SchoolAnswer) => void; onNotKnown: () => void }) {
+export function SchoolQuestion({
+  id,
+  first,
+  saved,
+  needsCountry,
+  onDone,
+  onNotKnown,
+}: {
+  id: string
+  first: string
+  saved?: SchoolAnswer
+  // Check-in (#511): an older Outside Tanzania school on file with no country yet.
+  needsCountry?: boolean
+  onDone: (s: SchoolAnswer) => void
+  onNotKnown: () => void
+}) {
   const known = saved && !("notKnown" in saved) ? saved : undefined
-  const [name, setName] = useState(known?.name ?? "")
+  const [name, setName] = useState(known?.name ? known.name.toUpperCase() : "")
   const [type, setType] = useState<"private" | "public" | null>(known?.type ?? null)
-  const [region, setRegion] = useState<string | null>(known?.region ?? null)
-  const [find, setFind] = useState("")
+  const [region, setRegion] = useState(known?.region ?? "")
+  const [country, setCountry] = useState(known?.region === OUTSIDE_TANZANIA ? (known.country ?? "") : "")
   const [error, setError] = useState("")
-  const t = find.trim().toLowerCase()
-  const shown = (t ? REGIONS.filter((r) => r.toLowerCase().includes(t)) : REGIONS).slice(0, 8)
-  if (region && !shown.includes(region)) shown.unshift(region)
+  const formRef = useRef<HTMLFormElement>(null)
+  const focusTimer = useRef(0)
   const errId = `${id}-error`
+  const regionId = `${id}-region`
+  const countryId = `${id}-country`
+  const out = region === OUTSIDE_TANZANIA
+
+  useEffect(() => () => window.clearTimeout(focusTimer.current), [])
+
+  function focusLater(targetId: string, onlyIfActiveId?: string) {
+    window.clearTimeout(focusTimer.current)
+    focusTimer.current = window.setTimeout(() => {
+      if (onlyIfActiveId && document.activeElement?.id !== onlyIfActiveId) return
+      formRef.current?.querySelector<HTMLInputElement>(`[id="${targetId}"]`)?.focus({ preventScroll: true })
+    }, 330)
+  }
 
   function submit(e: FormEvent) {
     e.preventDefault()
-    const n = name.trim().replace(/\s+/g, " ")
+    const n = cleanName(name)
     if (n.length < 3) return setError("Type the school’s name.")
-    if (!type || !region) return setError("Choose private or public, and the region.")
-    // This question asks no country yet (#511): a country saved with the school stays while it is still Outside Tanzania.
-    const country = region === OUTSIDE_TANZANIA && known?.region === OUTSIDE_TANZANIA ? known.country : undefined
-    onDone({ name: n, type, region, ...(country ? { country } : {}) })
+    if (!type) return setError("Choose private or public.")
+    if (!region) return setError("Choose the region from the list.")
+    if (out && !country) return setError("Choose the country from the list.")
+    onDone({ name: n, type, region, ...(out ? { country } : {}) })
   }
 
   return (
     <>
       <QuestionTitle htmlFor={`${id}-name`}>{`Which school is ${first} coming from?`}</QuestionTitle>
       <Hint>The school they attended last.</Hint>
-      <form noValidate onSubmit={submit} className="rs-col">
-        <Field
+      <form ref={formRef} noValidate onSubmit={submit} className="rs-col">
+        <CapitalsBox
           id={`${id}-name`}
           placeholder="School name"
-          autoComplete="off"
+          aria-label="School name"
           value={name}
-          invalid={!!error && name.trim().length < 3}
+          invalid={!!error && cleanName(name).length < 3}
           aria-describedby={errId}
-          onChange={(e) => {
-            setName(e.target.value)
+          onValueChange={(v) => {
+            setName(v)
             setError("")
           }}
         />
-        <GuidedReveal open={name.trim().length > 2}>
+        <GuidedReveal open={cleanName(name).length > 2}>
           <ChoiceTiles
             name={`${id}-type`}
             layout="two"
@@ -303,28 +350,51 @@ export function SchoolQuestion({ id, first, saved, onDone, onNotKnown }: { id: s
             onChange={(v) => {
               setType(v as "private" | "public")
               setError("")
+              if (!region) focusLater(regionId)
             }}
           />
         </GuidedReveal>
         <GuidedReveal open={!!type}>
           <Hint>Which region is the school in?</Hint>
-          <Field size="compact" placeholder="Type to find a region" aria-label="Find a region" autoComplete="off" value={find} onChange={(e) => setFind(e.target.value)} />
-          {shown.length > 0 ? (
-            <ChipButtons
-              label="Regions"
-              options={shown.map((r) => ({ value: r, label: r }))}
-              value={region}
-              onChange={(r) => {
-                setRegion(r)
+          <TypeAheadField
+            id={regionId}
+            options={REGION_OPTIONS}
+            pinned={OUTSIDE_TANZANIA}
+            value={region}
+            invalid={!!error && !region}
+            aria-describedby={errId}
+            lead={() => <GuidedIcon name="pin" small />}
+            labels={REGION_LABELS}
+            onValueChange={(v, how) => {
+              setRegion(v)
+              if (v !== OUTSIDE_TANZANIA) setCountry("")
+              setError("")
+              if (v === OUTSIDE_TANZANIA && how !== "type") focusLater(countryId, regionId)
+            }}
+          />
+          <GuidedReveal open={out}>
+            {needsCountry && !country && (
+              <Note>This school is Outside Tanzania, with no country saved yet. Choose the country to continue.</Note>
+            )}
+            <Hint>Which country is the school in?</Hint>
+            <TypeAheadField
+              id={countryId}
+              options={COUNTRY_OPTIONS}
+              value={country}
+              invalid={!!error && out && !country}
+              aria-describedby={errId}
+              lead={(v) => (v ? flag(v) : <GuidedIcon name="globe" small />)}
+              optionLead={flag}
+              labels={COUNTRY_LABELS}
+              onValueChange={(v) => {
+                setCountry(v)
                 setError("")
               }}
             />
-          ) : (
-            <Hint>No region by that name.</Hint>
-          )}
+          </GuidedReveal>
         </GuidedReveal>
         <FieldError id={errId} message={error} />
-        <GuidedReveal open={!!region}>
+        <GuidedReveal open={!!region && (!out || !!country)}>
           <ContinuePill type="submit">Continue</ContinuePill>
         </GuidedReveal>
         <TextLink className="rs-nk" onClick={onNotKnown}>
@@ -563,14 +633,16 @@ export function CustodianQuestion({
   prefill?: GivenContact | null
   onDone: (c: Custodian) => void
 }) {
-  // The form said Father: the switch starts on. The form's number goes with the form's answer.
+  // Check-in opens on The father or Someone else according to what the Admission form gave (#511, prototype v52).
   const formDad = prefill?.relationship === "Father"
   const given = prefill && !saved ? givenRelationship(prefill) : null
   const formNumber = (on: boolean) => (prefill && on === formDad ? { phone: prefill.contact.phone, whatsapp: prefill.contact.whatsapp ?? "" } : { phone: "", whatsapp: "" })
-  const [dad, setDad] = useState(saved ? saved.kind === "father" : formDad)
+  const [who, setWho] = useState<"father" | "else" | null>(
+    saved ? (saved.kind === "father" ? "father" : "else") : prefill ? (formDad ? "father" : "else") : null,
+  )
   const [same, setSame] = useState<boolean | null>(saved ? saved.kind === "same" : null)
-  const [phone, setPhone] = useState(saved && saved.kind !== "same" ? saved.phone : formNumber(formDad).phone)
-  const [whatsapp, setWhatsapp] = useState(saved && saved.kind !== "same" ? saved.whatsapp : formNumber(formDad).whatsapp)
+  const [phone, setPhone] = useState(saved && saved.kind !== "same" ? saved.phone : prefill ? formNumber(formDad).phone : "")
+  const [whatsapp, setWhatsapp] = useState(saved && saved.kind !== "same" ? saved.whatsapp : prefill ? formNumber(formDad).whatsapp : "")
   const [waOpen, setWaOpen] = useState(!!whatsapp)
   const savedContact = saved?.kind === "known" || saved?.kind === "father" ? saved.contact : undefined
   // Which person on file staff said it is, by contact id, or "else" for someone else. A changed number asks again.
@@ -580,31 +652,38 @@ export function CustodianQuestion({
   const [desc, setDesc] = useState(saved && saved.kind !== "father" ? saved.description : (given?.description ?? ""))
   const [error, setError] = useState("")
   const errId = `${id}-error`
+  const formRef = useRef<HTMLFormElement>(null)
   const waRef = useRef<HTMLInputElement>(null)
   const phoneRef = useRef<HTMLInputElement>(null)
+  const focusTimer = useRef(0)
 
-  const other = !dad
+  useEffect(() => () => window.clearTimeout(focusTimer.current), [])
+
+  const dad = who === "father"
+  const other = who === "else"
   const reuse = other && !!first && same === true
   const askPhone = dad || (other && (!first || same === false))
   // The form's own parent on the form's number: kept as the record holds them, so nothing is looked up and no name is typed.
-  const formParent = !!prefill && dad === formDad && phoneOk(phone) && digits(phone) === digits(prefill.contact.phone)
+  const formParent = !!prefill && who !== null && dad === formDad && phoneOk(phone) && digits(phone) === digits(prefill.contact.phone)
   const lookup = useFamilyLookup(phone, whatsapp, canCheck && askPhone && !formParent)
   const onFile = lookup?.state === "found" ? lookup.contacts : []
   const contact = formParent ? prefill.contact : onFile.find((c) => c.id === picked)
-  const needName = other && !reuse && !formParent && phoneOk(phone) && lookup?.state !== "checking" && (onFile.length === 0 || picked === "else")
+  const needName = other && !reuse && !formParent && (!first || same === false) && !contact
   const nameOk = Object.values(name).every((v) => v.trim())
-  const relReady = other && (reuse || !!contact || (needName && nameOk))
+  const famSettled = formParent || onFile.length === 0 || picked === "else" || !!contact
+  const phoneReady = phoneOk(phone) && famSettled && (formParent || lookup?.state !== "checking")
+  const relReady = other && (reuse || (phoneReady && (!!contact || formParent || nameOk)))
   const options: readonly RelationshipChoice[] = reuse ? SAME_RELATIONSHIPS : FIRST_RELATIONSHIPS
   const relOk = !!rel && options.includes(rel) && (rel !== "Other" || desc.trim().length > 0)
-  const famSettled = formParent || onFile.length === 0 || picked === "else" || !!contact
-  const ready = dad ? phoneOk(phone) && famSettled && (formParent || lookup?.state !== "checking") : relReady && relOk
+  const ready = dad ? phoneReady : relReady && relOk
 
   function submit(e: FormEvent) {
     e.preventDefault()
+    if (!who) return setError("Choose who the custodian is.")
     if (!reuse && !phoneOk(phone)) return setError("Type the mobile number in full, for example 0712 345 678.")
     if (!reuse && whatsapp.trim() && !phoneOk(whatsapp)) return setError("Type the WhatsApp number in full, or leave it empty.")
     if (dad) {
-      if (otherFather) return setError(`${otherFather}’s father is another man, so the father can’t be the custodian of them all. Turn off the switch and choose the custodian.`)
+      if (otherFather) return setError(`${otherFather}’s father is another man, so the father can’t be the custodian of them all. Choose Someone else instead.`)
       if (!famSettled) return setError("Say whether it is the same person.")
       return onDone({ kind: "father", phone: phone.trim(), whatsapp: whatsapp.trim(), contact })
     }
@@ -614,34 +693,47 @@ export function CustodianQuestion({
     onDone({ kind: "new", name: { firstName: cleanName(name.firstName), middleName: cleanName(name.middleName), lastName: cleanName(name.lastName) }, phone: phone.trim(), whatsapp: whatsapp.trim(), relationship: rel!, description: desc.trim() })
   }
 
+  function pickWho(next: string) {
+    const chosen = next === "father" ? "father" : "else"
+    const on = chosen === "father"
+    setWho(chosen)
+    setRel(null)
+    setDesc("")
+    setPicked(null)
+    setSame(null)
+    setError("")
+    if (prefill) {
+      // The form's number belongs to the form's answer: it comes back with it, and goes with the other.
+      const back = formNumber(on)
+      setPhone(back.phone)
+      setWhatsapp(back.whatsapp)
+      setWaOpen(!!back.whatsapp)
+      const r = on === formDad ? givenRelationship(prefill) : null
+      setRel(r?.choice ?? null)
+      setDesc(r?.description ?? "")
+    }
+    window.clearTimeout(focusTimer.current)
+    focusTimer.current = window.setTimeout(() => {
+      if (on) phoneRef.current?.focus({ preventScroll: true })
+      else if (!first && !(prefill && !formDad)) formRef.current?.querySelector<HTMLInputElement>(`[id="${id}-cn-firstName"]`)?.focus({ preventScroll: true })
+    }, 330)
+  }
+
   return (
     <>
       <QuestionTitle id={`${id}-title`}>{`Who is the custodian of ${names}?`}</QuestionTitle>
       <Hint>The custodian is responsible for school matters, and for paying the school fees.</Hint>
-      <form noValidate onSubmit={submit} onInput={() => setError("")} className="rs-col">
-        <Switch
-          className="rs-swrow"
-          label="The father is the custodian"
-          hint={father}
-          checked={dad}
-          onCheckedChange={(on) => {
-            setDad(on)
-            setRel(null)
-            setPicked(null)
-            setSame(null)
-            setError("")
-            if (prefill) {
-              // The form's number belongs to the form's answer: it comes back with it, and goes with the other.
-              const back = formNumber(on)
-              setPhone(back.phone)
-              setWhatsapp(back.whatsapp)
-              setWaOpen(!!back.whatsapp)
-              const r = on === formDad ? givenRelationship(prefill) : null
-              setRel(r?.choice ?? null)
-              setDesc(r?.description ?? "")
-            }
-            if (on) window.setTimeout(() => phoneRef.current?.focus(), 330)
-          }}
+      <form ref={formRef} noValidate onSubmit={submit} onInput={() => setError("")} className="rs-col">
+        <ChoiceTiles
+          name={`${id}-who-kind`}
+          layout="pair"
+          legend={<span className="sr-only">Who is the custodian</span>}
+          value={who}
+          onChange={pickWho}
+          options={[
+            { value: "father", label: "The father", description: father },
+            { value: "else", label: "Someone else", description: "Mother, guardian or another person" },
+          ]}
         />
         {first && (
           <GuidedReveal open={other}>
@@ -658,6 +750,14 @@ export function CustodianQuestion({
                 setRel(null)
               }}
             />
+          </GuidedReveal>
+        )}
+        <GuidedReveal open={needName}>
+          <PersonNameBoxes id={`${id}-cn`} aria-labelledby={`${id}-title`} labels={NAME_LABELS} value={name} onChange={setName} />
+        </GuidedReveal>
+        {prefill && (
+          <GuidedReveal open={formParent && other}>
+            <PersonNameBoxes id={`${id}-fp`} aria-labelledby={`${id}-title`} labels={NAME_LABELS} value={personParts(prefill.contact.fullName)} readOnly />
           </GuidedReveal>
         )}
         <GuidedReveal open={askPhone}>
@@ -688,7 +788,8 @@ export function CustodianQuestion({
               className="rs-nk"
               onClick={() => {
                 setWaOpen(true)
-                window.setTimeout(() => waRef.current?.focus(), 320)
+                window.clearTimeout(focusTimer.current)
+                focusTimer.current = window.setTimeout(() => waRef.current?.focus({ preventScroll: true }), 320)
               }}
             >
               Their WhatsApp number is different
@@ -707,36 +808,30 @@ export function CustodianQuestion({
           ) : (
             onFile.length > 1 && <Note>{`This number is on file for ${list(onFile.map((c) => c.fullName))}. Ask which one they are, if any.`}</Note>
           )}
-          <ChoiceTiles
-            name={`${id}-fam`}
-            layout={onFile.length === 1 ? "two" : "rows"}
-            legend={<span className="sr-only">Is it the same person?</span>}
-            options={
-              onFile.length === 1
-                ? [
-                    { value: onFile[0].id, label: "Same person" },
-                    { value: "else", label: "Someone else" },
-                  ]
-                : [
-                    ...onFile.map((c) => ({ value: c.id, label: c.fullName, description: c.children.length ? c.children.map(childLine).join("; ") : "No children here" })),
-                    { value: "else", label: "Someone else" },
-                  ]
-            }
-            value={picked !== null && (picked === "else" || contact) ? picked : null}
-            onChange={(v) => {
-              setPicked(v)
-              setRel(null)
-            }}
-          />
+          {onFile.length > 0 && (
+            <ChoiceTiles
+              name={`${id}-fam`}
+              layout={onFile.length === 1 ? "two" : "rows"}
+              legend={<span className="sr-only">Is it the same person?</span>}
+              options={
+                onFile.length === 1
+                  ? [
+                      { value: onFile[0].id, label: "Same person" },
+                      { value: "else", label: "Someone else" },
+                    ]
+                  : [
+                      ...onFile.map((c) => ({ value: c.id, label: c.fullName, description: c.children.length ? c.children.map(childLine).join("; ") : "No children here" })),
+                      { value: "else", label: "Someone else" },
+                    ]
+              }
+              value={picked !== null && (picked === "else" || contact) ? picked : null}
+              onChange={(v) => {
+                setPicked(v)
+                setRel(null)
+              }}
+            />
+          )}
         </GuidedReveal>
-        <GuidedReveal open={needName}>
-          <PersonNameBoxes id={`${id}-cn`} aria-labelledby={`${id}-title`} labels={NAME_LABELS} value={name} onChange={setName} />
-        </GuidedReveal>
-        {prefill && (
-          <GuidedReveal open={formParent && other}>
-            <PersonNameBoxes id={`${id}-fp`} aria-labelledby={`${id}-title`} labels={NAME_LABELS} value={personParts(prefill.contact.fullName)} readOnly />
-          </GuidedReveal>
-        )}
         <GuidedReveal open={relReady}>
           <ChoiceTiles
             name={`${id}-rel`}

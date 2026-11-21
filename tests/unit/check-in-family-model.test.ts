@@ -165,11 +165,25 @@ describe("the answers check-in starts from", () => {
     ])
   })
 
-  it("keep a previous school the record holds, only where the class asks one", () => {
+  it("keep a previous school the record holds, only where the class asks one, and prompt when Outside Tanzania has no country", () => {
     const school = { notKnown: true as const }
     const { answers: a } = startCheckIn(family([]), [child({ previousSchool: school }), child({ className: "STD 1", previousSchool: school })])
     expect(a.students[0].school).toEqual(school)
     expect(a.students[1].school).toBeUndefined()
+
+    const noCountry = { name: "OLD SCHOOL ABROAD", type: "private" as const, region: "Outside Tanzania" }
+    const withCountry = { ...noCountry, country: "Kenya" }
+    const abroad = startCheckIn(family([]), [
+      child({ previousSchool: noCountry }),
+      child({ leadId: "22222222-2222-4222-8222-222222222222", previousSchool: withCountry }),
+      child({ leadId: "33333333-3333-4333-8333-333333333333", className: "STD 1", previousSchool: noCountry }),
+    ])
+    expect(abroad.answers.students[0].school).toBeUndefined()
+    expect(abroad.checkIn.children[0].prefillSchool).toEqual(noCountry)
+    expect(abroad.answers.students[1].school).toEqual(withCountry)
+    expect(abroad.checkIn.children[1].prefillSchool).toBeUndefined()
+    expect(abroad.answers.students[2].school).toBeUndefined()
+    expect(abroad.checkIn.children[2].prefillSchool).toBeUndefined()
   })
 
   it("offer the form's parent with the children on file under them", () => {

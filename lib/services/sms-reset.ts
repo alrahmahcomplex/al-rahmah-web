@@ -4,6 +4,7 @@ import { MINIMUM_PASSWORD_LENGTH } from "@/lib/password"
 import { withoutPlus } from "@/lib/phone"
 
 import { getAgentUser, type AgentAccessError } from "./agent-auth"
+import { verifiedUserId } from "./auth-session"
 import type { Result } from "./result"
 
 // A password reset by SMS (#503 slice 2b, prototype F1 to F3), for agents who
@@ -14,7 +15,8 @@ import type { Result } from "./result"
 //     so the page never says whether a number has an account.
 // F2: check the number. A right one signs this browser in, as the reset
 //     email's link does; only an agent's login may stay signed in.
-// F3: save the new password on that session.
+// F3: save the new password on that session, and only for the login F2
+//     proved: the browser may have signed in as someone else since.
 
 export type SmsResetRequestError = "check-failed" | "unavailable"
 
@@ -57,7 +59,7 @@ export async function requestResetSms(
 
 export type SmsResetCheckError = "wrong-number" | "rate-limited" | "no-account" | Exclude<AgentAccessError, "not-agent"> | "unavailable"
 
-export async function checkResetNumber(supabase: SupabaseClient, phone: string, token: string): Promise<Result<null, SmsResetCheckError>> {
+export async function checkResetNumber(supabase: SupabaseClient, phone: string, token: string): Promise<Result<{ userId: string }, SmsResetCheckError>> {
   if (!/^\d{6}$/.test(token)) return { ok: false, error: "wrong-number" }
   let answer: Awaited<ReturnType<SupabaseClient["auth"]["verifyOtp"]>>
   try {
@@ -79,7 +81,7 @@ export async function checkResetNumber(supabase: SupabaseClient, phone: string, 
   // Only an agent's login stays signed in. Staff logins carry no phone, but
   // anyone else loses this browser's new session at once.
   const agent = await getAgentUser(supabase)
-  if (agent.ok) return { ok: true, data: null }
+  if (agent.ok) return { ok: true, data: { userId: data.user.id } }
   await supabase.auth.signOut({ scope: "local" })
   if (agent.error === "not-agent") return { ok: false, error: "no-account" }
   return { ok: false, error: agent.error === "signed-out" ? "unavailable" : agent.error }
@@ -87,8 +89,14 @@ export async function checkResetNumber(supabase: SupabaseClient, phone: string, 
 
 export type SmsResetSaveError = "password-too-short" | "signed-out" | "password-not-saved" | Exclude<AgentAccessError, "not-agent" | "signed-out"> | "no-account" | "unavailable"
 
-export async function saveResetPassword(supabase: SupabaseClient, password: string): Promise<Result<null, SmsResetSaveError>> {
+export async function saveResetPassword(
+  supabase: SupabaseClient,
+  password: string,
+  provenUserId: string | null,
+): Promise<Result<null, SmsResetSaveError>> {
   if (password.length < MINIMUM_PASSWORD_LENGTH) return { ok: false, error: "password-too-short" }
+  if (!provenUserId) return { ok: false, error: "signed-out" }
+  if ((await verifiedUserId(supabase)) !== provenUserId) return { ok: false, error: "signed-out" }
 
   // Rechecked here: the agent may have been switched off since F2.
   const agent = await getAgentUser(supabase)

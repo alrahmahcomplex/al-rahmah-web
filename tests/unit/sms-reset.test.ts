@@ -63,7 +63,7 @@ describe("asking for a reset SMS", () => {
 describe("checking the number", () => {
   it("signs an agent in with a right number", async () => {
     const { client, auth } = authClient()
-    expect(await checkResetNumber(client, "+255712345123", "246810")).toEqual({ ok: true, data: null })
+    expect(await checkResetNumber(client, "+255712345123", "246810")).toEqual({ ok: true, data: { userId: "user-1" } })
     expect(auth.verifyOtp).toHaveBeenCalledWith({ phone: "255712345123", token: "246810", type: "sms" })
     expect(auth.signOut).not.toHaveBeenCalled()
   })
@@ -95,20 +95,28 @@ describe("saving the new password", () => {
   it("saves it on the session the number gave", async () => {
     const { client, auth, signedIn } = authClient()
     signedIn.value = true
-    expect(await saveResetPassword(client, "new-password")).toEqual({ ok: true, data: null })
+    expect(await saveResetPassword(client, "new-password", "user-1")).toEqual({ ok: true, data: null })
     expect(auth.updateUser).toHaveBeenCalledWith({ password: "new-password" })
+  })
+
+  it("saves nothing when the browser's session is no longer the login the number proved", async () => {
+    const { client, auth, signedIn } = authClient()
+    signedIn.value = true
+    expect(await saveResetPassword(client, "new-password", "someone-else")).toEqual({ ok: false, error: "signed-out" })
+    expect(await saveResetPassword(client, "new-password", null)).toEqual({ ok: false, error: "signed-out" })
+    expect(auth.updateUser).not.toHaveBeenCalled()
   })
 
   it("refuses a short password, no session, and an agent switched off since", async () => {
     const short = authClient()
     short.signedIn.value = true
-    expect(await saveResetPassword(short.client, "abc")).toEqual({ ok: false, error: "password-too-short" })
+    expect(await saveResetPassword(short.client, "abc", "user-1")).toEqual({ ok: false, error: "password-too-short" })
 
-    expect(await saveResetPassword(authClient().client, "new-password")).toEqual({ ok: false, error: "signed-out" })
+    expect(await saveResetPassword(authClient().client, "new-password", "user-1")).toEqual({ ok: false, error: "signed-out" })
 
     const off = authClient({ agent: { state: "switched_off", full_name: null, code: null } })
     off.signedIn.value = true
-    expect(await saveResetPassword(off.client, "new-password")).toEqual({ ok: false, error: "switched-off" })
+    expect(await saveResetPassword(off.client, "new-password", "user-1")).toEqual({ ok: false, error: "switched-off" })
     expect(off.auth.updateUser).not.toHaveBeenCalled()
   })
 })

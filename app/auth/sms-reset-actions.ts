@@ -1,6 +1,6 @@
 "use server"
 
-import { headers } from "next/headers"
+import { cookies, headers } from "next/headers"
 import { redirect } from "next/navigation"
 
 import { normalizeTanzanianMobile } from "@/lib/phone"
@@ -11,6 +11,10 @@ import { createClient } from "@/utils/supabase/server"
 
 // "Umesahau nenosiri?" by mobile (#503 slice 2b, F1 to F3). The page decides
 // email or mobile in the browser; every step here reads the number again.
+
+// Names the login F2 proved, so F3 saves the password for that login only,
+// even if this browser signs in as someone else in between.
+const PROVEN_COOKIE = "sms-reset-proven"
 
 export type SmsRequestStatus = "sent" | "invalid-login" | "check-pending" | "check-failed" | "rate-limited" | "unavailable"
 
@@ -35,7 +39,15 @@ export async function checkSmsReset(rawPhone: string, token: string): Promise<{ 
     return { error: "rate-limited" }
   }
   const checked = await checkResetNumber(await createClient(), phone, String(token))
-  return checked.ok ? { ok: true } : { error: checked.error }
+  if (!checked.ok) return { error: checked.error }
+  ;(await cookies()).set(PROVEN_COOKIE, checked.data.userId, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    path: "/auth",
+    maxAge: 60 * 60,
+  })
+  return { ok: true }
 }
 
 export type SmsPasswordState = { error: SmsResetSaveError | "password-mismatch" } | null
@@ -44,7 +56,9 @@ export type SmsPasswordState = { error: SmsResetSaveError | "password-mismatch" 
 export async function saveSmsResetPassword(_previous: SmsPasswordState, formData: FormData): Promise<SmsPasswordState> {
   const password = String(formData.get("password") ?? "")
   if (password !== String(formData.get("confirm") ?? "")) return { error: "password-mismatch" }
-  const saved = await saveResetPassword(await createClient(), password)
+  const jar = await cookies()
+  const saved = await saveResetPassword(await createClient(), password, jar.get(PROVEN_COOKIE)?.value ?? null)
   if (!saved.ok) return { error: saved.error }
+  jar.delete({ name: PROVEN_COOKIE, path: "/auth" })
   redirect(HOME.agent)
 }

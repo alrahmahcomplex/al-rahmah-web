@@ -129,8 +129,11 @@ describe("resetting a password by SMS", () => {
 
     expect(await requestResetSms(browser, TEST_NUMBER, TEST_CAPTCHA_TOKEN)).toEqual({ ok: true, data: null })
     expect(await checkResetNumber(browser, TEST_NUMBER, "000000")).toEqual({ ok: false, error: "wrong-number" })
-    expect(await checkResetNumber(browser, TEST_NUMBER, TEST_CODE)).toEqual({ ok: true, data: null })
-    expect(await saveResetPassword(browser, "new-sms-password")).toEqual({ ok: true, data: null })
+    const proven = await checkResetNumber(browser, TEST_NUMBER, TEST_CODE)
+    expect(proven).toEqual({ ok: true, data: { userId: agent.userId } })
+    // Another login's id saves nothing, even on this session.
+    expect(await saveResetPassword(browser, "new-sms-password", "00000000-0000-0000-0000-000000000000")).toEqual({ ok: false, error: "signed-out" })
+    expect(await saveResetPassword(browser, "new-sms-password", agent.userId)).toEqual({ ok: true, data: null })
 
     const fresh = anonClient()
     const { error } = await fresh.auth.signInWithPassword({ phone: TEST_NUMBER.slice(1), password: "new-sms-password", options: { captchaToken: TEST_CAPTCHA_TOKEN } })

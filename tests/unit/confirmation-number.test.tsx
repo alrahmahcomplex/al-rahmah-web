@@ -123,6 +123,23 @@ describe("ConfirmationNumber", () => {
     expect(boxes[0]).not.toHaveAttribute("readonly")
   })
 
+  it("ignores a late answer to a check that a reset left behind", async () => {
+    let answer: (result: ConfirmationResult) => void = () => {}
+    const onComplete = vi.fn(() => new Promise<ConfirmationResult>((resolve) => (answer = resolve)))
+    const onSettled = vi.fn()
+    const ref = createRef<ConfirmationNumberHandle>()
+    render(<ConfirmationNumber ref={ref} label="n" digitLabel={(n) => `d${n}`} onComplete={onComplete} onSettled={onSettled} />)
+    const boxes = screen.getAllByRole("textbox")
+    await userEvent.click(boxes[0])
+    await userEvent.paste("000000")
+    await act(async () => ref.current?.reset())
+    await act(async () => answer("bad"))
+    expect(screen.getByRole("group").parentElement).toHaveAttribute("data-state", "idle")
+    expect(boxes[0]).not.toHaveAttribute("readonly")
+    await new Promise((resolve) => setTimeout(resolve, 1200))
+    expect(onSettled).not.toHaveBeenCalled()
+  })
+
   it("treats a check that throws as a wrong number", async () => {
     const onComplete = vi.fn(async (): Promise<ConfirmationResult> => {
       throw new Error("offline")

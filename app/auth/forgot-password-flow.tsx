@@ -189,7 +189,7 @@ function SmsStep({
     <>
       <AuthHeading intro={sms.sent}>{sms.heading}</AuthHeading>
       <div className="flex flex-col gap-3">
-        <ConfirmationNumber ref={boxes} label={sms.number} digitLabel={sms.digit} onComplete={check} onSettled={settled} autoFocus />
+        <ConfirmationNumber ref={boxes} label={sms.number} digitLabel={sms.digit} onComplete={check} onSettled={settled} disabled={resending} autoFocus />
         {note && (
           <NoticeBox role="alert" tone="info">
             {note.kind === "wrong" ? (
@@ -203,7 +203,17 @@ function SmsStep({
             ) : note.kind === "expired" ? (
               sms.expired
             ) : (
-              messageText(language, note.error)
+              <>
+                {messageText(language, note.error)}
+                {(note.error === "rate-limited" || note.error === "unavailable") && (
+                  <>
+                    <br />
+                    <button type="button" className="font-semibold text-blue-700 underline underline-offset-2" onClick={() => (setNote(null), boxes.current?.reset())}>
+                      {sms.tryAgain}
+                    </button>
+                  </>
+                )}
+              </>
             )}
           </NoticeBox>
         )}

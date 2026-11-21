@@ -68,6 +68,9 @@ export const ConfirmationNumber = forwardRef<ConfirmationNumberHandle, Confirmat
   const boxes = useRef<(HTMLInputElement | null)[]>([])
   const row = useRef<HTMLDivElement>(null)
   const timers = useRef<number[]>([])
+  // Each check counts; a reset moves on, so a late answer to an old check
+  // never lands on fresh boxes.
+  const run = useRef(0)
   const live = useRef(true)
   const locked = state !== "idle" || disabled
 
@@ -110,9 +113,10 @@ export const ConfirmationNumber = forwardRef<ConfirmationNumberHandle, Confirmat
   const submit = (code: string) => {
     setState("checking")
     boxes.current.forEach((box) => box?.blur())
+    const mine = ++run.current
     const answer = onComplete(code).catch((): ConfirmationResult => "bad")
     void answer.then((result) => {
-      if (!live.current) return
+      if (!live.current || mine !== run.current) return
       setState(result)
       const still = prefersReducedMotion()
       // Green runs box by box (70ms apart); red shakes once. Then they merge.
@@ -139,6 +143,7 @@ export const ConfirmationNumber = forwardRef<ConfirmationNumberHandle, Confirmat
   }
 
   const reset = useCallback((focus = true) => {
+    run.current += 1
     timers.current.forEach((t) => window.clearTimeout(t))
     timers.current = []
     setInstant(true)

@@ -15,6 +15,7 @@ const FIELD_MESSAGES: Partial<Record<DetailField, string>> = {
   previous_school_name: "Type the school’s name.",
   previous_school_type: "Choose private or public, and the region.",
   previous_school_region: "Choose private or public, and the region.",
+  previous_school_country: "Choose the country from the list.",
 }
 
 export function detailRefusal(error: DetailCorrectionError): Refused {

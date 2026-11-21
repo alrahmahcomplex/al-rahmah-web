@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation"
 import { useState, useTransition } from "react"
 
+import type { LastNameFrom, StudentNameParts } from "@/lib/names"
 import type { DayOrBoarding, LeadClass } from "@/lib/services/leads"
 
 import { correctStudent } from "../applicants/[id]/actions"
@@ -29,10 +30,20 @@ export type StudentDetails = {
   dayOrBoarding: DayOrBoarding
 }
 
+export type StudentNameChange = StudentNameParts & { lastNameFrom?: LastNameFrom }
+
 /** One student's name, class or Day or boarding. Only that answer is sent, so one read earlier never overwrites a newer change to the others. */
-export async function saveStudent(leadId: string, change: { studentName?: string; className?: LeadClass; dayOrBoarding?: DayOrBoarding }): Promise<CorrectionOutcome> {
+export async function saveStudent(
+  leadId: string,
+  change: { studentName?: string; nameParts?: StudentNameChange; className?: LeadClass; dayOrBoarding?: DayOrBoarding },
+): Promise<CorrectionOutcome> {
   try {
-    return await correctStudent(leadId, { fullName: change.studentName, className: change.className, dayOrBoarding: change.dayOrBoarding })
+    return await correctStudent(leadId, {
+      fullName: change.studentName,
+      ...(change.nameParts ? { nameParts: change.nameParts } : {}),
+      className: change.className,
+      dayOrBoarding: change.dayOrBoarding,
+    })
   } catch {
     return { status: "refused", field: null, message: LOST }
   }

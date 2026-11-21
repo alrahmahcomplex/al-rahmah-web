@@ -5,6 +5,8 @@ import { useState, useTransition } from "react"
 
 import { Icon } from "@/components/icons"
 import { Avatar, Button, KeyValueList, StatusChip, Tag, TextLink, toast, type KeyValueItem } from "@/components/kit"
+import type { LastNameFrom } from "@/lib/names"
+import { OUTSIDE_TANZANIA } from "@/lib/places"
 import type { LeadPreviousSchool } from "@/lib/services/lead-details"
 import type { Lead } from "@/lib/services/leads"
 
@@ -23,6 +25,7 @@ import type { StudentDetails } from "./saving"
 export type StudentCardData = {
   lead: Lead
   father: string | null
+  lastNameFrom: LastNameFrom | null
   previousSchool: LeadPreviousSchool
   interview: "registered" | "can-register" | "none"
   compareWith: SiblingPerson | null
@@ -34,7 +37,10 @@ const firstWord = (name: string) => name.trim().split(/\s+/)[0] ?? name
 
 function schoolLine(school: LeadPreviousSchool, asked: boolean) {
   if (!asked) return <span className="fam-quiet">Not asked below STD 2</span>
-  if (school?.kind === "school") return `${school.name} · ${school.type === "private" ? "Private" : "Public"} · ${school.region}`
+  if (school?.kind === "school") {
+    const where = school.region === OUTSIDE_TANZANIA && school.country ? school.country : school.region
+    return `${school.name} · ${school.type === "private" ? "Private" : "Public"} · ${where}`
+  }
   if (school?.kind === "not-known") return <Tag tone="wait">Not known yet</Tag>
   return <Tag tone="bad">Missing</Tag>
 }
@@ -92,7 +98,12 @@ export function StudentCard({ student, canEdit }: { student: StudentCardData; ca
   })
 
   const rows: KeyValueItem[] = [
-    { key: "Full name", value: lead.studentName, action: change("name", "the name") },
+    {
+      key: "Full name",
+      value: lead.studentName,
+      reason: student.lastNameFrom === "father_middle" ? "Last name from the father’s middle name" : undefined,
+      action: change("name", "the name"),
+    },
     { key: "Father", value: student.father ?? <Tag tone="line">Not recorded yet</Tag>, action: change("name", "the father’s name") },
     {
       key: "Boy or girl",
@@ -153,6 +164,7 @@ export function StudentCard({ student, canEdit }: { student: StudentCardData; ca
             leadId={lead.id}
             studentName={lead.studentName}
             father={student.father}
+            lastNameFrom={student.lastNameFrom}
             enrolled={lead.status === "Enrolled"}
             compareWith={student.compareWith}
             {...sheetOpen("name")}

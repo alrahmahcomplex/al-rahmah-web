@@ -73,7 +73,7 @@ export default async function FamilyPage({ searchParams }: { searchParams: Promi
         Back
       </ButtonLink>
       <PageHeader
-        title={familyTitle(students.map((s) => ({ studentName: s.lead.studentName, fatherFullName: s.father })))}
+        title={familyTitle(students.map((s) => ({ studentName: s.lead.studentName, fatherFullName: s.father, lastNameFrom: s.lastNameFrom })))}
         subtitle={`${students.length} students from one registration, with their custodians. Change any answer here; each change goes to the Activity log.`}
       />
       <div className="fam-cols">
@@ -81,7 +81,14 @@ export default async function FamilyPage({ searchParams }: { searchParams: Promi
           {students.map((s) => (
             <StudentCard
               key={s.lead.id}
-              student={{ lead: s.lead, father: s.father, previousSchool: s.previousSchool, interview: s.interview, compareWith: s.compareWith }}
+              student={{
+                lead: s.lead,
+                father: s.father,
+                lastNameFrom: s.lastNameFrom,
+                previousSchool: s.previousSchool,
+                interview: s.interview,
+                compareWith: s.compareWith,
+              }}
               canEdit={mayEdit && s.open}
             />
           ))}

@@ -234,6 +234,7 @@ export type SiblingLeadFacts = {
   studentName: string
   closure: "Inactive" | "Archived" | null
   fatherFullName: string | null
+  lastNameFrom: LastNameFrom | null
 }
 
 export async function getSiblingLeadFacts(
@@ -241,14 +242,25 @@ export async function getSiblingLeadFacts(
   leadIds: string[],
 ): Promise<Result<Map<string, SiblingLeadFacts>, "unavailable">> {
   if (leadIds.length === 0) return { ok: true, data: new Map() }
-  const { data, error } = await supabase.from("leads").select("id, student_name, closure, father_full_name").in("id", leadIds)
+  const { data, error } = await supabase.from("leads").select("id, student_name, closure, father_full_name, last_name_from").in("id", leadIds)
   if (error) {
     console.error("Could not read the leads of a sibling group", error)
     return { ok: false, error: "unavailable" }
   }
-  const rows = data as { id: string; student_name: string; closure: "Inactive" | "Archived" | null; father_full_name: string | null }[]
+  const rows = data as {
+    id: string
+    student_name: string
+    closure: "Inactive" | "Archived" | null
+    father_full_name: string | null
+    last_name_from: LastNameFrom | null
+  }[]
   return {
     ok: true,
-    data: new Map(rows.map((r) => [r.id, { id: r.id, studentName: r.student_name, closure: r.closure, fatherFullName: r.father_full_name }])),
+    data: new Map(
+      rows.map((r) => [
+        r.id,
+        { id: r.id, studentName: r.student_name, closure: r.closure, fatherFullName: r.father_full_name, lastNameFrom: r.last_name_from },
+      ]),
+    ),
   }
 }

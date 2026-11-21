@@ -1,5 +1,6 @@
 import "server-only"
 
+import type { LastNameFrom } from "@/lib/names"
 import type { Permission } from "@/lib/permissions"
 import { getInterviewRegistration, getLeadInterviews } from "@/lib/services/interviews"
 import { getLeadFatherAndSchool, type LeadPreviousSchool } from "@/lib/services/lead-details"
@@ -25,6 +26,7 @@ export type FamilyStudent = {
   // False once the lead is Declined or carries a closure mark: read-only.
   open: boolean
   father: string | null
+  lastNameFrom: LastNameFrom | null
   previousSchool: LeadPreviousSchool
   // "Name (Relationship)", or null.
   broughtBy: string | null
@@ -73,6 +75,7 @@ async function readStudent(leadId: string, permissions: readonly Permission[]) {
     lead: lead.data,
     open,
     father: details.data.fatherFullName,
+    lastNameFrom: details.data.lastNameFrom,
     previousSchool: details.data.previousSchool,
     broughtBy: details.data.broughtBy,
     interview:

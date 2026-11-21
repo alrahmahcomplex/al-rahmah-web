@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useTransition, type ReactNode } from "react"
 
 import { Button, ChoiceTiles, Note, Sheet, toast } from "@/components/kit"
+import type { LastNameFrom } from "@/lib/names"
 
 import { saveFatherName, type FatherOutcome } from "./sibling-actions"
 import { Compare, SiblingRequestSheet, useRefreshed } from "./sibling-group"
@@ -33,8 +34,9 @@ export type FatherSaved = {
   father: string
   // The toast for a plain save. Null when a sheet opens to say what changed.
   message: string | null
-  // When the desk chose the sibling's spelling: that sibling's own name, which shows how the father's name splits.
+  // When the desk chose the sibling's spelling: that sibling's own name and last-name choice, which show how the father's name splits.
   siblingStudentName?: string
+  siblingLastNameFrom?: LastNameFrom | null
 }
 
 export function useFatherNameFlow({
@@ -94,7 +96,7 @@ export function useFatherNameFlow({
     setFlowOpen(true)
   }
 
-  function handle(outcome: FatherOutcome, saved: string, siblingStudentName?: string) {
+  function handle(outcome: FatherOutcome, saved: string, siblingStudentName?: string, siblingLastNameFrom?: LastNameFrom | null) {
     switch (outcome.status) {
       case "refused":
         onRefused(outcome.message)
@@ -104,7 +106,7 @@ export function useFatherNameFlow({
         openFlow({ kind: "question", name: outcome.fatherFullName, sibling: outcome.sibling, holders: outcome.holders })
         return
       case "saved":
-        onSaved({ father: saved, message: outcome.message, siblingStudentName })
+        onSaved({ father: saved, message: outcome.message, siblingStudentName, siblingLastNameFrom })
         refreshed()
         return
       case "different":
@@ -134,7 +136,8 @@ export function useFatherNameFlow({
         outcome = { status: "refused", message: LOST }
       }
       const theirs = answer === "typo-theirs" && siblingFather
-      handle(outcome, theirs ? siblingFather : name, theirs && flow?.kind === "question" ? flow.sibling.studentName : undefined)
+      const sibling = theirs && flow?.kind === "question" ? flow.sibling : null
+      handle(outcome, theirs ? siblingFather : name, sibling?.studentName, sibling?.lastNameFrom)
     })
   }
 

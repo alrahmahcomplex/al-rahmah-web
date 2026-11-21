@@ -2,6 +2,8 @@
 
 import { revalidatePath } from "next/cache"
 
+import type { LastNameFrom } from "@/lib/names"
+import { COUNTRY_NAMES, onList, OUTSIDE_TANZANIA } from "@/lib/places"
 import { correctFatherFullName, correctPreviousSchool, getSiblingLeadFacts, type PreviousSchoolType } from "@/lib/services/lead-details"
 import { getLeadFee } from "@/lib/services/lead-fees"
 import { explainSiblingGroup, type SiblingGroupExplanation } from "@/lib/services/sibling-counts"
@@ -42,12 +44,15 @@ function revalidate(leadIds: string[]) {
   revalidatePath("/staff/discounts")
 }
 
-// Each lead's student name and father's full name, or null when they
+// Each lead's student name, father's full name and last-name choice, or null when they
 // can't be read.
-async function fathersOf(supabase: SupabaseClient, ids: string[]): Promise<Map<string, { name: string; father: string | null }> | null> {
+async function fathersOf(
+  supabase: SupabaseClient,
+  ids: string[],
+): Promise<Map<string, { name: string; father: string | null; lastNameFrom: LastNameFrom | null }> | null> {
   const read = await getSiblingLeadFacts(supabase, ids)
   if (!read.ok) return null
-  return new Map([...read.data.values()].map((r) => [r.id, { name: r.studentName, father: r.fatherFullName }]))
+  return new Map([...read.data.values()].map((r) => [r.id, { name: r.studentName, father: r.fatherFullName, lastNameFrom: r.lastNameFrom }]))
 }
 
 // Each member's School fee, for staff who may view payments; null otherwise.
@@ -141,6 +146,7 @@ export async function saveFatherName(
         firstName: firstName(them?.name ?? ""),
         studentName: them?.name ?? "",
         father: question.siblingFatherFullName,
+        lastNameFrom: them?.lastNameFrom ?? null,
       },
       holders,
     }
@@ -201,16 +207,27 @@ export async function saveFatherName(
   return { status: "saved", message: "Father’s name saved." }
 }
 
-export type SchoolInput = { kind: "school"; name: string; type: PreviousSchoolType; region: string } | { kind: "not-known" }
+export type SchoolInput = { kind: "school"; name: string; type: PreviousSchoolType; region: string; country?: string } | { kind: "not-known" }
 
 export async function savePreviousSchool(leadId: string, school: SchoolInput): Promise<{ status: "saved" } | Refused> {
   if (!isId(leadId) || !school || typeof school !== "object") return NOT_READ
+  let country: string | undefined
   if (school.kind === "school") {
     if (typeof school.name !== "string" || school.name.trim().length < 2) {
       return { status: "refused", field: "previous_school_name", message: "Type the school’s name." }
     }
     if ((school.type !== "private" && school.type !== "public") || !REGIONS.includes(school.region)) {
       return { status: "refused", field: "previous_school_type", message: "Choose private or public, and the region." }
+    }
+    if (school.country !== undefined) {
+      if (school.region !== OUTSIDE_TANZANIA || typeof school.country !== "string") {
+        return { status: "refused", field: "previous_school_country", message: "Choose the country from the list." }
+      }
+      const listed = onList(COUNTRY_NAMES, school.country)
+      if (!listed) {
+        return { status: "refused", field: "previous_school_country", message: "Choose the country from the list." }
+      }
+      country = listed
     }
   } else if (school.kind !== "not-known") return NOT_READ
 
@@ -220,7 +237,15 @@ export async function savePreviousSchool(leadId: string, school: SchoolInput): P
   const saved = await correctPreviousSchool(
     supabase,
     leadId,
-    school.kind === "school" ? { kind: "school", name: school.name.trim().replace(/\s+/g, " "), type: school.type, region: school.region } : school,
+    school.kind === "school"
+      ? {
+          kind: "school",
+          name: school.name.trim().replace(/\s+/g, " "),
+          type: school.type,
+          region: school.region,
+          ...(country ? { country } : {}),
+        }
+      : school,
   )
   if (!saved.ok) return detailRefusal(saved.error)
   revalidate([leadId])

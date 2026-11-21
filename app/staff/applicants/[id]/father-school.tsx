@@ -2,8 +2,10 @@
 
 import { useId, useState, useTransition } from "react"
 
+import { Icon as GuidedIcon, TypeAheadField } from "@/components/guided-form"
 import { FatherNameBoxes, type FatherName } from "@/components/guided-form/names"
 import { Button, ChipButtons, ChoiceTiles, Field, Tag, TextLink, toast } from "@/components/kit"
+import { COUNTRY_NAMES, countryFlag, OUTSIDE_TANZANIA } from "@/lib/places"
 import type { LeadPreviousSchool, PreviousSchoolType } from "@/lib/services/lead-details"
 import type { LeadClass } from "@/lib/services/leads"
 
@@ -144,7 +146,19 @@ export function FatherNameRow({
 }
 
 const schoolLine = (school: Extract<LeadPreviousSchool, { kind: "school" }>) =>
-  `${school.name} · ${school.type === "private" ? "Private" : "Public"} · ${school.region}`
+  `${school.name} · ${school.type === "private" ? "Private" : "Public"} · ${school.region === OUTSIDE_TANZANIA && school.country ? school.country : school.region}`
+
+// The country of a school Outside Tanzania, as on the Family page (#511).
+const COUNTRY_OPTIONS = COUNTRY_NAMES.map((c) => ({ value: c, label: c }))
+const COUNTRY_LABELS = {
+  field: "Country",
+  placeholder: "Type or choose a country",
+  showAll: "Show all countries",
+  search: "Search countries",
+  list: "Countries",
+  none: (q: string) => `No country matches “${q}”.`,
+}
+const flag = (country: string) => <span className="gf-flag">{countryFlag(country)}</span>
 
 export function PreviousSchoolRow({
   leadId,
@@ -165,6 +179,7 @@ export function PreviousSchoolRow({
   const [name, setName] = useState(known?.name ?? "")
   const [type, setType] = useState<PreviousSchoolType | null>(known?.type ?? null)
   const [region, setRegion] = useState<string | null>(known?.region ?? null)
+  const [country, setCountry] = useState(known?.country ?? "")
   const [find, setFind] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [pending, startTransition] = useTransition()
@@ -180,6 +195,7 @@ export function PreviousSchoolRow({
     setName(known?.name ?? "")
     setType(known?.type ?? null)
     setRegion(known?.region ?? null)
+    setCountry(known?.country ?? "")
     setFind("")
     setError(null)
     setEditing(true)
@@ -206,7 +222,10 @@ export function PreviousSchoolRow({
     const n = name.trim().replace(/\s+/g, " ")
     if (n.length < 2) return setError("Type the school’s name.")
     if (!type || !region) return setError("Choose private or public, and the region.")
-    save({ kind: "school", name: n, type, region }, "Previous school saved.")
+    const out = region === OUTSIDE_TANZANIA
+    // Another school, or a new region, needs its country; private or public alone keeps the saved one (#511).
+    if (out && !country && (n !== known?.name || region !== known?.region)) return setError("Choose the country from the list.")
+    save({ kind: "school", name: n, type, region, ...(out && country ? { country } : {}) }, "Previous school saved.")
   }
 
   return (
@@ -276,11 +295,30 @@ export function PreviousSchoolRow({
               value={region}
               onChange={(r) => {
                 setRegion(r)
+                if (r !== OUTSIDE_TANZANIA) setCountry("")
                 setError(null)
               }}
             />
           ) : (
             <p className="lr-hint">No region by that name.</p>
+          )}
+          {region === OUTSIDE_TANZANIA && (
+            <>
+              <p className="lr-hint">Which country is the school in?</p>
+              <TypeAheadField
+                id={`${nameId}-country`}
+                compact
+                options={COUNTRY_OPTIONS}
+                value={country}
+                onValueChange={(next) => {
+                  setCountry(next)
+                  setError(null)
+                }}
+                lead={(value) => (value ? flag(value) : <GuidedIcon name="globe" small />)}
+                optionLead={flag}
+                labels={COUNTRY_LABELS}
+              />
+            </>
           )}
           {error && (
             <p id={errorId} role="alert" className="lr-error">

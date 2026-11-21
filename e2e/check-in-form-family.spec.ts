@@ -202,6 +202,44 @@ test.describe("checking in an Admission form family", () => {
     expect(country).toBe("Uganda")
   })
 
+  test("Not known yet keeps an old Outside Tanzania school with no country as it is", async ({ page }) => {
+    const dad: Child["father"] = [word("ALI"), word("OMARI"), word("HASSAN")]
+    const yusuf: Child = { first: word("YUSUF"), father: dad, className: "STD 6", gender: "Boy" }
+    const form = await sentForm([yusuf])
+    await asSystem((sql) =>
+      sql.query(
+        "update public.leads set previous_school_name = 'OLD SCHOOL ABROAD', previous_school_type = 'private', previous_school_region = 'Outside Tanzania' where id = $1",
+        [form.ids[0]],
+      ),
+    )
+
+    await signInOnce(page, ADMISSIONS.email, ADMISSIONS.password)
+    await findOnHome(page, form.numbers[0])
+    await expect(open(page).getByText(/no country saved yet/i)).toBeVisible()
+    // One press: the school stays, and the form moves on.
+    await go(page, "Not known yet").click()
+    await expect(page.getByText("OLD SCHOOL ABROAD · Private · Outside Tanzania · country not known yet")).toBeVisible()
+    await go(page, "Continue").click()
+    await pick(page, new RegExp(`^${form.parent}`))
+    await go(page, "Looks right").click()
+    await go(page, "Record the visit").click()
+    await expect(page.getByRole("heading", { name: "Visit recorded" })).toBeVisible({ timeout: 15_000 })
+
+    const school = await inRolledBackTransaction(async (sql) => {
+      const { rows } = await sql.query(
+        "select previous_school_name, previous_school_region, previous_school_country, previous_school_not_known from public.leads where id = $1",
+        [form.ids[0]],
+      )
+      return rows[0]
+    })
+    expect(school).toEqual({
+      previous_school_name: "OLD SCHOOL ABROAD",
+      previous_school_region: "Outside Tanzania",
+      previous_school_country: null,
+      previous_school_not_known: false,
+    })
+  })
+
   test("the Applicants sheet offers check-in for a family still waiting for its visit", async ({ page }) => {
     const child: Child = { first: word("NEEMA"), father: [word("JUMA"), word("SALIM"), word("MRISHO")], className: "KG 1", gender: "Girl" }
     const form = await sentForm([child])

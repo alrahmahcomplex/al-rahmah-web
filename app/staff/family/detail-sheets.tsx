@@ -177,7 +177,9 @@ export function SchoolSheet({
     if (n.length < 2) return setProblem("Type the school’s name.")
     if (!type) return setProblem("Choose private or public.")
     if (!region) return setProblem("Choose the region from the list.")
-    if (out && !country) return setProblem("Choose the country from the list.")
+    // Another school, or a new region, needs its country; private or public alone keeps the saved one, or none
+    // on a school saved before the country list (#511).
+    if (out && !country && (n !== known?.name || region !== known?.region)) return setProblem("Choose the country from the list.")
     run(
       async () => {
         try {
@@ -186,7 +188,7 @@ export function SchoolSheet({
             name: n,
             type,
             region,
-            ...(out ? { country } : {}),
+            ...(out && country ? { country } : {}),
           })
           return outcome.status === "saved" ? outcome : { status: "refused", field: null, message: outcome.message }
         } catch {

@@ -293,8 +293,6 @@ export function SchoolQuestion({
   const [region, setRegion] = useState(known?.region ?? "")
   const [country, setCountry] = useState(known?.region === OUTSIDE_TANZANIA ? (known.country ?? "") : "")
   const [error, setError] = useState("")
-  // Check-in: Not known yet would take the school on file off the record, so it asks once more first.
-  const [confirmUnknown, setConfirmUnknown] = useState(false)
   const formRef = useRef<HTMLFormElement>(null)
   const focusTimer = useRef(0)
   const errId = `${id}-error`
@@ -304,8 +302,12 @@ export function SchoolQuestion({
 
   useEffect(() => () => window.clearTimeout(focusTimer.current), [])
 
+  // Where the planned focus goes, and the box it may come from.
+  const focusPlan = useRef<{ to: string; from?: string }>({ to: "" })
+
   function focusLater(targetId: string, onlyIfActiveId?: string) {
     window.clearTimeout(focusTimer.current)
+    focusPlan.current = { to: targetId, from: onlyIfActiveId }
     focusTimer.current = window.setTimeout(() => {
       if (onlyIfActiveId && document.activeElement?.id !== onlyIfActiveId) return
       formRef.current?.querySelector<HTMLInputElement>(`[id="${targetId}"]`)?.focus({ preventScroll: true })
@@ -331,10 +333,13 @@ export function SchoolQuestion({
         ref={formRef}
         noValidate
         onSubmit={submit}
-        // Staff who go back to the school's name keep their place: the focus planned for the region or country is dropped.
-        // Only the name box: the region list hands focus back to its own box as it closes, and that must not cancel it.
+        // Staff who move to another box themselves keep their place: the school's name, or a list's search box
+        // (its events reach the form through the portal). The planned box, and the region box the list hands
+        // focus back to as it closes, don't cancel it.
         onFocusCapture={(e) => {
-          if (e.target instanceof HTMLElement && e.target.id === `${id}-name`) window.clearTimeout(focusTimer.current)
+          const t = e.target
+          if (!(t instanceof HTMLInputElement) || t.type === "radio" || t.type === "checkbox") return
+          if (t.id !== focusPlan.current.to && t.id !== focusPlan.current.from) window.clearTimeout(focusTimer.current)
         }}
         className="rs-col"
       >
@@ -387,7 +392,7 @@ export function SchoolQuestion({
           />
           <GuidedReveal open={out}>
             {needsCountry && !country && (
-              <Note>This school is Outside Tanzania, with no country saved yet. Choose the country to continue.</Note>
+              <Note>This school is Outside Tanzania, with no country saved yet. Choose the country, or Not known yet keeps the school as it is.</Note>
             )}
             <Hint>Which country is the school in?</Hint>
             <TypeAheadField
@@ -410,16 +415,7 @@ export function SchoolQuestion({
         <GuidedReveal open={!!region && (!out || !!country)}>
           <ContinuePill type="submit">Continue</ContinuePill>
         </GuidedReveal>
-        {confirmUnknown && known && (
-          <Note>{`Not known yet takes ${known.name} off the record. Press Not known yet again to go ahead, or choose the country.`}</Note>
-        )}
-        <TextLink
-          className="rs-nk"
-          onClick={() => {
-            if (needsCountry && known && !confirmUnknown) setConfirmUnknown(true)
-            else onNotKnown()
-          }}
-        >
+        <TextLink className="rs-nk" onClick={onNotKnown}>
           Not known yet
         </TextLink>
       </form>

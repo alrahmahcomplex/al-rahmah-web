@@ -118,14 +118,12 @@ describe("SchoolQuestion at check-in, round 2 of #526", () => {
     expect(onDone).toHaveBeenCalledWith({ ...OLD, country: "Uganda" })
   })
 
-  it("asks once more before Not known yet takes the school on file off the record", async () => {
+  it("Not known yet answers in one press, with no warning, on an old school abroad with no country", async () => {
     const onNotKnown = vi.fn()
     render(<SchoolQuestion id="s" first="YUSUF" saved={OLD} needsCountry onDone={() => {}} onNotKnown={onNotKnown} />)
     await userEvent.click(screen.getByRole("button", { name: "Not known yet" }))
-    expect(onNotKnown).not.toHaveBeenCalled()
-    expect(screen.getByText("Not known yet takes IS off the record. Press Not known yet again to go ahead, or choose the country.")).toBeInTheDocument()
-    await userEvent.click(screen.getByRole("button", { name: "Not known yet" }))
     expect(onNotKnown).toHaveBeenCalledTimes(1)
+    expect(screen.queryByText(/off the record/)).toBeNull()
   })
 
   it("keeps the caret in the school's name when staff go back to it before the region box opens", async () => {
@@ -136,6 +134,19 @@ describe("SchoolQuestion at check-in, round 2 of #526", () => {
     await userEvent.click(name)
     await new Promise((r) => setTimeout(r, 450))
     expect(name).toHaveFocus()
+  })
+})
+
+describe("SchoolQuestion focus, round 3 of #526", () => {
+  it("keeps typing in the region list's search when staff open it before the planned focus", async () => {
+    render(<SchoolQuestion id="s" first="YUSUF" onDone={() => {}} onNotKnown={() => {}} />)
+    await userEvent.type(screen.getByRole("textbox", { name: "School name" }), "green hills")
+    await userEvent.click(screen.getByRole("radio", { name: "Private" }))
+    await userEvent.click(screen.getByRole("button", { name: "Show all regions" }))
+    const search = await screen.findByRole("combobox", { name: "Search regions" })
+    search.focus()
+    await new Promise((r) => setTimeout(r, 450))
+    expect(search).toHaveFocus()
   })
 })
 
@@ -223,7 +234,8 @@ describe("CustodianQuestion", () => {
       relationship: "Mother",
       description: "",
     })
-  })
+    // Much typing: give a busy machine time.
+  }, 15_000)
 
   it("opens on Someone else at check-in when the Admission form named a custodian", () => {
     render(

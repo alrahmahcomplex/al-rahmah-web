@@ -220,6 +220,8 @@ function RegisterForm({ staffId, today, years, defaultYear, fees, canLink, canEn
   const [pending, setPending] = useState(false)
   // Saved, and the finished screen is on its way: the form stays locked until it shows.
   const [saved, setSaved] = useState(false)
+  // Start over confirmed: nothing is saved while the form clears.
+  const [resetting, setResetting] = useState(false)
   const [failure, setFailure] = useState<ReactNode>(null)
   // The fee and group of each child on file staff linked, or "failed" when it could not be read.
   const [onFileFees, setOnFileFees] = useState<Record<string, OnFileFee | "failed">>({})
@@ -273,7 +275,7 @@ function RegisterForm({ staffId, today, years, defaultYear, fees, canLink, canEn
     timers.add(id)
   }
 
-  const locked = pending || saved || !!finished
+  const locked = pending || saved || resetting || !!finished
   function answer(id: string, change: (a: Answers) => Answers) {
     if (locked) return
     setInteracted(true)
@@ -298,6 +300,7 @@ function RegisterForm({ staffId, today, years, defaultYear, fees, canLink, canEn
     setEdit(null)
     setFinished(null)
     setSaved(false)
+    setResetting(false)
     setInterviewOpen(false)
     setInterviewed({})
     setBusyInterview({})
@@ -530,9 +533,14 @@ function RegisterForm({ staffId, today, years, defaultYear, fees, canLink, canEn
         body: () => <BoardQuestion id={`rs-${sid}`} first={f} saved={s.board} onPick={(v) => later(() => answer(`${sid}.board`, setStudent(s.key, { board: v })), PICK_MS)} />,
       })
       if (s.className && !NO_SCHOOL_ASKED.includes(s.className)) {
-        const done = schoolComplete(s.school)
         const prefillSchool = s.school ?? form?.prefillSchool
         const needsCountry = !!prefillSchool && !("notKnown" in prefillSchool) && prefillSchool.region === OUTSIDE_TANZANIA && !prefillSchool.country
+        // An Outside Tanzania school on file from before the country list, kept as it is: valid with no country.
+        const old = form?.prefillSchool
+        const kept =
+          !!old && !!s.school && !("notKnown" in s.school) && !s.school.country &&
+          s.school.name === old.name && s.school.type === old.type && s.school.region === old.region
+        const done = schoolComplete(s.school) || kept
         out.push({
           id: `${sid}.school`,
           group: 0,
@@ -540,7 +548,11 @@ function RegisterForm({ staffId, today, years, defaultYear, fees, canLink, canEn
           label: "Previous school",
           done,
           summary: () =>
-            !s.school ? "" : "notKnown" in s.school ? "Not known yet · add it later on the student’s record" : `${s.school.name} · ${s.school.type === "private" ? "Private" : "Public"} · ${schoolWhere(s.school)}`,
+            !s.school
+              ? ""
+              : "notKnown" in s.school
+                ? "Not known yet · add it later on the student’s record"
+                : `${s.school.name} · ${s.school.type === "private" ? "Private" : "Public"} · ${schoolWhere(s.school)}${kept ? " · country not known yet" : ""}`,
           body: () => (
             <SchoolQuestion
               id={`rs-${sid}-school`}
@@ -549,6 +561,11 @@ function RegisterForm({ staffId, today, years, defaultYear, fees, canLink, canEn
               needsCountry={needsCountry}
               onDone={(school) => answer(`${sid}.school`, setStudent(s.key, { school }))}
               onNotKnown={() => {
+                // At check-in, an old school abroad with no country stays on the record as it is, the country still empty.
+                if (old) {
+                  answer(`${sid}.school`, setStudent(s.key, { school: old }))
+                  return
+                }
                 answer(`${sid}.school`, setStudent(s.key, { school: { notKnown: true } }))
                 toast("Saved as Not known yet. Add it later on the student’s record.")
               }}
@@ -1309,6 +1326,7 @@ function RegisterForm({ staffId, today, years, defaultYear, fees, canLink, canEn
               size="wide"
               onClick={() => {
                 setStartOver(false)
+                setResetting(true)
                 later(() => {
                   restart()
                   toast("The form has started over.")

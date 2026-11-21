@@ -1,21 +1,34 @@
--- Require a country for a previous school Outside Tanzania on Register students
--- and Check-in (#511, PR 2).
+-- Require a country for a previous school Outside Tanzania when staff enter
+-- or change the school (#511, PR 2).
 --
--- PR 1 (20270120100100) kept the country optional until the Register students
--- and Check-in screens shipped the country list. Now both screens collect it:
+-- PR 1 (20270120100100) kept the country optional until the screens shipped
+-- the country list. Register students, Check-in and the Family page now
+-- collect it. The rule:
+-- - The country is required only when a school is entered or its name or
+--   region is changed: on Register students, at Check-in when staff type or
+--   change the school, and on the Family page and the applicant record
+--   (update_lead_details). A changed name or region never keeps the stored
+--   country: the screens fill it in for staff to confirm or change.
+-- - Private or public alone keeps the stored country.
+-- - An Outside Tanzania school saved before this release with no country
+--   stays valid as it is. Check-in may send it back unchanged (Not known yet
+--   keeps it), and the record may change its other details without it.
+-- - No table constraint enforces the country, so those old rows pass every
+--   write. Nothing is backfilled or deleted.
+--
 -- 1. registration_previous_school_country refuses a school Outside Tanzania
 --    whose country is missing, empty, or not on previous_school_countries().
---    Both register_students and complete_admission_visit call it.
--- 2. complete_admission_visit also refuses omitting previous_school for a child
---    whose class asks for a previous school and whose record holds Outside
---    Tanzania with no country yet, so Check-in prompts staff for the country.
+--    register_students and complete_admission_visit call it.
+-- 2. complete_admission_visit skips that check for a school sent back as the
+--    lead holds it: Outside Tanzania, the same name, and no country on file
+--    or sent. Left out, the school stays as it is.
+-- 3. update_lead_details refuses a school Outside Tanzania whose name or
+--    region changes without a country sent, and keeps the stored country
+--    for any other change.
 --
--- update_lead_details and the leads table constraints stay unchanged: existing
--- records saved before the country list remain valid, and the applicant record's
--- school editor does not ask for a country yet.
---
--- Rollback: restore registration_previous_school_country and
--- complete_admission_visit as 20270120100100_last_name_and_country.sql made them.
+-- Rollback: restore registration_previous_school_country,
+-- complete_admission_visit and update_lead_details as
+-- 20270120100100_last_name_and_country.sql made them.
 
 do $migration$
 begin
@@ -483,12 +496,18 @@ AS $function$
                 s_school_type[i] := parsed.school_type;
                 s_school_region[i] := parsed.region;
                 s_school_unknown[i] := parsed.not_known;
-                s_school_country[i] := public.registration_previous_school_country(item -> 'previous_school', s_school_region[i], i);
-            elsif public.previous_school_asked(lead.class_name)
-                  and lead.previous_school_region = 'Outside Tanzania'
-                  and lead.previous_school_country is null then
-                raise exception 'invalid'
-                    using detail = jsonb_build_object('student', i, 'field', 'previous_school_country')::text;
+                -- An Outside Tanzania school saved before the country list, sent
+                -- back unchanged with no country, stays as it is. Entered or
+                -- changed, it needs its country.
+                if s_school_region[i] = 'Outside Tanzania'
+                   and lead.previous_school_region = 'Outside Tanzania'
+                   and lead.previous_school_country is null
+                   and s_school[i] is not distinct from lead.previous_school_name
+                   and nullif(btrim(coalesce(item -> 'previous_school' ->> 'country', '')), '') is null then
+                    s_school_country[i] := null;
+                else
+                    s_school_country[i] := public.registration_previous_school_country(item -> 'previous_school', s_school_region[i], i);
+                end if;
             end if;
 
             -- Boy or girl: what staff give, or what the family gave.
@@ -824,5 +843,370 @@ AS $function$
     end;
     $function$;
 
+
+-- ---------------------------------------------------------------------------
+-- update_lead_details, as 20270120100100 made it, with the country required
+-- once the school changes.
+-- ---------------------------------------------------------------------------
+
+create or replace function public.update_lead_details(lead_id uuid, changes jsonb)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $fn$
+declare
+    lead public.leads;
+    contact public.guardian_contacts;
+    pupil_name text;
+    student_class public.lead_class;
+    student_year integer;
+    student_boarding public.day_or_boarding;
+    student_gender public.student_gender;
+    this_year integer := extract(year from public.tanzania_today());
+    phones text[];
+    match public.leads;
+    brought_name text;
+    brought_phone text;
+    brought_relationship text;
+    school_name text;
+    school_type public.previous_school_type;
+    school_region text;
+    school_not_known boolean;
+    school_country text;
+    has_parts boolean;
+    named record;
+    last_from public.student_last_name_from;
+    father_name text;
+    father_source public.father_name_source;
+    effective_father text;
+    father_answer text;
+    father_spelling text;
+    member public.sibling_group_members;
+    check_verdict text;
+    check_other_lead uuid;
+    check_other_name text;
+    typo_replaced text;
+    typo_mode boolean := false;
+begin
+    if auth.role() is distinct from 'authenticated' or not public.has_permission('leads.edit') then
+        raise exception 'not_permitted';
+    end if;
+
+    perform public.lock_lead_family(update_lead_details.lead_id);
+    select * into lead from public.leads l where l.id = update_lead_details.lead_id for update;
+    if not found then
+        raise exception 'not_found';
+    end if;
+    perform public.assert_lead_open(lead.id);
+
+    -- Name parts (first_name, father_first, father_middle, father_last, with
+    -- optional last_name_from) build student_name and father_full_name through
+    -- registration_name. last_name_from is refused without name parts. A
+    -- one-box full_name change clears last_name_from; a father_full_name
+    -- change leaves both student_name and last_name_from untouched (#511).
+    has_parts := changes ?| array['first_name', 'father_first', 'father_middle', 'father_last'];
+    if changes ? 'last_name_from' and not has_parts then
+        raise exception 'invalid' using detail = jsonb_build_object('field', 'last_name_from')::text;
+    end if;
+
+    pupil_name := lead.student_name;
+    last_from := lead.last_name_from;
+    father_name := lead.father_full_name;
+    father_source := lead.father_full_name_source;
+
+    if has_parts then
+        if changes ? 'full_name' then
+            raise exception 'invalid' using detail = jsonb_build_object('field', 'student_name')::text;
+        end if;
+        if changes ? 'father_full_name' then
+            raise exception 'invalid' using detail = jsonb_build_object('field', 'father_full_name')::text;
+        end if;
+        select * into named from public.registration_name(changes, null);
+        pupil_name := named.student_name;
+        last_from := public.registration_last_name_from(changes, null);
+        father_name := named.father_full_name;
+        father_source := case
+            when father_name is not distinct from lead.father_full_name
+                 and lead.father_full_name_source in ('entered', 'edited', 'typo_confirmed')
+                then lead.father_full_name_source
+            else 'edited'
+        end;
+        effective_father := father_name;
+    else
+        if changes ? 'full_name' then
+            pupil_name := btrim(coalesce(changes ->> 'full_name', ''));
+            if pupil_name = '' then
+                raise exception 'invalid' using detail = jsonb_build_object('field', 'student_name')::text;
+            end if;
+            if pupil_name is distinct from lead.student_name then
+                last_from := null;
+            end if;
+        end if;
+
+        -- The father's full name (#301). Left out, it stays, or follows a
+        -- corrected student name while it was derived or backfilled (the
+        -- derive trigger does that on the update below).
+        if changes ? 'father_full_name' then
+            father_name := public.clean_father_name(changes ->> 'father_full_name');
+            if father_name is null or char_length(father_name) > 200 then
+                raise exception 'invalid' using detail = jsonb_build_object('field', 'father_full_name')::text;
+            end if;
+            father_source := case
+                when father_name is not distinct from lead.father_full_name
+                     and lead.father_full_name_source in ('edited', 'typo_confirmed')
+                    then lead.father_full_name_source
+                else 'edited'
+            end;
+            effective_father := father_name;
+        elsif pupil_name is distinct from lead.student_name and lead.father_full_name_source in ('derived', 'backfilled') then
+            effective_father := public.derive_father_full_name(pupil_name);
+        else
+            effective_father := lead.father_full_name;
+        end if;
+    end if;
+
+    student_class := lead.class_name;
+    if changes ? 'class_name' then
+        begin
+            student_class := (changes ->> 'class_name')::public.lead_class;
+        exception when invalid_text_representation then
+            student_class := null;
+        end;
+        if student_class is null then
+            raise exception 'invalid' using detail = jsonb_build_object('field', 'class_name')::text;
+        end if;
+    end if;
+
+    student_year := lead.enrollment_year;
+    if changes ? 'enrollment_year' then
+        begin
+            student_year := (changes ->> 'enrollment_year')::integer;
+        exception when invalid_text_representation or numeric_value_out_of_range then
+            student_year := null;
+        end;
+        if student_year is null
+           or (student_year <> lead.enrollment_year and student_year not between this_year and this_year + 2) then
+            raise exception 'invalid' using detail = jsonb_build_object('field', 'enrollment_year')::text;
+        end if;
+    end if;
+
+    student_boarding := lead.day_or_boarding;
+    if changes ? 'day_or_boarding' then
+        begin
+            student_boarding := (changes ->> 'day_or_boarding')::public.day_or_boarding;
+        exception when invalid_text_representation then
+            student_boarding := null;
+        end;
+        if student_boarding is null then
+            raise exception 'invalid' using detail = jsonb_build_object('field', 'day_or_boarding')::text;
+        end if;
+    end if;
+
+    -- Boy or girl: staff may give or correct it, never clear it.
+    student_gender := lead.gender;
+    if changes ? 'gender' then
+        student_gender := public.student_gender_of(changes -> 'gender', null);
+        if student_gender is null then
+            raise exception 'invalid' using detail = jsonb_build_object('field', 'gender')::text;
+        end if;
+    end if;
+
+    brought_name := lead.brought_by_name;
+    if changes ? 'brought_by_name' then
+        brought_name := nullif(btrim(coalesce(changes ->> 'brought_by_name', '')), '');
+        if char_length(brought_name) > 120 then
+            raise exception 'invalid' using detail = jsonb_build_object('field', 'brought_by_name')::text;
+        end if;
+    end if;
+
+    brought_phone := lead.brought_by_phone;
+    if changes ? 'brought_by_phone' then
+        brought_phone := nullif(btrim(coalesce(changes ->> 'brought_by_phone', '')), '');
+        if brought_phone is not null then
+            brought_phone := public.normalize_phone(brought_phone);
+            if brought_phone is null then
+                raise exception 'invalid' using detail = jsonb_build_object('field', 'brought_by_phone')::text;
+            end if;
+        end if;
+    end if;
+
+    brought_relationship := lead.brought_by_relationship;
+    if changes ? 'brought_by_relationship' then
+        brought_relationship := nullif(btrim(coalesce(changes ->> 'brought_by_relationship', '')), '');
+        if char_length(brought_relationship) > 60 then
+            raise exception 'invalid' using detail = jsonb_build_object('field', 'brought_by_relationship')::text;
+        end if;
+    end if;
+
+    if brought_name is null and (brought_phone is not null or brought_relationship is not null) then
+        raise exception 'invalid' using detail = jsonb_build_object('field', 'brought_by_name')::text;
+    end if;
+
+    school_name := lead.previous_school_name;
+    if changes ? 'previous_school_name' then
+        school_name := nullif(btrim(coalesce(changes ->> 'previous_school_name', '')), '');
+        if char_length(school_name) not between 2 and 120 then
+            raise exception 'invalid' using detail = jsonb_build_object('field', 'previous_school_name')::text;
+        end if;
+    end if;
+
+    school_type := lead.previous_school_type;
+    if changes ? 'previous_school_type' then
+        if nullif(btrim(coalesce(changes ->> 'previous_school_type', '')), '') is null then
+            school_type := null;
+        else
+            begin
+                school_type := (changes ->> 'previous_school_type')::public.previous_school_type;
+            exception when invalid_text_representation then
+                raise exception 'invalid' using detail = jsonb_build_object('field', 'previous_school_type')::text;
+            end;
+        end if;
+    end if;
+
+    school_region := lead.previous_school_region;
+    if changes ? 'previous_school_region' then
+        if nullif(btrim(coalesce(changes ->> 'previous_school_region', '')), '') is null then
+            school_region := null;
+        else
+            school_region := public.previous_school_region(changes ->> 'previous_school_region');
+            if school_region is null then
+                raise exception 'invalid' using detail = jsonb_build_object('field', 'previous_school_region')::text;
+            end if;
+        end if;
+    end if;
+
+    school_not_known := lead.previous_school_not_known;
+    if changes ? 'previous_school_not_known' then
+        if jsonb_typeof(changes -> 'previous_school_not_known') is distinct from 'boolean' then
+            raise exception 'invalid' using detail = jsonb_build_object('field', 'previous_school_not_known')::text;
+        end if;
+        school_not_known := (changes ->> 'previous_school_not_known')::boolean;
+    end if;
+
+    if school_not_known and (school_name is not null or school_type is not null or school_region is not null) then
+        raise exception 'invalid' using detail = jsonb_build_object('field', 'previous_school_not_known')::text;
+    end if;
+    if school_name is not null or school_type is not null or school_region is not null then
+        if school_name is null then
+            raise exception 'invalid' using detail = jsonb_build_object('field', 'previous_school_name')::text;
+        elsif school_type is null then
+            raise exception 'invalid' using detail = jsonb_build_object('field', 'previous_school_type')::text;
+        elsif school_region is null then
+            raise exception 'invalid' using detail = jsonb_build_object('field', 'previous_school_region')::text;
+        end if;
+    end if;
+
+    -- The country of a school Outside Tanzania (#511): kept while the
+    -- region stays Outside Tanzania, also when an empty one is sent;
+    -- cleared with any other region or Not known yet. A country with any
+    -- other region, or off the list, is refused.
+    school_country := lead.previous_school_country;
+    if changes ? 'previous_school_country' then
+        if nullif(btrim(coalesce(changes ->> 'previous_school_country', '')), '') is not null then
+            school_country := public.previous_school_country(changes ->> 'previous_school_country');
+            if school_country is null or school_region is distinct from 'Outside Tanzania' then
+                raise exception 'invalid' using detail = jsonb_build_object('field', 'previous_school_country')::text;
+            end if;
+        end if;
+    end if;
+    if school_region is distinct from 'Outside Tanzania' then
+        school_country := null;
+    end if;
+    -- #511, PR 2: a school entered, or with its name or region changed,
+    -- Outside Tanzania needs its country sent: the stored one is not kept for
+    -- another school. Private or public alone keeps the stored country, and a
+    -- school saved before the country list, unchanged, stays valid without one.
+    if (school_name is distinct from lead.previous_school_name
+        or school_region is distinct from lead.previous_school_region)
+       and nullif(btrim(coalesce(changes ->> 'previous_school_country', '')), '') is null then
+        school_country := null;
+        if school_region = 'Outside Tanzania' then
+            raise exception 'invalid' using detail = jsonb_build_object('field', 'previous_school_country')::text;
+        end if;
+    end if;
+
+    father_answer := nullif(btrim(coalesce(changes ->> 'father_name_answer', '')), '');
+    if father_answer is not null and father_answer not in ('typo', 'different') then
+        raise exception 'invalid' using detail = jsonb_build_object('field', 'father_name_answer')::text;
+    end if;
+
+    -- A new name must not make this child a duplicate of another lead, a
+    -- brother or sister on the same contact included.
+    if public.normalize_student_name(pupil_name) <> lead.student_name_key then
+        select * into contact from public.guardian_contacts g where g.id = lead.guardian_contact_id for share;
+        phones := array[contact.phone, contact.whatsapp];
+        perform public.lock_lead_phones(phones);
+        match := public.find_duplicate_lead(public.normalize_student_name(pupil_name), phones, lead.id);
+        if match.id is not null then
+            return public.duplicate_result(match);
+        end if;
+    end if;
+
+    -- A member that counts by its name, about to get a name close to its
+    -- group's: the typing-mistake question first (S5, R36).
+    select * into member from public.sibling_group_members m where m.lead_id = lead.id;
+    if member.group_id is not null and not member.legacy and member.basis in ('matched', 'typo_confirmed')
+       and public.father_name_match(lead.father_full_name, effective_father) is distinct from 'same' then
+        select c.verdict, c.other_lead_id, c.other_name into check_verdict, check_other_lead, check_other_name
+        from public.sibling_name_check(lead.id, effective_father, member.group_id) c;
+    end if;
+    if check_verdict = 'close' then
+        if father_answer is null then
+            raise exception 'father_name_question' using detail = jsonb_build_object(
+                'father_full_name', effective_father,
+                'sibling_lead_id', check_other_lead,
+                'sibling_father_full_name', check_other_name
+            )::text;
+        elsif father_answer = 'typo' then
+            father_spelling := public.clean_father_name(changes ->> 'father_name_spelling');
+            if father_spelling is null
+               or not (public.father_name_match(father_spelling, effective_father) = 'same'
+                       or public.father_name_match(father_spelling, check_other_name) = 'same') then
+                raise exception 'invalid' using detail = jsonb_build_object('field', 'father_name_spelling')::text;
+            end if;
+            typo_replaced := case when public.father_name_match(father_spelling, effective_father) = 'same'
+                                  then check_other_name else effective_father end;
+            father_name := father_spelling;
+            father_source := 'typo_confirmed';
+            typo_mode := true;
+        end if;
+    elsif father_answer is not null then
+        raise exception 'invalid' using detail = jsonb_build_object('field', 'father_name_answer')::text;
+    end if;
+
+    if typo_mode then
+        perform set_config('app.sibling_typo_group', member.group_id::text, true);
+    end if;
+
+    update public.leads l
+    set student_name = pupil_name,
+        class_name = student_class,
+        enrollment_year = student_year,
+        day_or_boarding = student_boarding,
+        gender = student_gender,
+        brought_by_name = brought_name,
+        brought_by_phone = brought_phone,
+        brought_by_relationship = brought_relationship,
+        previous_school_name = school_name,
+        previous_school_type = school_type,
+        previous_school_region = school_region,
+        previous_school_not_known = school_not_known,
+        previous_school_country = school_country,
+        last_name_from = last_from,
+        father_full_name = father_name,
+        father_full_name_source = father_source
+    where l.id = lead.id;
+
+    if typo_mode then
+        perform public.write_typo_spelling(member.group_id, father_spelling, typo_replaced);
+        update public.sibling_group_members m
+        set basis = 'typo_confirmed', cause = 'father_name', updated_at = now()
+        where m.id = member.id and m.basis is distinct from 'typo_confirmed';
+    end if;
+
+    return jsonb_build_object('result', 'updated');
+end;
+$fn$;
 end;
 $migration$;

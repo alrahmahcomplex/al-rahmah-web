@@ -298,10 +298,6 @@ export function AdmissionFormSteps({
   // the page.
   const trail = useRef<StepKey[]>([])
   const pos = useRef(0)
-  // Whether the open question was reached through the browser's Back or
-  // Forward, on its own history entry. Continue from there then adds the next
-  // question's entry after it, instead of taking its place (round 2, #513).
-  const viaHistory = useRef(false)
   // Sent back to an earlier question's own entry: the problems to show once
   // its popstate arrives.
   const arriving = useRef<{ key: StepKey; shown: Shown[] } | null>(null)
@@ -425,13 +421,7 @@ export function AdmissionFormSteps({
         }
         trail.current[pos.current] = target
         window.history.replaceState(null, "", urlFor(target, f.children))
-      } else if (want !== asked) {
-        // An entry for the relationship, skipped once The father was picked:
-        // it shows the custodian question, so it names it.
-        trail.current[pos.current] = want
-        window.history.replaceState(null, "", urlFor(want, f.children))
       }
-      viaHistory.current = true
       arriving.current = null
       setNotice(null)
       setInteracted(true)
@@ -467,7 +457,6 @@ export function AdmissionFormSteps({
   // Opens a question. `push` gives it a new history entry (moving forward);
   // `replace` swaps the current entry for it.
   function show(next: FormState, how: "push" | "replace") {
-    viaHistory.current = false
     setForm(next)
     const url = urlFor(next.open, next.children)
     if (how === "push") {
@@ -615,9 +604,7 @@ export function AdmissionFormSteps({
     const nextChildren = children === f.children ? latest.children : children
     setProblems([])
     setExpanded(new Set())
-    // A reopened question folds into the entry it borrowed; one reached on its
-    // own entry keeps it, and the next question gets a new one.
-    show({ ...latest, children: nextChildren, done, open: furthest(nextChildren, done) }, latest.done.has(key) && !viaHistory.current ? "replace" : "push")
+    show({ ...latest, children: nextChildren, done, open: furthest(nextChildren, done) }, latest.done.has(key) ? "replace" : "push")
   }
 
   // A "Badilisha …" link: reopen an answered question, unless the open one

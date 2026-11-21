@@ -14,15 +14,27 @@ vi.mock("@/app/staff/applicants/[id]/actions", () => ({ correctStudent: actions.
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }))
 
 import { NameSheet } from "@/app/staff/family/name-sheet"
+import { studentFullName, type LastNameFrom } from "@/lib/names"
 
 // Change the name on the Family page (#512): what is sent for the student's
-// name when only the student's own name changes, when the father's name
-// changes, and when the student's name is refused after the father's saved.
+// name when only the student's own name changes, when the last-name choice
+// changes, when the father's name changes, and when the student's name is
+// refused after the father's saved.
 
-function Sheet({ studentName, father }: { studentName: string; father: string }) {
+function Sheet({ studentName, father, lastNameFrom = "father_last" }: { studentName: string; father: string; lastNameFrom?: LastNameFrom | null }) {
   const [open, setOpen] = useState(true)
   return (
-    <NameSheet leadId="lead" studentName={studentName} father={father} enrolled={false} compareWith={null} open={open} onOpenChange={setOpen} onBusy={() => {}} />
+    <NameSheet
+      leadId="lead"
+      studentName={studentName}
+      father={father}
+      lastNameFrom={lastNameFrom}
+      enrolled={false}
+      compareWith={null}
+      open={open}
+      onOpenChange={setOpen}
+      onBusy={() => {}}
+    />
   )
 }
 
@@ -32,7 +44,10 @@ const save = () =>
   act(async () => {
     fireEvent.click(within(sheet()).getByRole("button", { name: "Save" }))
   })
-const sentName = (call: number) => actions.correctStudent.mock.calls[call][1].fullName
+const sentName = (call: number) => {
+  const payload = actions.correctStudent.mock.calls[call][1]
+  return payload.nameParts ? studentFullName(payload.nameParts, payload.nameParts.lastNameFrom) : payload.fullName
+}
 
 // Picks an answer to "One name, or two?" and lets its pause and save run.
 async function answer(index: number) {
@@ -52,14 +67,37 @@ beforeEach(() => {
 afterEach(() => vi.useRealTimers())
 
 describe("only the student's own name changes", () => {
-  it("keeps a last name of two words, and never touches the father's name", async () => {
+  it("keeps a last name of two words through nameParts, and never touches the father's name", async () => {
     render(<Sheet studentName="NEEMA JUMA DE SOUZA" father="JUMA SALIM DE SOUZA" />)
     type("Student’s name", "AMINA")
     expect(sheet()).toHaveTextContent("Student’s full name: AMINA JUMA DE SOUZA")
     await save()
 
     expect(actions.correctStudent).toHaveBeenCalledTimes(1)
-    expect(actions.correctStudent.mock.calls[0]).toEqual(["lead", { fullName: "AMINA JUMA DE SOUZA", className: undefined, dayOrBoarding: undefined }])
+    expect(actions.correctStudent.mock.calls[0]).toEqual([
+      "lead",
+      {
+        fullName: undefined,
+        nameParts: { firstName: "AMINA", fatherFirst: "JUMA", fatherMiddle: "SALIM", fatherLast: "DE SOUZA", lastNameFrom: "father_last" },
+        className: undefined,
+        dayOrBoarding: undefined,
+      },
+    ])
+    expect(actions.saveFatherName).not.toHaveBeenCalled()
+  })
+
+  it("keeps lastNameFrom = father_middle when only the student's own name changes", async () => {
+    render(<Sheet studentName="NEEMA JUMA SALIM" father="JUMA SALIM MRISHO" lastNameFrom="father_middle" />)
+    type("Student’s name", "AMINA")
+    expect(sheet()).toHaveTextContent("Student’s full name: AMINA JUMA SALIM")
+    await save()
+
+    expect(actions.correctStudent).toHaveBeenCalledWith("lead", {
+      fullName: undefined,
+      nameParts: { firstName: "AMINA", fatherFirst: "JUMA", fatherMiddle: "SALIM", fatherLast: "MRISHO", lastNameFrom: "father_middle" },
+      className: undefined,
+      dayOrBoarding: undefined,
+    })
     expect(actions.saveFatherName).not.toHaveBeenCalled()
   })
 
@@ -75,6 +113,56 @@ describe("only the student's own name changes", () => {
     type("Student’s name", "AMINA")
     await save()
     expect(sentName(0)).toBe("AMINA ALI MOHAMED")
+  })
+})
+
+describe("the last-name choice changes", () => {
+  it("switches to the father's middle name through nameParts without running the father flow", async () => {
+    render(<Sheet studentName="NEEMA JUMA MRISHO" father="JUMA SALIM MRISHO" lastNameFrom="father_last" />)
+    fireEvent.click(within(sheet()).getByRole("radio", { name: /Father’s middle name/ }))
+    expect(sheet()).toHaveTextContent("Student’s full name: NEEMA JUMA SALIM")
+    await save()
+
+    expect(actions.saveFatherName).not.toHaveBeenCalled()
+    expect(actions.correctStudent).toHaveBeenCalledWith("lead", {
+      fullName: undefined,
+      nameParts: { firstName: "NEEMA", fatherFirst: "JUMA", fatherMiddle: "SALIM", fatherLast: "MRISHO", lastNameFrom: "father_middle" },
+      className: undefined,
+      dayOrBoarding: undefined,
+    })
+  })
+
+  it("updates the student's name when the father's middle name changes under father_middle", async () => {
+    actions.saveFatherName.mockResolvedValue({ status: "saved", message: "Father’s name saved." })
+    render(<Sheet studentName="NEEMA JUMA SALIM" father="JUMA SALIM MRISHO" lastNameFrom="father_middle" />)
+    type("Middle name", "OMARI")
+    expect(sheet()).toHaveTextContent("Student’s full name: NEEMA JUMA OMARI")
+    await save()
+
+    expect(actions.saveFatherName).toHaveBeenCalledWith("lead", "JUMA OMARI MRISHO", null, null)
+    expect(actions.correctStudent).toHaveBeenCalledWith("lead", {
+      fullName: undefined,
+      nameParts: { firstName: "NEEMA", fatherFirst: "JUMA", fatherMiddle: "OMARI", fatherLast: "MRISHO", lastNameFrom: "father_middle" },
+      className: undefined,
+      dayOrBoarding: undefined,
+    })
+  })
+
+  it("saves the father's name first and then sends the new last-name choice through nameParts", async () => {
+    actions.saveFatherName.mockResolvedValue({ status: "saved", message: "Father’s name saved." })
+    render(<Sheet studentName="NEEMA JUMA MRISHO" father="JUMA SALIM MRISHO" lastNameFrom="father_last" />)
+    type("Last name", "KOMBO")
+    fireEvent.click(within(sheet()).getByRole("radio", { name: /Father’s middle name/ }))
+    expect(sheet()).toHaveTextContent("Student’s full name: NEEMA JUMA SALIM")
+    await save()
+
+    expect(actions.saveFatherName).toHaveBeenCalledWith("lead", "JUMA SALIM KOMBO", null, null)
+    expect(actions.correctStudent).toHaveBeenCalledWith("lead", {
+      fullName: undefined,
+      nameParts: { firstName: "NEEMA", fatherFirst: "JUMA", fatherMiddle: "SALIM", fatherLast: "KOMBO", lastNameFrom: "father_middle" },
+      className: undefined,
+      dayOrBoarding: undefined,
+    })
   })
 })
 

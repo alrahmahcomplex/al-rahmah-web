@@ -146,6 +146,59 @@ test("a father's name changed on the page renames the student", async ({ page })
   await expect(answer(page, renamed, "Full name")).toHaveText(renamed)
 })
 
+test("switching the last-name choice uses the father's middle name and saves it", async ({ page }) => {
+  const family = await registerFamily()
+  await open(page, ADMISSIONS, family.href)
+
+  const original = family.names[0]
+  const first = original.split(" ")[0]
+  await card(page, original).getByRole("button", { name: `Change the name of ${original}` }).click()
+  const sheet = page.getByRole("dialog", { name: "Change the name" })
+  await sheet.locator("label").filter({ has: page.getByRole("radio", { name: /Father’s middle name/ }) }).click()
+  const fromMiddle = `${first} JUMA SALIM`
+  await expect(sheet).toContainText(`Student’s full name: ${fromMiddle}`)
+  await sheet.getByRole("button", { name: "Save" }).click()
+  await expect(page.getByRole("status").filter({ hasText: "Name saved." })).toBeVisible()
+
+  await expect(answer(page, fromMiddle, "Full name")).toContainText(fromMiddle)
+  await expect(answer(page, fromMiddle, "Full name")).toContainText("Last name from the father’s middle name")
+  await page.reload()
+  await expect(answer(page, fromMiddle, "Full name")).toContainText("Last name from the father’s middle name")
+})
+
+test("changing the previous school to Outside Tanzania requires a country via type-ahead", async ({ page }) => {
+  const family = await registerFamily()
+  await open(page, ADMISSIONS, family.href)
+
+  const name = family.names[0]
+  await card(page, name).getByRole("button", { name: `Change the previous school of ${name}` }).click()
+  const sheet = page.getByRole("dialog", { name: "Previous school" })
+
+  // Pick Outside Tanzania from the region dropdown list inside the sheet.
+  await sheet.getByRole("button", { name: "Show all regions" }).click()
+  await page.getByRole("listbox", { name: "Regions" }).getByRole("option", { name: "Outside Tanzania (Other Country)" }).click()
+  // Saving without a country is refused.
+  await sheet.getByRole("button", { name: "Save" }).click()
+  await expect(sheet.getByRole("alert")).toContainText("Choose the country from the list.")
+
+  // Pick Kenya from the country dropdown list inside the sheet and save.
+  await sheet.getByRole("button", { name: "Show all countries" }).click()
+  await page.getByRole("combobox", { name: "Search countries" }).fill("Ken")
+  await page.getByRole("listbox", { name: "Countries" }).getByRole("option", { name: "Kenya" }).click()
+  await sheet.getByRole("button", { name: "Save" }).click()
+  await expect(page.getByRole("status").filter({ hasText: "Previous school saved." })).toBeVisible()
+  await expect(answer(page, name, "Previous school")).toHaveText("EXAMPLE PRIMARY SCHOOL · Public · Kenya")
+
+  // Switching back to a Tanzanian region clears the country.
+  await card(page, name).getByRole("button", { name: `Change the previous school of ${name}` }).click()
+  await sheet.getByRole("button", { name: "Show all regions" }).click()
+  await page.getByRole("combobox", { name: "Search regions" }).fill("Aru")
+  await page.getByRole("listbox", { name: "Regions" }).getByRole("option", { name: "Arusha" }).click()
+  await sheet.getByRole("button", { name: "Save" }).click()
+  await expect(page.getByRole("status").filter({ hasText: "Previous school saved." })).toBeVisible()
+  await expect(answer(page, name, "Previous school")).toHaveText("EXAMPLE PRIMARY SCHOOL · Public · Arusha")
+})
+
 test("a refused rename keeps the sheet open with what was typed", async ({ page }) => {
   const family = await registerFamily()
   await open(page, ADMISSIONS, family.href)

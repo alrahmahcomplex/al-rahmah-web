@@ -54,7 +54,7 @@ const LIST_FLOOR = 180
 
 /** The nearest part of the page that scrolls: a sheet, the staff stage, or the window. */
 function scroller(el: HTMLElement): HTMLElement {
-  return el.closest<HTMLElement>(".gf-sheet, [data-stage-scroll]") ?? ((document.scrollingElement ?? document.documentElement) as HTMLElement)
+  return el.closest<HTMLElement>(".gf-sheet, .kit-sheet-body, [data-stage-scroll]") ?? ((document.scrollingElement ?? document.documentElement) as HTMLElement)
 }
 
 /** How much of the scroll area's top stays covered once the box scrolls up: the sticky progress bar of the form the box is in, and a small gap. */

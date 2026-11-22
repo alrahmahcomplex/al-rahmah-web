@@ -164,9 +164,19 @@ export async function setNewAgentEmail(
   return { ok: true, data: { kind } }
 }
 
-/** Whether self-confirm is on, so the form asks in its order. A failed read keeps today's order. */
-export async function selfConfirmOpen(supabase: SupabaseClient): Promise<boolean> {
-  const { data, error } = await supabase.rpc("self_confirm_open")
+/**
+ * Whether self-confirm is on, so the form asks in its order. A failed read,
+ * or one slower than `waitMs` (the page waits for it), keeps today's order.
+ */
+export async function selfConfirmOpen(supabase: SupabaseClient, waitMs = 2000): Promise<boolean> {
+  let answer
+  try {
+    answer = await supabase.rpc("self_confirm_open").abortSignal(AbortSignal.timeout(waitMs))
+  } catch (error) {
+    console.error("Self-confirm: could not read whether it is on", error)
+    return false
+  }
+  const { data, error } = answer
   if (error) {
     console.error("Self-confirm: could not read whether it is on", error)
     return false

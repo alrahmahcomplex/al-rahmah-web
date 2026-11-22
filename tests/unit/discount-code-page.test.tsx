@@ -125,7 +125,9 @@ beforeEach(() => {
   stubs.selfConfirm = false
   stubs.client.mockReset().mockReturnValue({
     secret: "client",
-    rpc: async (fn: string) => (fn === "self_confirm_open" ? { data: stubs.selfConfirm, error: null } : { data: null, error: { message: "not stubbed" } }),
+    rpc: (fn: string) => ({
+      abortSignal: async () => (fn === "self_confirm_open" ? { data: stubs.selfConfirm, error: null } : { data: null, error: { message: "not stubbed" } }),
+    }),
   })
   stubs.discount.mockReset().mockResolvedValue({ ok: true, data: 10000 })
   window.scrollTo = vi.fn() as unknown as typeof window.scrollTo

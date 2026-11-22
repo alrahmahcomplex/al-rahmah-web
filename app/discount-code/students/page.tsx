@@ -256,15 +256,7 @@ export default async function AgentStudentsPage({ searchParams }: { searchParams
           </a>
         </p>
 
-        <form action={signOutAndReturn} className="-ml-2.5 self-start">
-          <input type="hidden" name="back" value="/auth" />
-          <button
-            type="submit"
-            className="inline-flex min-h-11 items-center rounded-full px-2.5 font-exo text-[15px] font-semibold text-blue-600 underline decoration-blue-600/35 underline-offset-4 outline-none hover:bg-blue-50 focus-visible:ring-3 focus-visible:ring-(color:--gf-focus-ring)"
-          >
-            {account.signOut}
-          </button>
-        </form>
+        <SignOut label={account.signOut} />
       </div>
     </AccountShell>
   )
@@ -289,17 +281,24 @@ async function Waiting({ language }: { language: Language }) {
     <AccountShell language={language} wide>
       <div className="flex flex-col gap-5">
         <WaitingCode language={language} code={code.data} link={origin ? referralLink(origin, code.data) : null} officePhone={OFFICE_PHONE} justJoined={!!welcomed && welcomed === userId} />
-        <form action={signOutAndReturn} className="-ml-2.5 self-start">
-          <input type="hidden" name="back" value="/auth" />
-          <button
-            type="submit"
-            className="inline-flex min-h-11 items-center rounded-full px-2.5 font-exo text-[15px] font-semibold text-blue-600 underline decoration-blue-600/35 underline-offset-4 outline-none hover:bg-blue-50 focus-visible:ring-3 focus-visible:ring-(color:--gf-focus-ring)"
-          >
-            {account.signOut}
-          </button>
-        </form>
+        <SignOut label={account.signOut} />
       </div>
     </AccountShell>
+  )
+}
+
+// "Toka", the same on the dashboard and on a waiting code's page.
+function SignOut({ label }: { label: string }) {
+  return (
+    <form action={signOutAndReturn} className="-ml-2.5 self-start">
+      <input type="hidden" name="back" value="/auth" />
+      <button
+        type="submit"
+        className="inline-flex min-h-11 items-center rounded-full px-2.5 font-exo text-[15px] font-semibold text-blue-600 underline decoration-blue-600/35 underline-offset-4 outline-none hover:bg-blue-50 focus-visible:ring-3 focus-visible:ring-(color:--gf-focus-ring)"
+      >
+        {label}
+      </button>
+    </form>
   )
 }
 

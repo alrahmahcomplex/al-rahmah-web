@@ -86,6 +86,11 @@ begin
     select * into draft
     from public.agent_draft(start_new_agent_self_confirm.full_name, start_new_agent_self_confirm.phone, start_new_agent_self_confirm.whatsapp, null, null);
 
+    -- One start at a time per browser, taken before the phone's lock (always
+    -- in that order), so parallel sends with different phones can't all pass
+    -- the browser's daily limit before any of them is written (Greptile, #538).
+    perform pg_advisory_xact_lock(hashtextextended('self-confirm-browser:' || start_new_agent_self_confirm.browser, 0));
+
     -- The lock sign_up_marketing_agent and create_agent_record take, so two
     -- sends with one phone wait for each other.
     perform pg_advisory_xact_lock(hashtextextended('agent-phone:' || draft.agent_phone, 0));

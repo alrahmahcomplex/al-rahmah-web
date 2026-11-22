@@ -207,7 +207,12 @@ test.describe("the chart card", () => {
     await signIn(page, MANAGER)
     await expect(charts(page).getByRole("tab")).toHaveText(["Sources", "Classes", "Months", "Seats"])
     await expect(tab(page, "Sources")).toHaveAttribute("aria-selected", "true")
-    await expect(charts(page).getByRole("listitem")).toHaveText([/^Admission form/, /^Agents’ Discount codes/, /^Promo codes/, /^Walk-in at the desk/])
+    // Earlier records follows when another spec has imported records with no code.
+    const sources = charts(page).getByRole("listitem")
+    await expect(sources.first()).toHaveText(/^Admission form/)
+    const names = await sources.allTextContents()
+    expect(names.slice(0, 4)).toEqual([expect.stringMatching(/^Admission form/), expect.stringMatching(/^Agents’ Discount codes/), expect.stringMatching(/^Promo codes/), expect.stringMatching(/^Walk-in at the desk/)])
+    expect(names.slice(4)).toEqual(names.length > 4 ? [expect.stringMatching(/^Earlier records/)] : [])
 
     await tab(page, "Classes").click()
     await expect(charts(page).getByText(/ draws? the most students$/)).toBeVisible()
@@ -223,7 +228,8 @@ test.describe("the chart card", () => {
     await expect(charts(page).getByText(/busiest month/)).toBeVisible()
     const month = charts(page).getByRole("img", { name: /· applications$/ }).first()
     await month.hover()
-    await expect(charts(page).getByText(/^(Jan · applications|January so far · applications)$/)).toBeVisible()
+    // The admission year's first column: applicants dated before its June, or June itself.
+    await expect(charts(page).getByText(/^(Before June \d{4}|Jun|June so far) · applications$/)).toBeVisible()
 
     await tab(page, "Seats").click()
     await expect(charts(page).getByText("Each capsule is the whole class. The fill is the seats held.")).toBeVisible()

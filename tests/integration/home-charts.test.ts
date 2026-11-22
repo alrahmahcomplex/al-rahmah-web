@@ -5,19 +5,20 @@ import { beforeAll, describe, expect, test, vi } from "vitest"
 import { admissionYears, type AdmissionChild, type AdmissionForm } from "@/lib/admission-form"
 import { submitAdmissionForm } from "@/lib/services/admission-form"
 import { APPLICATION_SOURCES, getHomeChartCounts, type HomeChartCounts } from "@/lib/services/home-charts"
-import { createLead, LEAD_CLASSES } from "@/lib/services/leads"
+import { createLead, LEAD_CLASSES, type LeadClass } from "@/lib/services/leads"
 
 import { anonClient, asSystem, createThrowawayStaff, inRolledBackTransaction, secretClient, signedIn, unusedAdmissionNumber } from "../support/db"
-import { discountPhone, freshCode, leadWithCode } from "../support/discount-codes"
+import { discountPhone, freshCode } from "../support/discount-codes"
 import { ACCOUNTANT, ADMISSIONS, MANAGER } from "../support/fixtures"
 
 vi.mock("server-only", () => ({}))
 
-// Home's chart counts (#405) against local Supabase. The test moves the leads
-// it makes into a year of its own in 1963–1997, which no seed and no other
-// test uses, and reads only that year. Each lead is placed at a time of day
-// in Tanzania, which the database turns into an instant itself, so no UTC
-// offset is written here.
+// Home's chart counts (#405, #518) against local Supabase: every applicant
+// enrolling in the year asked for, imported records included. The test moves
+// the leads it makes into two enrollment years of its own in 2001–2023, which
+// no seed and no other test uses, and reads only those. Each lead is placed
+// at a time of day in Tanzania, which the database turns into an instant
+// itself, so no UTC offset is written here.
 
 const [, nextYear] = admissionYears()
 // The seeded Approved agent's code.
@@ -25,21 +26,18 @@ const AGENT_CODE = "BJN-402"
 
 let year: number
 
-// A year in 1963–1997 with no lead in it, nor in the years either side,
-// picked at random from those still free. Each run fills three years, so
-// after many runs without a reset none may be left.
-async function emptyYear(): Promise<number> {
+// The first of two enrollment years in 2002–2022 with no lead in them, nor
+// in the years either side, picked at random from those still free. Each run
+// fills two years, so after many runs without a reset none may be left.
+async function emptyYears(): Promise<number> {
   const free = await inRolledBackTransaction(async (sql) => {
     const { rows } = await sql.query<{ year: number }>(
-      `select y as year from generate_series(1963, 1997) as y
-       where not exists (
-           select 1 from public.leads l
-           where l.created_at >= make_timestamptz(y - 1, 1, 1, 0, 0, 0, 'Africa/Dar_es_Salaam')
-             and l.created_at < make_timestamptz(y + 2, 1, 1, 0, 0, 0, 'Africa/Dar_es_Salaam'))`,
+      `select y as year from generate_series(2002, 2022) as y
+       where not exists (select 1 from public.leads l where l.enrollment_year between y - 1 and y + 2)`,
     )
     return rows.map((row) => row.year)
   })
-  if (free.length === 0) throw new Error("No free year in 1963–1997 for the chart counts test: run `npm run db:reset`.")
+  if (free.length === 0) throw new Error("No free enrollment years in 2001–2023 for the chart counts test: run `npm run db:reset`.")
   return free[randomInt(0, free.length)]
 }
 
@@ -74,8 +72,9 @@ async function atDesk(className: AdmissionChild["className"]): Promise<string> {
   return created.data.leadId
 }
 
-// A lead brought in by a student import.
-async function imported(): Promise<string> {
+// A lead brought in by a student import, with its Visit date from the file
+// (or none) and its code (or none). It is created now, the import day.
+async function imported(className: LeadClass, visitDate: string | null, code: string | null = null): Promise<string> {
   const admissionNumber = await unusedAdmissionNumber()
   return asSystem(async (sql) => {
     const batch = await sql.query<{ id: string }>(
@@ -89,19 +88,34 @@ async function imported(): Promise<string> {
     )
     const lead = await sql.query<{ id: string }>(
       `insert into public.leads (admission_number, student_name, class_name, enrollment_year, day_or_boarding, status, visit_date,
-           guardian_contact_id, import_batch_id, custodian_relationship)
-       values ($1, $2, 'FORM 1', 2027, 'Day', 'Visited', '2026-09-01', $3, $4, 'Mother') returning id`,
-      [admissionNumber, `Chart Import ${randomUUID().slice(0, 8)}`, contact.rows[0].id, batch.rows[0].id],
+           guardian_contact_id, referral_code, import_batch_id, custodian_relationship)
+       values ($1, $2, $3, 2027, 'Day', $4, $5, $6, $7, $8, 'Mother') returning id`,
+      [
+        admissionNumber,
+        `Chart Import ${randomUUID().slice(0, 8)}`,
+        className,
+        visitDate ? "Visited" : "Applied",
+        visitDate,
+        contact.rows[0].id,
+        code,
+        batch.rows[0].id,
+      ],
     )
     return lead.rows[0].id
   })
 }
 
-// Places the lead at a Tanzania date and time: [year, month, day, hour, minute].
-async function moveTo(leadId: string, [y, m, d, h, min]: [number, number, number, number, number]) {
-  await asSystem((sql) =>
-    sql.query("update public.leads set created_at = make_timestamptz($2, $3, $4, $5, $6, 0, 'Africa/Dar_es_Salaam') where id = $1", [leadId, y, m, d, h, min]),
-  )
+type At = [year: number, month: number, day: number, hour: number, minute: number]
+
+// Moves the lead into `enrollmentYear` and, given `at`, places it at that
+// Tanzania date and time.
+async function place(leadId: string, enrollmentYear: number, at?: At) {
+  await asSystem(async (sql) => {
+    await sql.query("update public.leads set enrollment_year = $2 where id = $1", [leadId, enrollmentYear])
+    if (at) {
+      await sql.query("update public.leads set created_at = make_timestamptz($2, $3, $4, $5, $6, 0, 'Africa/Dar_es_Salaam') where id = $1", [leadId, ...at])
+    }
+  })
 }
 
 // Writes as the database owner under another audit actor, as the form's
@@ -113,29 +127,27 @@ async function asActor<T>(actor: "public_form", work: (sql: Parameters<Parameter
   })
 }
 
-async function countsAs(person: { email: string; password: string }): Promise<HomeChartCounts> {
-  const result = await getHomeChartCounts(await signedIn(person), year)
+async function countsAs(person: { email: string; password: string }, of = year): Promise<HomeChartCounts> {
+  const result = await getHomeChartCounts(await signedIn(person), of)
   if (!result.ok) throw new Error(`count refused: ${result.error}`)
   return result.data
 }
 
 const nonZero = (rows: { count: number }[], key: (row: never) => string) =>
   Object.fromEntries(rows.filter((row) => row.count > 0).map((row) => [key(row as never), row.count]))
+const monthsOf = (counts: HomeChartCounts) => Object.fromEntries(counts.months.map((row) => [row.month, row.count]))
 
 beforeAll(async () => {
-  year = await emptyYear()
-  console.info(`home-charts: planted in ${year}`)
+  year = await emptyYears()
+  console.info(`home-charts: planted in enrollment years ${year} and ${year + 1}`)
+  const before = year - 1
   const promo = freshCode("C")
   await asSystem((sql) => sql.query("insert into public.promo_codes (code, name, amount) values ($1, 'Chart promo', 5000)", [promo]))
 
+  // The year asked for, applied for mostly in the calendar year before it.
   const formPlain = await fromForm("STD 4")
   const formAgent = await fromForm("STD 4", AGENT_CODE)
   const deskPlain = await atDesk("STD 2")
-  const deskPromo = await leadWithCode(promo)
-  const systemPlain = await leadWithCode(null)
-  const importedLead = await imported()
-  const nextYearLead = await atDesk("FORM 2")
-  const lastYearLead = await atDesk("FORM 3")
   // Registered at the desk, then touched by the form: still the desk.
   const deskThenForm = await atDesk("KG 1")
   await asActor("public_form", (sql) => sql.query("update public.leads set returning_family_reapplied = true where id = $1", [deskThenForm]))
@@ -147,55 +159,90 @@ beforeAll(async () => {
     await sql.query("update public.leads set referral_code = $2 where id = $1", [deskAgent, AGENT_CODE])
   })
 
-  await moveTo(formPlain, [year, 1, 1, 0, 0])
-  await moveTo(formAgent, [year, 3, 10, 9, 0])
-  await moveTo(deskPlain, [year, 3, 20, 9, 0])
-  await moveTo(deskThenForm, [year, 2, 2, 9, 0])
-  await moveTo(formPromo, [year, 2, 28, 23, 59])
-  await moveTo(deskPromo, [year, 7, 4, 9, 0])
-  await moveTo(deskAgent, [year, 8, 1, 0, 0])
-  await moveTo(systemPlain, [year, 12, 31, 23, 59])
-  await moveTo(importedLead, [year, 5, 5, 9, 0])
-  await moveTo(nextYearLead, [year + 1, 1, 1, 0, 0])
-  await moveTo(lastYearLead, [year - 1, 12, 31, 23, 59])
+  await place(formPlain, year, [before, 6, 1, 0, 0])
+  await place(formAgent, year, [before, 9, 10, 9, 0])
+  await place(deskPlain, year, [before, 9, 20, 9, 0])
+  await place(deskThenForm, year, [before, 10, 2, 9, 0])
+  // 23:59 on 31 October in Tanzania is 20:59 UTC: still October.
+  await place(formPromo, year, [before, 10, 31, 23, 59])
+  await place(deskAgent, year, [year, 1, 4, 0, 0])
+
+  // Imported records: by their Visit date, never the import day; by their code's source, or Earlier records.
+  await place(await imported("FORM 1", `${before - 1}-03-15`), year)
+  await place(await imported("FORM 1", `${before}-08-05`, AGENT_CODE), year)
+  await place(await imported("STD 2", `${before}-08-06`, promo), year)
+  // No Visit date in the file: the import day is its own date.
+  await place(await imported("FORM 1", null), year, [before, 11, 11, 9, 0])
+
+  // The next enrollment year, applied for in the same months.
+  await place(await atDesk("FORM 2"), year + 1, [before, 9, 1, 9, 0])
+  await place(await imported("FORM 3", `${before}-09-02`), year + 1)
 })
 
 describe("home_chart_counts", () => {
-  test("counts this year's applications by month, in Tanzania time", async () => {
+  test("counts every applicant by enrollment year, imported records included, whatever year they applied in", async () => {
+    expect((await countsAs(MANAGER)).total).toBe(10)
+    const next = await countsAs(MANAGER, year + 1)
+    expect(next.total).toBe(2)
+    expect(nonZero(next.classes, (row: { className: string }) => row.className)).toEqual({ "FORM 2": 1, "FORM 3": 1 })
+    expect(nonZero(next.sources, (row: { source: string }) => row.source)).toEqual({ walk_in: 1, earlier_records: 1 })
+    expect(monthsOf(next)).toEqual({ [`${year - 1}-09`]: 2 })
+  })
+
+  test("counts them by month in Tanzania time, an imported record in the month of its own Visit date", async () => {
     const counts = await countsAs(MANAGER)
-    expect(counts.months).toEqual([1, 2, 2, 0, 0, 0, 1, 1, 0, 0, 0, 1])
-    expect(counts.total).toBe(8)
+    const before = year - 1
+    expect(counts.months.map((row) => row.month)).toEqual(counts.months.map((row) => row.month).toSorted())
+    expect(monthsOf(counts)).toEqual({
+      [`${before - 1}-03`]: 1,
+      [`${before}-06`]: 1,
+      [`${before}-08`]: 2,
+      [`${before}-09`]: 2,
+      [`${before}-10`]: 2,
+      [`${before}-11`]: 1,
+      [`${year}-01`]: 1,
+    })
   })
 
   test("counts them by their current class, every class listed", async () => {
     const counts = await countsAs(MANAGER)
     expect(counts.classes.map((row) => row.className)).toEqual([...LEAD_CLASSES])
-    expect(nonZero(counts.classes, (row: { className: string }) => row.className)).toEqual({ "KG 1": 2, "KG 2": 1, "STD 2": 1, "STD 3": 2, "STD 4": 2 })
+    expect(nonZero(counts.classes, (row: { className: string }) => row.className)).toEqual({
+      "KG 1": 2,
+      "KG 2": 1,
+      "STD 2": 2,
+      "STD 4": 2,
+      "FORM 1": 3,
+    })
   })
 
-  test("sorts them by source: a Promo code, an agent's code, the Admission form, or the desk", async () => {
+  test("sorts them by source: a Promo code, an agent's code, Earlier records, the Admission form, or the desk", async () => {
     const counts = await countsAs(MANAGER)
     expect(counts.sources.map((row) => row.source)).toEqual([...APPLICATION_SOURCES])
     expect(nonZero(counts.sources, (row: { source: string }) => row.source)).toEqual({
       admission_form: 1,
-      // From the form and from the desk.
-      agent_code: 2,
+      // From the form, from the desk and from an import.
+      agent_code: 3,
+      // From the form and from an import.
       promo_code: 2,
-      // Registered by staff (one later touched by the form) or written by the system: never the form.
-      walk_in: 3,
+      // Registered by staff, one later touched by the form: never the form.
+      walk_in: 2,
+      // Imported with no code, with a Visit date or without.
+      earlier_records: 2,
     })
   })
 
-  test("leaves out students brought in by an import, and applications of other years", async () => {
+  test("adds up to a direct count of the year's leads in every dimension", async () => {
     const counts = await countsAs(MANAGER)
-    expect(counts.classes.find((row) => row.className === "FORM 1")?.count).toBe(0)
-    expect(counts.classes.find((row) => row.className === "FORM 2")?.count).toBe(0)
-    expect(counts.classes.find((row) => row.className === "FORM 3")?.count).toBe(0)
-    const manager = await signedIn(MANAGER)
-    for (const other of [year - 1, year + 1]) {
-      const result = await getHomeChartCounts(manager, other)
-      expect(result.ok && result.data.classes.filter((row) => row.count > 0)).toEqual([{ className: other < year ? "FORM 3" : "FORM 2", count: 1 }])
-    }
+    const direct = await inRolledBackTransaction(async (sql) => {
+      const { rows } = await sql.query<{ n: number }>("select count(*)::int as n from public.leads where enrollment_year = $1", [year])
+      return rows[0].n
+    })
+    const sum = (rows: { count: number }[]) => rows.reduce((total, row) => total + row.count, 0)
+    expect(counts.total).toBe(direct)
+    expect(sum(counts.months)).toBe(direct)
+    expect(sum(counts.classes)).toBe(direct)
+    expect(sum(counts.sources)).toBe(direct)
   })
 
   test("counts the same for every role that may view leads", async () => {
@@ -215,11 +262,14 @@ describe("home_chart_counts", () => {
   test("hands back counts only: a dimension, a fixed bucket and a number, never a lead", async () => {
     const { data, error } = await (await signedIn(MANAGER)).rpc("home_chart_counts", { year })
     expect(error).toBeNull()
-    const months = Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, "0"))
-    const allowed: Record<string, readonly string[]> = { month: months, class: LEAD_CLASSES, source: APPLICATION_SOURCES }
+    const allowed: Record<string, (bucket: string) => boolean> = {
+      month: (bucket) => /^\d{4}-(0[1-9]|1[0-2])$/.test(bucket),
+      class: (bucket) => (LEAD_CLASSES as readonly string[]).includes(bucket),
+      source: (bucket) => (APPLICATION_SOURCES as readonly string[]).includes(bucket),
+    }
     for (const row of data as Record<string, unknown>[]) {
       expect(Object.keys(row).toSorted()).toEqual(["application_count", "bucket", "dimension"])
-      expect(allowed[row.dimension as string]).toContain(row.bucket)
+      expect(allowed[row.dimension as string](row.bucket as string)).toBe(true)
       expect(Number(row.application_count)).toBeGreaterThan(0)
     }
   })

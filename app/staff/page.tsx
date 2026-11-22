@@ -2,7 +2,7 @@ import type { Metadata } from "next"
 import { Suspense } from "react"
 
 import { Note, pageTitle } from "@/components/kit"
-import { tanzaniaToday } from "@/lib/school-calendar"
+import { currentAdmissionYear, tanzaniaToday } from "@/lib/school-calendar"
 import { countPendingDiscountRequests } from "@/lib/services/discounts"
 import { getOverdueCount } from "@/lib/services/follow-ups"
 import { getHomeChartCounts } from "@/lib/services/home-charts"
@@ -52,6 +52,7 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
   const permissions = staff.permissions
   const params = await searchParams
   const today = tanzaniaToday()
+  const admissionYear = currentAdmissionYear(today)
   const day = pickedDay(one(params.day), today)
   const week = pickedWeek(one(params.week), today)
 
@@ -68,8 +69,8 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
     mayCallBack(permissions) ? getOverdueCount(supabase) : null,
     canSeeSeats ? seatsOnOpening(supabase, today) : null,
     mayDecideDiscounts(permissions) ? countPendingDiscountRequests(supabase) : null,
-    // home_chart_counts still filters by created_at calendar year; #518 switches it to enrollment_year and currentAdmissionYear.
-    canView ? getHomeChartCounts(supabase, Number(today.slice(0, 4))) : null,
+    // Every applicant enrolling in the current admission year (#518).
+    canView ? getHomeChartCounts(supabase, admissionYear) : null,
   ])
 
   const actions = quickActions({
@@ -85,7 +86,7 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
   const charts = [
     counts && sourcesTab(counts),
     counts && classesTab(counts),
-    counts && monthsTab(counts, today),
+    counts && monthsTab(counts, today, admissionYear),
     canSeeSeats && seats?.ok && seats.data.streams ? namedSeatsTab(seats.data.streams) : null,
   ].filter((tab): tab is ChartTab => !!tab)
 

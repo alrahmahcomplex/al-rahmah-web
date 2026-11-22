@@ -65,6 +65,8 @@
   transition: opacity var(--gf-t-fast);
 }
 .hm-ch-bar[data-part] { background: var(--gf-chart-part); }
+/* Every applicant dated before the admission year's June, in one column. */
+.hm-ch-bar[data-early] { background: repeating-linear-gradient(135deg, var(--gf-chart-3) 0 4px, var(--gf-chart-4) 4px 8px); }
 .hm-ch-bar:hover, .hm-ch-bar[data-on] { opacity: 0.8; }
 
 /* ---------- Seats: capsules ---------- */
@@ -104,6 +106,8 @@
 :is(.hm-ch-arc, .hm-ch-legend i)[data-shade="1"] { stroke: var(--gf-chart-2); background: var(--gf-chart-2); }
 :is(.hm-ch-arc, .hm-ch-legend i)[data-shade="2"] { stroke: var(--gf-chart-3); background: var(--gf-chart-3); }
 :is(.hm-ch-arc, .hm-ch-legend i)[data-shade="3"] { stroke: var(--gf-chart-4); background: var(--gf-chart-4); }
+/* Earlier records, apart from the year's four sources. */
+:is(.hm-ch-arc, .hm-ch-legend i)[data-shade="4"] { stroke: var(--gf-chart-earlier); background: var(--gf-chart-earlier); }
 
 /* ---------- the tooltip: the light kit tooltip's look ---------- */
 .hm-ch-tip {

@@ -213,6 +213,7 @@ function MonthColumns({ tab, mark }: { tab: MonthsTab; mark: Mark }) {
                 aria-label={spoken(point.tip)}
                 className="hm-ch-bar"
                 data-part={point.part ? "" : undefined}
+                data-early={point.early ? "" : undefined}
                 style={{ height: `${Math.max(1, (point.value / top) * 100)}%` }}
                 {...mark(point.label, point.tip)}
               />

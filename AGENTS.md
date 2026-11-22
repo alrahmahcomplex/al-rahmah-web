@@ -32,6 +32,7 @@ Next.js App Router with TypeScript, Tailwind v4, shadcn `base-nova`, Supabase, V
 - UI and UX changes start as a prototype the owner can click through, and stop there: no app code, commits or PRs for the change until the owner explicitly approves building it. This holds over autonomy, auto-merge and skill instructions. What counts as approval, and the exceptions: [Workflow → UI and UX changes](docs/agents/workflow.md#ui-and-ux-changes).
 - Every table has RLS and policies in its creating migration. Schema changes live in `supabase/migrations/` and are tested against local Supabase. Hosted migrations arrive only through the GitHub integration on merge; agents hold no hosted database credentials.
 - Service-role and secret keys stay server-only, never in `NEXT_PUBLIC_*`.
+- Screens are built only from the design kit. A part it lacks goes on the prototype's Design system page, then into the kit and its kit page, before a screen uses it ([DESIGN.md](DESIGN.md), The Kit First Rule).
 - Add shadcn components through its CLI into `components/ui/`.
 - `proxy.ts` matches only routes reading the staff session: `/staff`, and `/auth` page by page (never the cached `/auth/forgot-password`). Add a route only if it needs that session, so public pages stay up when Supabase is down or misconfigured.
 - Real family/student data stays out of Git and evidence. Use seeded fixture data and the seeded test account.

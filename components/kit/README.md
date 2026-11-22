@@ -16,6 +16,8 @@ Import from `@/components/kit`. Every piece, in every state, is on the kit page,
 
 A staff screen uses only the kit. The old parts are left only for the public pages that still use them.
 
+**Kit first.** A part a screen needs that is not here is added here first: drawn on the prototype's Design system page, then built here, or in the icon, illustration, guided-form or brand folder DESIGN.md names for it, and shown on `/staff/kit` in every state, then used (DESIGN.md, The Kit First Rule). A screen's CSS lays kit parts out; it does not change their look.
+
 | Use | Not |
 |---|---|
 | `Button` (`variant`, `size`, `pending`), `ButtonLink` | `ui/button`, `staff/pending-button`; `variant="bad"` for `ui/button`'s `destructive` |

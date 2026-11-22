@@ -6,7 +6,7 @@ import { expect, test } from "./staff-test"
 import { asSystem, secretClient, signedIn } from "../tests/support/db"
 import { MANAGER } from "../tests/support/fixtures"
 import { PHONE_WIDTH, waitForSecurityCheck } from "./admission-form"
-import { chooseLanguage, FORBIDDEN, fillRegistration, nameBox, sendButton, WORDS } from "./discount-code"
+import { afterSend, chooseLanguage, FORBIDDEN, fillRegistration, nameBox, sendButton, WORDS } from "./discount-code"
 import { logIn } from "./log-in"
 
 // Sign-up with an email and claiming an existing Discount code (#193) end to
@@ -64,6 +64,8 @@ async function send(page: Page, entry: Entry) {
   else await fillRegistration(page, "sw", entry)
   await waitForSecurityCheck(page)
   await sendButton(page, "sw", !!entry.hasCode).click()
+  // Self-confirm's order: today's claim path asks for the email after the send.
+  await afterSend(page, "sw", entry, !!entry.hasCode)
 }
 
 async function claim(page: Page, agent: { typedName: string; phone: string; code: string }, address: string, name = agent.typedName) {
@@ -92,7 +94,10 @@ function queueCard(page: Page, fullName: string) {
   return page.getByRole("region", { name: new RegExp(`^${fullName}`) })
 }
 
+// Each claim waits for two security checks in self-confirm's order (the send,
+// then the send again with the email), so these get the slow budget.
 test.describe("the Discount code page's answers", () => {
+  test.slow()
   test.use({ viewport: PHONE_WIDTH })
 
   test("1 and 8. a claim on an imported code shows the code, the link and share, and says to check spam; a retry shows it again", async ({
@@ -189,7 +194,8 @@ test.describe("the Discount code page's answers", () => {
 
   test("an email already in use gets the neutral reply", async ({ page }) => {
     await send(page, { name: "Zawadi Barua Pepe", phone: phone(), email: MANAGER.email })
-    await expect(notice(page)).toHaveText("Barua pepe hii haiwezi kutumika. Tumia nyingine au piga simu ofisini.")
+    // A new agent gives the email on the sign-in choice's email path (#503), which words it its own way.
+    await expect(notice(page)).toHaveText("Barua pepe hii haiwezi kutumika. Andika nyingine, au piga simu ofisini.")
   })
 
   test("the sign-up prompt and the sign-in prompt stay apart", async ({ page }) => {
@@ -206,6 +212,7 @@ test.describe("the Discount code page's answers", () => {
 })
 
 test.describe("the Manager's queue", () => {
+  test.slow()
   test("Confirm saves the email, rejects the competing claim, and sends the invite", async ({ page, browser }) => {
     const agent = await existingAgent()
     const address = email("confirm")

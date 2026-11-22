@@ -109,6 +109,9 @@ async function setPassword(page: Page, password: string, { securityCheck = true 
 async function byEmail(page: Page, address: string, password: string) {
   await page.getByRole("radio", { name: /Kwa barua pepe/ }).check({ force: true })
   await page.getByRole("button", { name: "Endelea" }).click()
+  // The email is asked on its path (#503 slice 4d-b): the form asked none.
+  await page.getByLabel("Barua pepe yako?").fill(address)
+  await page.getByRole("button", { name: "Endelea" }).click()
   await expect(page.getByRole("heading", { name: "Angalia barua pepe yako" })).toBeVisible()
   await expect(page.getByText(address)).toBeVisible()
   const link = await inviteLink(address)
@@ -191,6 +194,48 @@ test.describe("self-confirm: the four cases", () => {
     await start(page, { name: agent.fullName, phone: mobile(), email: address, code: agent.code })
     await byEmail(page, address, "case-four-password")
     expect(await joinedLogin(agent.id)).toMatchObject({ joined: true })
+  })
+})
+
+// New agents choose too (#503 slice 4d-b): by mobile, the number to the mobile
+// typed, a password, then the waiting code, with no students until the office
+// approves the code; approving only flips the status.
+test.describe("a new agent", () => {
+  test("by mobile: the number, a password, the waiting code, and the students once the office approves", async ({ page }) => {
+    test.slow()
+    const who = { name: names(), phone: mobile(), email: email("new-mobile") }
+    await chooseLanguage(page.context(), "sw")
+    await page.goto("/discount-code")
+    await fillRegistration(page, "sw", who)
+    await waitForSecurityCheck(page)
+    await sendButton(page, "sw").click()
+    await expect(page.getByRole("heading", { name: "Chagua jinsi ya kuingia", level: 2 })).toBeVisible({ timeout: 15_000 })
+    const id = await asSystem(async (sql) => (await sql.query<{ id: string }>("select id from public.marketing_agents where phone = $1", [e164(who.phone)])).rows[0].id)
+
+    await page.getByRole("radio", { name: /Kwa namba ya simu/ }).check({ force: true })
+    await page.getByRole("button", { name: "Endelea" }).click()
+    await expect(page.getByRole("heading", { name: "Angalia SMS yako" })).toBeVisible()
+    const digits = await knownNumber(id)
+    await page.getByRole("textbox", { name: "Tarakimu 1 kati ya 6" }).click()
+    await page.keyboard.type(digits)
+    await expect(page.getByRole("heading", { name: "Weka nenosiri lako" })).toBeVisible({ timeout: 15_000 })
+    await page.getByLabel("Nenosiri jipya", { exact: true }).fill("new-agent-password")
+    await page.getByLabel("Rudia nenosiri jipya").fill("new-agent-password")
+    await waitForSecurityCheck(page)
+    await page.getByRole("button", { name: "Weka nenosiri" }).click()
+
+    // The waiting code: its code and link, when the password works (O-N62), and no students.
+    await expect(page).toHaveURL(/\/discount-code\/students/, { timeout: 20_000 })
+    await expect(page.getByRole("heading", { name: "Code yako ya Punguzo" })).toBeVisible()
+    await expect(page.getByText("Ofisi ya Masoko ikithibitisha code yako, ingia kwa namba yako ya simu na nenosiri hili kuona wanafunzi uliowaleta.")).toBeVisible()
+    await expect(page.getByText("Familia zako ziko wapi")).toHaveCount(0)
+    expect(await joinedLogin(id)).toMatchObject({ joined: true })
+
+    // The office approves the code: the same login now sees the dashboard.
+    const approved = await (await signedIn(MANAGER)).rpc("approve_marketing_agent", { agent_id: id })
+    if (approved.error) throw new Error(approved.error.message)
+    await page.reload()
+    await expect(page.getByRole("heading", { name: /^Habari, / })).toBeVisible()
   })
 })
 

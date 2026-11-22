@@ -2,6 +2,7 @@ import { randomInt, randomUUID } from "node:crypto"
 
 import { expect, type BrowserContext, type Page } from "@playwright/test"
 
+import { waitForSecurityCheck } from "./admission-form"
 import { E2E_PORT } from "./server"
 
 // Helpers the Discount code specs share. Every run invents its own name and
@@ -126,8 +127,14 @@ export async function fillRegistration(
     await page.getByLabel(t.whatsapp).fill(whatsapp)
   }
   await continueFrom(page, lang)
-  await page.getByLabel(t.email).fill(who.email)
-  await continueFrom(page, lang)
+  // Self-confirm's order (#503 slice 4d-b, live since 20270128120100) asks no
+  // email here; today's order does.
+  const email = openQuestion(page).getByLabel(t.email)
+  await expect(email.or(openQuestion(page).getByRole("radio", { name: t.yes }))).toBeVisible()
+  if (await email.isVisible()) {
+    await email.fill(who.email)
+    await continueFrom(page, lang)
+  }
   // The tiles are drawn over their radios, so tap the tile as a person would.
   if (code) {
     await pickTile(page, t.yes)
@@ -141,3 +148,36 @@ export async function fillRegistration(
 
 // Words the public pages never use (CONTEXT.md, Discount code).
 export const FORBIDDEN = /agent|referral|approv|wakala|idhini/i
+
+const EMAIL_CHOICE = { sw: /Kwa barua pepe/, en: /With my email/ } as const
+const CONTINUE = { sw: "Endelea", en: "Continue" } as const
+
+/**
+ * After Send, in self-confirm's order (#503): a new agent chooses how to sign
+ * in, and this takes the email path, which asks for the email and ends on
+ * today's finish; today's claim path brings the form's email question back,
+ * which this answers before sending again. Anything else (a finish, a notice,
+ * a code holder's choice) is left for the test.
+ */
+export async function afterSend(page: Page, lang: Lang, who: { email: string }, claim = false) {
+  const t = WORDS[lang]
+  const choice = page.getByRole("radio", { name: EMAIL_CHOICE[lang] })
+  const formEmail = openQuestion(page).getByLabel(t.email)
+  const done = page.getByRole("heading", { level: 1, name: new RegExp(`^(${t.done}|${t.claimDone})$`) })
+  const notice = page.getByRole("main").getByRole("alert")
+  await expect(choice.or(formEmail).or(done).or(notice).first()).toBeVisible({ timeout: 20_000 })
+  if (await formEmail.isVisible()) {
+    await formEmail.fill(who.email)
+    await continueFrom(page, lang)
+    // The first send spent the security check's token: wait for a fresh one.
+    await waitForSecurityCheck(page)
+    await sendButton(page, lang, claim).click()
+    return afterSend(page, lang, who, claim)
+  }
+  if (!claim && (await choice.isVisible())) {
+    await choice.check({ force: true })
+    await page.getByRole("button", { name: CONTINUE[lang] }).click()
+    await page.getByLabel(t.email).fill(who.email)
+    await page.getByRole("button", { name: CONTINUE[lang] }).click()
+  }
+}

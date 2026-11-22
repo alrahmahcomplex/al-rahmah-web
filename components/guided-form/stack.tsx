@@ -234,18 +234,42 @@ export function revealStep(li: HTMLElement) {
 }
 
 /**
- * The folded answer line (`.sum`): tick dot, small label over the value on
- * the left, the action (usually a `ChangeLink`) on the right.
+ * The folded answer line (`.sum`), one group per question (owner, #503
+ * slice 4d, the Law of Proximity): the tick dot and the question's label on
+ * the left; the answer on the right, with its action (usually a `ChangeLink`)
+ * right under it, right-aligned too. A long answer wraps in its own column,
+ * never under the label. Where the row is too narrow for two columns, the
+ * three stack: label, answer, action. Without a label, the answer sits beside
+ * the dot and the action under it on the right.
  */
 export function SummaryRow({ label, value, action, icon }: { label?: ReactNode; value: ReactNode; action?: ReactNode; icon?: ReactNode }) {
-  return (
-    <div className="flex min-h-16 flex-wrap items-center gap-x-3 gap-y-1 py-2.5 text-left">
-      <span className="grid size-7 flex-none place-items-center rounded-full bg-blue-50 text-blue-600">{icon ?? <Icon name="check" small />}</span>
-      <div className="flex min-w-0 flex-[1_1_10em] flex-col">
-        {label && <span className="text-[13px] leading-[1.3] text-slate-500">{label}</span>}
-        <span className="text-base leading-[1.35] font-semibold [overflow-wrap:break-word] text-slate-800">{value}</span>
+  const dot = <span className="grid size-7 flex-none place-items-center rounded-full bg-blue-50 text-blue-600">{icon ?? <Icon name="check" small />}</span>
+  const answer = <span className="text-base leading-[1.35] font-semibold [overflow-wrap:anywhere] text-slate-800">{value}</span>
+  if (!label) {
+    return (
+      <div className="flex min-h-16 flex-col gap-1 py-3 text-left" data-summary-row>
+        <div className="flex min-w-0 items-center gap-3">
+          {dot}
+          {answer}
+        </div>
+        {action && <div className="self-end">{action}</div>}
       </div>
-      {action && <div className="ml-auto flex-none">{action}</div>}
+    )
+  }
+  return (
+    <div className="@container py-3 text-left" data-summary-row>
+      <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.35fr)] items-start gap-x-3 gap-y-1 @max-[19rem]:grid-cols-1">
+        <div className="flex min-h-7 min-w-0 items-center gap-3">
+          {dot}
+          <span className="text-sm leading-[1.35] text-slate-600 [overflow-wrap:anywhere]" data-summary-label>
+            {label}
+          </span>
+        </div>
+        <div className="flex min-w-0 flex-col items-end gap-0.5 pt-0.5 text-right @max-[19rem]:items-start @max-[19rem]:pl-10 @max-[19rem]:text-left" data-summary-answer>
+          {answer}
+          {action}
+        </div>
+      </div>
     </div>
   )
 }

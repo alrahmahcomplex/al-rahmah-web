@@ -7,7 +7,7 @@ import { asSystem, signedIn } from "../tests/support/db"
 import { MANAGER } from "../tests/support/fixtures"
 import { PHONE_WIDTH, waitForSecurityCheck } from "./admission-form"
 import { chooseLanguage, fillRegistration, sendButton } from "./discount-code"
-import { logIn } from "./log-in"
+import { signInOnce } from "./log-in"
 import { E2E_OTP_HMAC_SECRET } from "./self-confirm-secret"
 
 // Self-confirm end to end (#503, live since 20270128120100): an agent on
@@ -196,6 +196,8 @@ test.describe("self-confirm: the four cases", () => {
 
 test.describe("Remove this sign-in", () => {
   test("the office removes a sign-in, the removed browser is out on its next page, and the real agent joins by mobile", async ({ page, browser }) => {
+    // Two joins and a Manager's removal in one story.
+    test.slow()
     const agent = await agentWithMobile()
     // Someone joins on the code by email first.
     const intruder = await browser.newPage({ viewport: PHONE_WIDTH })
@@ -203,8 +205,7 @@ test.describe("Remove this sign-in", () => {
     await start(intruder, { name: agent.fullName, phone: agent.phone, email: address, code: agent.code })
     await byEmail(intruder, address, "intruder-password")
 
-    await logIn(page, MANAGER.email, MANAGER.password)
-    await expect(page).toHaveURL(/\/staff$/, { timeout: 15_000 })
+    await signInOnce(page, MANAGER.email, MANAGER.password)
     await page.goto(`/staff/agents?status=all&q=${encodeURIComponent(agent.code)}`)
     await page.getByRole("button", { name: `More actions for ${agent.fullName}` }).click()
     await page.getByRole("button", { name: "Remove this sign-in" }).click()

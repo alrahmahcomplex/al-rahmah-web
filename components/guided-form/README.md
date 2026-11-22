@@ -145,3 +145,24 @@ const LABELS = { first: "First name", middle: "Middle name", last: "Last name" }
 - Every box is `required` unless `required={false}`. `names` changes what a box posts as, such as `students[0][firstName]`; `value` and `onChange` take the contract's object. The last box can end in a space while typing: save `cleanName(value)`.
 - A Promo code of three letters then a digit (EID2026) gets the hyphen too. A lookup that takes both kinds of code tries the code as typed, then without that hyphen; the database never holds two codes that differ only by it (`discount_code_key`).
 - `typeInNameBox`, `cleanName`, `hasTwoNames`, `formatCode` and `formatAgentCode` are the plain rules, for a server check or a test.
+
+## Confirmation number
+
+Six boxes for a number sent by SMS (#503), from prototype v57. It has its own stylesheet, `confirmation-number.css` (`gf-otp-*`).
+
+```tsx
+const boxes = useRef<ConfirmationNumberHandle>(null)
+<ConfirmationNumber
+  ref={boxes}
+  label="Namba ya kuthibitisha"
+  digitLabel={(n) => `Tarakimu ${n} kati ya 6`}
+  onComplete={async (code) => ((await check(code)) ? "ok" : "bad")}
+  onSettled={(result) => (result === "ok" ? next() : showNote())}
+  autoFocus
+/>
+```
+
+- `onComplete` runs on the sixth digit, a paste or an SMS autofill. The boxes stay locked until it answers `"ok"` or `"bad"`; a throw counts as `"bad"`.
+- `onSettled` runs once the tick or the cross has landed: move on, or show the note under the boxes. The part shows no words of its own.
+- `boxes.current.reset()` empties the boxes and focuses the first, for "Jaribu tena" or after a new number is sent.
+- `disabled` locks the boxes.

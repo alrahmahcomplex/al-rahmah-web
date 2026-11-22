@@ -33,13 +33,15 @@ describe("signing out on a page that refused the session", () => {
     "/auth",
     "/auth/confirm?token_hash=abc123&type=invite",
     "/auth/reset-password?token_hash=abc123&type=recovery",
+    // The reset by SMS asks a signed-in browser to sign out first (#503).
+    "/auth/forgot-password",
     "/discount-code/set-password?token_hash=abc123&type=invite",
   ])("returns to %s", async (back) => {
     expect(await signOutFrom(back)).toBe(back)
     expect(stubs.signOut).toHaveBeenCalledOnce()
   })
 
-  it.each(["/authors", "/auth/callback?code=xyz", "/auth/forgot-password", "/discount-code/students", "/staff", "https://example.com/auth", "//example.com/auth"])(
+  it.each(["/authors", "/auth/callback?code=xyz", "/discount-code/students", "/staff", "https://example.com/auth", "//example.com/auth"])(
     "sends %s to sign-in instead",
     async (back) => {
       expect(await signOutFrom(back)).toBe("/auth")

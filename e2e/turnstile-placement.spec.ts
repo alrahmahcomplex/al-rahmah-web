@@ -190,7 +190,7 @@ for (const { name, size } of VIEWPORTS) {
         await cloudflareAsksForAClick(page)
         await page.goto("/auth/forgot-password")
         await page.getByRole("textbox").fill("mzazi@example.test")
-        await expectSendBringsCheckIntoView(page, lang, lang === "sw" ? "Tuma kiungo kipya" : "Send a new link")
+        await expectSendBringsCheckIntoView(page, lang, lang === "sw" ? "Tuma" : "Send")
       })
 
       test(`on the Admission review step, Send brings a check that needs a click into view, in ${lang}`, async ({ page, baseURL }) => {
@@ -213,7 +213,7 @@ for (const { name, size } of VIEWPORTS) {
       await page.goto("/auth/forgot-password")
       await waitForSecurityCheck(page)
       await page.getByRole("textbox").fill(`hakuna-akaunti-${randomUUID().slice(0, 8)}@example.test`)
-      await page.getByRole("button", { name: "Tuma kiungo kipya" }).click()
+      await page.getByRole("button", { name: "Tuma", exact: true }).click()
       await expect(page.getByRole("status")).toContainText("Kama barua pepe hii ina akaunti", { timeout: 15_000 })
     })
   })

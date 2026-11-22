@@ -30,7 +30,7 @@ const TIMEOUT_MS = 10_000
 type BeemAnswer = { successful?: boolean; code?: number; request_id?: number | string }
 
 export function beemSender(
-  { apiKey, secretKey, senderId }: { apiKey: string; secretKey: string; senderId: string },
+  { apiKey, secretKey, senderId, timeoutMs = TIMEOUT_MS }: { apiKey: string; secretKey: string; senderId: string; timeoutMs?: number },
   fetchImpl: typeof fetch = fetch,
 ): SmsSender {
   const authorization = `Basic ${Buffer.from(`${apiKey}:${secretKey}`).toString("base64")}`
@@ -41,7 +41,7 @@ export function beemSender(
         method: "POST",
         headers: { Authorization: authorization, "Content-Type": "application/json", Accept: "application/json" },
         body: JSON.stringify({ source_addr: senderId, encoding: 0, message, recipients: [{ recipient_id: 1, dest_addr: to }] }),
-        signal: AbortSignal.timeout(TIMEOUT_MS),
+        signal: AbortSignal.timeout(timeoutMs),
       })
     } catch (error) {
       return { ok: false, error: (error as { name?: unknown } | null)?.name === "TimeoutError" ? "timeout" : "network" }
@@ -100,11 +100,13 @@ function localSupabase(url: string | undefined): boolean {
 // variables say. Anything else, a deployment that lost a key included,
 // refuses every send, so a missing key shows up as failed sends in the log
 // rather than as numbers that silently never left.
-export function smsSender(env: Record<string, string | undefined> = process.env): SmsSender {
+// timeoutMs: the Send SMS hook passes a shorter one, so it answers Supabase
+// within Supabase's own hook timeout (5 s).
+export function smsSender(env: Record<string, string | undefined> = process.env, { timeoutMs }: { timeoutMs?: number } = {}): SmsSender {
   const apiKey = env.BEEM_API_KEY
   const secretKey = env.BEEM_SECRET_KEY
   const senderId = env.BEEM_SENDER_ID
-  if (apiKey && secretKey && senderId) return beemSender({ apiKey, secretKey, senderId })
+  if (apiKey && secretKey && senderId) return beemSender({ apiKey, secretKey, senderId, timeoutMs })
   if (env.SMS_FAKE === "1" && env.VERCEL_ENV !== "production" && localSupabase(env.NEXT_PUBLIC_SUPABASE_URL)) return fakeSender()
   console.error("BEEM_API_KEY, BEEM_SECRET_KEY and BEEM_SENDER_ID must be set to send SMS (or SMS_FAKE=1 outside Production).")
   return async () => ({ ok: false, error: "beem_keys_missing" })
@@ -152,15 +154,22 @@ export type SmsError =
 
 type Reservation = { outcome?: string; send_id?: string }
 
+// Shared with a caller that stops waiting (the Send SMS hook): `reserved`
+// turns true once the send has its place and goes to the provider;
+// `abandoned`, set by the caller, stops a send that has neither yet.
+export type SendGate = { reserved: boolean; abandoned: boolean }
+
 // Sends one SMS through `send` after reserving its place. `supabase` holds the
 // secret key: reserve_sms and record_sms accept nothing else.
 export async function sendSms(
   supabase: SupabaseClient,
   send: SmsSender,
   sms: { kind: SmsKind; to: string; agentId?: string | null; message: string },
+  gate?: SendGate,
 ): Promise<Result<{ sendId: string }, SmsError>> {
   const mobile = normalizeTanzanianMobile(sms.to)
   if (!mobile || !fitsOneSms(sms.message)) return { ok: false, error: { kind: "invalid" } }
+  if (gate?.abandoned) return { ok: false, error: { kind: "unavailable" } }
 
   const reserved = await supabase.rpc("reserve_sms", { kind: sms.kind, to_phone: mobile, agent_id: sms.agentId ?? null })
   if (reserved.error) {
@@ -175,6 +184,14 @@ export async function sendSms(
     return { ok: false, error: { kind: "unavailable" } }
   }
   const sendId = row.send_id
+  // Abandoned while reserving: never sent, and recorded as not sent. The
+  // place stays counted, as a provider error's does.
+  if (gate?.abandoned) {
+    const recorded = await supabase.rpc("record_sms", { send_id: sendId, result: "provider_error", provider_request_id: null, error_code: "abandoned" })
+    if (recorded.error) console.error("Could not record an SMS", sendId, recorded.error)
+    return { ok: false, error: { kind: "unavailable" } }
+  }
+  if (gate) gate.reserved = true
 
   let delivered: Result<{ requestId: string }, string>
   try {

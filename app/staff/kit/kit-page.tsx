@@ -40,7 +40,7 @@ import { FormPartsCard, ListInPopoverCard } from "./form-parts"
 import { GuidedDemo } from "./guided-demo"
 import "./kit-page.css"
 import { OverlayCards } from "./overlays"
-import { NamesCard, PickedPartsCards } from "./picked-parts"
+import { ConfirmationNumberCard, NamesCard, PickedPartsCards } from "./picked-parts"
 import { ChipUpBarCard, LastNameCard, PlaceListsCard, TwoChoicesCard } from "./place-parts"
 
 // The approved prototype's "Design system" page (version 13), rebuilt with
@@ -619,6 +619,7 @@ function MorePieces({ linkFilter }: { linkFilter: string }) {
 
       <Bento className="kp-ds" data-rise="group">
         <NamesCard />
+        <ConfirmationNumberCard />
         <LastNameCard />
         <PlaceListsCard />
         <TwoChoicesCard />

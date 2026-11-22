@@ -75,7 +75,7 @@ test("a staff member resets their own password from Umesahau nenosiri? and lands
   await expect(page.getByText(/Mfanyakazi\?/)).toHaveCount(0)
   await page.getByLabel("Barua pepe").fill(member.email)
   await expect(page.locator('input[name="cf-turnstile-response"]')).toHaveValue(/.+/, { timeout: 20_000 })
-  await page.getByRole("button", { name: "Tuma kiungo kipya" }).click()
+  await page.getByRole("button", { name: "Tuma", exact: true }).click()
   await expect(page.getByRole("status")).toHaveText(SENT)
 
   const [email] = await waitForEmails(member.email, 1)

@@ -314,8 +314,11 @@ template = "Your code is {{ .Code }}"
 max_frequency = "5s"
 
 # Use pre-defined map of phone number to OTP for testing.
-# [auth.sms.test_otp]
-# 4152127777 = "123456"
+# One local test number (#503): Auth texts nothing to it and takes this
+# number, so the browser test of the reset by SMS can type it. The hook has
+# its own test (tests/integration/send-sms-hook.test.ts).
+[auth.sms.test_otp]
+255799000503 = "246810"
 
 # Configure logged in session timeouts.
 # [auth.sessions]
@@ -325,10 +328,10 @@ max_frequency = "5s"
 # inactivity_timeout = "8h"
 
 # The Send SMS hook (#503): Supabase hands every SMS it would send (a reset
-# code, a phone change) to the app, which sends it through Beem (the route
-# comes in #503 slice 2b). Locally it calls the app on the e2e port. The
-# secret is a local test value only; hosted has its own, in Vercel as
-# SEND_SMS_HOOK_SECRET.
+# code, a phone change) to the app, which sends it through Beem
+# (app/api/auth/send-sms). Locally it calls the app on the e2e port. The
+# secret is a local test value only, also in .env.example; hosted has its
+# own, in Vercel as SEND_SMS_HOOK_SECRET.
 [auth.hook.send_sms]
 enabled = true
 uri = "http://host.docker.internal:3100/api/auth/send-sms"

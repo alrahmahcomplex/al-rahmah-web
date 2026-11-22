@@ -133,6 +133,24 @@ Agent self-confirm, mobile sign-in resets and the courtesy SMS send through Beem
 - **Every send is in `sms_sends`** with its kind, mobile, result and Beem's request id. "Sent" means Beem accepted it, not that the phone received it; Beem reports delivery only when asked, at least 5 minutes after sending.
 - **The settings are rows, not code.** Change one with a reviewed migration after `set_audit_actor`, like the other settings rows.
 
+#### Phone sign-in and the Send SMS hook (#503 slice 2b)
+
+Supabase Auth makes, stores and expires the reset numbers. It hands every SMS to the app's Send SMS hook, `https://portal.alrahmahcomplex.or.tz/api/auth/send-sms`, which texts only an agent's login, writes the words and sends through Beem with the budget and the log. A phone change (`updateUser({ phone })`) reaches the hook too and is sent nothing. The hook answers 200 when it sends nothing on purpose, so Auth never retries it.
+
+| Setting | Where | Value |
+|---|---|---|
+| Send SMS hook | Authentication → Hooks → Send SMS, HTTPS | The URL above, enabled. Supabase makes its secret there |
+| `SEND_SMS_HOOK_SECRET` | Vercel, Production only, Sensitive | The hook screen's secret, `v1,whsec_…`. Without it, or with a wrong one, the route refuses every request (401) and no reset SMS goes out |
+| Phone provider | Authentication → Sign In / Providers → Phone | ON, with **Confirm phone ON** (off, Auth would set a requested phone at once). The hook takes every send, so the SMS provider's own settings are unused |
+| SMS OTP | Same screen | 6 digits, expiry 600 seconds |
+| Minimum interval per number | Authentication → Rate Limits (or the Phone screen) | 55 seconds: the page's "Tuma tena" countdown is 60 seconds and starts before Auth is asked |
+| SMS sent per hour | Authentication → Rate Limits | A project-wide cap above the expected resets; the app's own daily budget and per-mobile limits apply on top |
+| Token verifications | Authentication → Rate Limits | Raised from the default (150 per 5 minutes): every check comes from Vercel's addresses, as invite and reset links do. The app checks a Turnstile token before each one |
+| Test phone numbers | Authentication → Sign In / Providers → Phone | Empty. The repo's `auth.sms.test_otp` is local only; `config.toml` never reaches hosted |
+| Allow new users to sign up | Authentication → Sign In / Providers | OFF; check it again after turning the phone provider on |
+
+Locally, `supabase/config.toml` has the same shape, with a test secret (also in `.env.example`) and one test number, `255799000503`, which takes `246810` and is texted nothing (`auth.sms.test_otp`), for the browser test.
+
 ### Invite batch budgets
 
 Agent invite batches (#192) send at most 30 (`BATCH_LIMIT` in `lib/services/agent-invite-batches.ts`), from the hourly limit above. Each batch stops itself after 45 seconds, and the Agents page sets `maxDuration` to 60 seconds. Vercel Hobby allows up to 60 seconds without Fluid compute and up to 300 with it, so 60 holds either way. Change those numbers in the code, together with this paragraph.

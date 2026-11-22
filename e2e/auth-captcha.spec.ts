@@ -58,7 +58,7 @@ test.describe("with Supabase's CAPTCHA protection on", () => {
     await page.goto("/auth/forgot-password")
     await page.getByLabel("Barua pepe").fill(member.email)
     await expect(page.locator('input[name="cf-turnstile-response"]')).toHaveValue(/.+/, { timeout: 20_000 })
-    await page.getByRole("button", { name: "Tuma kiungo kipya" }).click()
+    await page.getByRole("button", { name: "Tuma", exact: true }).click()
     await expect(page.getByRole("status")).toHaveText(SENT)
 
     await expect.poll(() => emailCount(member.email), { timeout: 15_000 }).toBe(1)

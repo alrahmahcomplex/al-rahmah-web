@@ -4,6 +4,12 @@ export { codeKey, completeCode, filterCodeOptions, sortCodeOptions, type CodeOpt
 export { CodePicker, type CodePickerProps } from "./code-picker"
 export { Confetti } from "./confetti"
 export {
+  ConfirmationNumber,
+  type ConfirmationNumberHandle,
+  type ConfirmationNumberProps,
+  type ConfirmationResult,
+} from "./confirmation-number"
+export {
   ChangeLink,
   ChoiceTiles,
   ContinuePill,

@@ -1,7 +1,9 @@
 import { render, screen } from "@testing-library/react"
 import { describe, expect, it, vi } from "vitest"
 
+const spend = vi.hoisted(() => vi.fn(async () => {}))
 vi.mock("@/components/kit/confetti", () => ({ rainConfetti: vi.fn() }))
+vi.mock("@/app/discount-code/students/actions", () => ({ spendWelcome: spend }))
 
 import { WaitingCode } from "@/app/discount-code/students/waiting"
 
@@ -35,6 +37,8 @@ describe("WaitingCode", () => {
   it("shows the finish mark only right after the password is set", () => {
     const { container, rerender } = render(<WaitingCode language="sw" code="RAJ-124" link={LINK} officePhone="+255 700 000 001" justJoined />)
     const marked = container.querySelectorAll("svg").length
+    // The greeting is spent at once, so a refresh shows the page without it.
+    expect(spend).toHaveBeenCalledTimes(1)
     rerender(<WaitingCode language="sw" code="RAJ-124" link={LINK} officePhone="+255 700 000 001" justJoined={false} />)
     expect(container.querySelectorAll("svg").length).toBeLessThan(marked)
   })

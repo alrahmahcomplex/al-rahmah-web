@@ -12,3 +12,10 @@ export async function continueToStudents() {
   jar.delete({ name: WELCOME_COOKIE, path: WELCOME_PATH })
   redirect(WELCOME_PATH)
 }
+
+// A waiting code's page (#503 slice 4d-b) shows its finish mark once: the
+// greeting is spent as soon as it has shown, so a refresh doesn't replay it.
+export async function spendWelcome() {
+  const jar = await cookies()
+  jar.delete({ name: WELCOME_COOKIE, path: WELCOME_PATH })
+}

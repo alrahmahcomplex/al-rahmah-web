@@ -11,6 +11,7 @@ import type { Language } from "@/lib/language"
 import { cn } from "@/lib/utils"
 
 import { COPY } from "../copy"
+import { spendWelcome } from "./actions"
 
 // A new agent's waiting code (#503 slice 4d-b; the lead's decision 1): signed
 // in by mobile while the Marketing Office has yet to approve the code, they see
@@ -27,7 +28,10 @@ export function WaitingCode({ language, code, link, officePhone, justJoined }: {
   const [copied, setCopied] = useState<"yes" | "failed" | null>(null)
   const mark = useRef<HTMLSpanElement>(null)
   useEffect(() => {
-    if (justJoined) rainConfetti(mark.current)
+    if (!justJoined) return
+    rainConfetti(mark.current)
+    // Once: a refresh or a return shows the page without the mark (Greptile, #538).
+    void spendWelcome().catch(() => {})
   }, [justJoined])
   // A waiting code takes nothing off yet, so the message names no figure.
   const shareHref = link ? discountCodeShareLink(copy.shareText(code, link, null)) : null

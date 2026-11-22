@@ -276,7 +276,7 @@ test("no page or response before the finish carries an agent's code, and the fin
   for (const body of bodiesAfter) for (const code of codes) expect(body.includes(code), `the finish carries ${code}`).toBe(false)
 })
 
-test("Start over: on the first question only, a toast on an empty form, a sheet with answers, and a new form from the finish", async ({ page }) => {
+test("Start over swaps as the Admission form's does: left on the first question, then on the right; the finish has no bar", async ({ page }) => {
   const who = newcomer()
   await page.goto("/discount-code")
   const startOver = page.getByRole("button", { name: WORDS.sw.startOver })
@@ -285,8 +285,10 @@ test("Start over: on the first question only, a toast on an empty form, a sheet 
 
   await typeName(page, "sw", who.name)
   await continueFrom(page, "sw")
-  await expect(startOver).toHaveCount(0)
-  await page.getByRole("button", { name: WORDS.sw.back }).click()
+  // From the second question on: Back on the left, Start over after the section name, which sits above the bar.
+  await expect(page.getByRole("button", { name: WORDS.sw.back })).toBeVisible()
+  await expect(startOver).toHaveClass(/gf-reset-end/)
+  await expect(page.locator(".gf-bar-row")).toHaveClass(/gf-chip-up/)
   await startOver.click()
   const sheet = page.getByRole("dialog", { name: "Uanze upya?" })
   await sheet.getByRole("button", { name: "Ndiyo, futa fomu" }).click()
@@ -297,8 +299,40 @@ test("Start over: on the first question only, a toast on an empty form, a sheet 
   await waitForSecurityCheck(page)
   await sendButton(page, "sw").click()
   await expect(page.getByRole("heading", { level: 1, name: WORDS.sw.done })).toBeVisible()
-  await startOver.click()
-  await expect(page.getByRole("dialog")).toHaveCount(0)
+  await expect(page.locator(".gf-bar-row")).toHaveCount(0)
+  await expect(startOver).toHaveCount(0)
+  // Sent: a reload opens an empty form.
+  await page.reload()
   await expect(nameBox(page, "sw")).toHaveValue("")
-  await expect(page.getByText("Fomu mpya iko tayari.")).toBeVisible()
+})
+
+test("a reload keeps the answers, and Hapana picked again after Back or a reload moves on, by tap, Space or Enter", async ({ page }) => {
+  const who = newcomer()
+  await page.goto("/discount-code")
+  await typeName(page, "sw", who.name)
+  await continueFrom(page, "sw")
+  await page.getByLabel(WORDS.sw.phone).fill(who.phone)
+  await continueFrom(page, "sw")
+  await page.reload()
+  // Back on the email question, with the name and phone folded above it.
+  await expect(page.getByRole("button", { name: "Badilisha Jina" })).toBeVisible()
+  await expect(page.getByRole("button", { name: "Badilisha Namba" })).toBeVisible()
+  await page.getByLabel(WORDS.sw.email).fill(who.email)
+  await continueFrom(page, "sw")
+  const no = page.getByRole("radio", { name: WORDS.sw.no })
+  await pickTile(page, WORDS.sw.no)
+  await expect(sendButton(page, "sw")).toBeVisible()
+
+  await page.reload()
+  await expect(sendButton(page, "sw")).toBeVisible()
+  for (const pick of ["tap", "Space", "Enter"] as const) {
+    await page.getByRole("button", { name: WORDS.sw.back }).click()
+    await expect(no).toBeChecked()
+    if (pick === "tap") await pickTile(page, WORDS.sw.no)
+    else {
+      await no.focus()
+      await page.keyboard.press(pick)
+    }
+    await expect(sendButton(page, "sw"), `${pick} on the checked answer moves on`).toBeVisible()
+  }
 })

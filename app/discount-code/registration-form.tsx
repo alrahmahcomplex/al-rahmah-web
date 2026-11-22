@@ -35,6 +35,7 @@ import { discountCodeShareLink } from "@/lib/discount-code-share"
 import type { Language } from "@/lib/language"
 import { cn } from "@/lib/utils"
 
+import { clearDraft, readDraft, writeDraft } from "./draft"
 import { CARD } from "./frame"
 import { registerAsAgent } from "./actions"
 import { SelfConfirmFlow } from "./self-confirm-flow"
@@ -53,9 +54,14 @@ import type { DiscountCodeMessage, DiscountCodeState } from "./outcome"
 //   the review: the database makes a new code from the initials.
 // - The page never shows another agent's code. The review shows only the
 //   person's own initials; the whole code appears on their finished screen.
-// - Start over sits on the first question only; Back takes its place after.
-//   With answers it asks first, in a sheet; on an empty form it says there is
-//   nothing to clear; on the finished screen it opens a new form at once.
+// - The bar swaps as the Admission form's does (#503 slice 4d, prototype
+//   v63): Start over on the left of the first question, then Back there and
+//   Start over on the right, with the section name above the bar. With
+//   answers it asks first, in a sheet; on an empty form it says there is
+//   nothing to clear. A finished screen has no bar at all.
+// - The answers stay in the tab's sessionStorage (./draft.ts) through a
+//   reload, until "Futa fomu yote", Start over or a finished form clears them.
+// - Tapping the answer already chosen moves on, with Space or Enter too.
 
 const EMPTY: AgentDraft = { firstName: "", middleName: "", lastName: "", phone: "", whatsapp: "", email: "", hasCode: false, code: "" }
 const NAME_KEYS = ["firstName", "middleName", "lastName"] as const
@@ -83,6 +89,9 @@ const TILE_PAUSE_MS = 240
 
 // Answers that aren't a problem with the form: shown calmly.
 const CALM = new Set<Notice>(["claim-waiting", "invited", "joined"])
+
+// A step the form passes over: the code box, unless the answer is Yes.
+const skipped = (step: Step, answer: CodeAnswer) => step === "code" && answer !== "yes"
 
 function noticeText(copy: Copy, notice: Exclude<Notice, null>): string {
   switch (notice) {
@@ -133,6 +142,8 @@ export function DiscountCodeForm({
   const heading = useRef<HTMLHeadingElement>(null)
   const moved = useRef(false)
   const tileTimer = useRef<number | undefined>(undefined)
+  // The draft is read once, after hydration, before it is written back.
+  const [restored, setRestored] = useState(false)
 
   // What gets checked and sent: WhatsApp only while its field is shown, the
   // code only after Yes.
@@ -145,6 +156,33 @@ export function DiscountCodeForm({
   const fullName = agentFullName(draft)
 
   useEffect(() => () => window.clearTimeout(tileTimer.current), [])
+
+  // Brings back the tab's draft once, after hydration, and opens the first
+  // question not answered yet.
+  useEffect(() => {
+    const saved = readDraft()
+    /* eslint-disable react-hooks/set-state-in-effect -- reading the tab's storage after hydration */
+    if (saved) {
+      const { answered: steps, whatsappOn: wa, codeAnswer: answer, ...typed } = saved
+      const now = new Set<Step>(steps)
+      setDraft({ ...EMPTY, ...typed, hasCode: answer === "yes" })
+      setWhatsappOn(wa)
+      setCodeAnswer(answer)
+      setAnswered(now)
+      setOpen(ORDER.find((k) => !now.has(k) && !skipped(k, answer)) ?? "send")
+      setInstant(true)
+      window.setTimeout(() => setInstant(false), 0)
+    }
+    setRestored(true)
+    /* eslint-enable react-hooks/set-state-in-effect */
+  }, [])
+
+  // Keeps the draft in step with the answers until the form is sent and done.
+  useEffect(() => {
+    if (!restored || done) return
+    const { firstName, middleName, lastName, phone, whatsapp, email, code } = draft
+    writeDraft({ firstName, middleName, lastName, phone, whatsapp, whatsappOn, email, codeAnswer, code, answered: [...answered] })
+  }, [restored, done, draft, whatsappOn, codeAnswer, answered])
 
   // After a problem or a send, put the reader at the field to fix, or at the
   // confirmation. Runs after the step's own focus, so it wins.
@@ -171,8 +209,6 @@ export function DiscountCodeForm({
     setOpen(FIELD_STEP[shown.field])
   }
 
-  // A step the form passes over: the code box, unless the answer is Yes.
-  const skipped = (step: Step, answer: CodeAnswer) => step === "code" && answer !== "yes"
 
   // The problem on this step or an earlier one, or null.
   function problemUpTo(step: Step): AgentField | null {
@@ -210,7 +246,7 @@ export function DiscountCodeForm({
   }
 
   // Yes opens the code box; No goes straight to the review. Picking the same
-  // answer again (after Change Answer) moves on too.
+  // answer again (after Back, Change Answer or a reload) moves on too.
   function answerHasCode(value: string) {
     const answer = value as Exclude<CodeAnswer, null>
     setCodeAnswer(answer)
@@ -223,6 +259,7 @@ export function DiscountCodeForm({
     // A send still in flight belongs to the form being cleared; its answer is ignored.
     round.current += 1
     window.clearTimeout(tileTimer.current)
+    clearDraft()
     setDraft(EMPTY)
     setWhatsappOn(false)
     setCodeAnswer(null)
@@ -279,6 +316,8 @@ export function DiscountCodeForm({
       }
       if (round.current !== sentIn) return
       if (result.status === "registered" || result.status === "claimed") {
+        // Sent and done: a reload opens an empty form.
+        clearDraft()
         moved.current = true
         setDone(result)
         return
@@ -303,6 +342,8 @@ export function DiscountCodeForm({
         <SelfConfirmFlow
           language={language}
           started={selfConfirm}
+          // The email is on its way or the password is being set: the answers are no longer needed.
+          onFinished={clearDraft}
           onChangeEmail={() => {
             setSelfConfirm(null)
             setOpen("email")
@@ -321,10 +362,6 @@ export function DiscountCodeForm({
           done={done}
           officePhone={officePhone}
           headingRef={heading}
-          onNewForm={() => {
-            startOver()
-            toast(copy.newFormToast)
-          }}
         />
       </>
     )
@@ -391,7 +428,9 @@ export function DiscountCodeForm({
           activeGroup={activeGroup}
           canBack={open !== "name"}
           onBack={back}
-          canReset={open === "name"}
+          canReset
+          endReset
+          chipUp={open !== "name"}
           onReset={askStartOver}
           labels={{ back: copy.back, reset: copy.startOver }}
           status={status}
@@ -569,6 +608,21 @@ export function DiscountCodeForm({
                   )
                 }
               >
+                {/* A click, Space or Enter on the answer already chosen fires no change,
+                    so this wrapper carries it on (the Space-on-a-checked-radio trap). */}
+                <div
+                  onClick={(event) => {
+                    const target = event.target as HTMLElement
+                    if (target instanceof HTMLInputElement && target.type === "radio") answerHasCode(target.value)
+                  }}
+                  onKeyDown={(event) => {
+                    const target = event.target as HTMLElement
+                    if ((event.key === " " || event.key === "Enter") && target instanceof HTMLInputElement && target.type === "radio" && target.checked) {
+                      event.preventDefault()
+                      answerHasCode(target.value)
+                    }
+                  }}
+                >
                 <ChoiceTiles
                   name="has_code_answer"
                   legend={<QuestionTitle>{copy.hasCode}</QuestionTitle>}
@@ -585,8 +639,7 @@ export function DiscountCodeForm({
                     {copy.hasCodeHint}
                   </Hint>
                 </ChoiceTiles>
-                {/* After Change Answer, the same answer moves on with Continue. */}
-                {codeAnswer && answered.has("has") && <ContinuePill onClick={() => next("has")}>{copy.next}</ContinuePill>}
+                </div>
               </GuidedStep>
             )}
 
@@ -710,14 +763,11 @@ function Confirmation({
   done,
   officePhone,
   headingRef,
-  onNewForm,
 }: {
   copy: Copy
   done: Done
   officePhone: string
   headingRef: React.RefObject<HTMLHeadingElement | null>
-  // Start over in the progress bar.
-  onNewForm: () => void
 }) {
   const [copied, setCopied] = useState<"yes" | "failed" | null>(null)
   const mark = useRef<HTMLSpanElement>(null)
@@ -736,21 +786,7 @@ function Confirmation({
 
   return (
     <section className={cn(CARD, "flex flex-col items-center gap-4 text-center")}>
-      {/* Every step done; Start over opens a new form at once. */}
-      <ProgressBar
-        className="w-full"
-        groups={[
-          { label: copy.groups.you, steps: YOU_STEPS, done: YOU_STEPS },
-          { label: copy.groups.code, steps: CODE_STEPS, done: CODE_STEPS },
-        ]}
-        activeGroup={1}
-        canBack={false}
-        onBack={() => {}}
-        canReset
-        onReset={onNewForm}
-        labels={{ back: copy.back, reset: copy.startOver }}
-        status={copy.progressFinished}
-      />
+      {/* Sent: no progress bar and no Start over (owner, prototype v61). */}
       <FinishMark ref={mark} />
       <h1
         ref={headingRef}

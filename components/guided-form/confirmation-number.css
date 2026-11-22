@@ -1,6 +1,7 @@
 /* The confirmation-number boxes (#503, prototype v57): six boxes that send
-   themselves, a green wave into a tick, a red shake into a cross. Ported
-   from the prototype's .otpk classes; see confirmation-number.tsx. */
+   themselves, a green wave into the outline tick, a red shake into the
+   outline cross (v60). Ported from the prototype's .otpk classes; see
+   confirmation-number.tsx. */
 
 .gf-otp {
   position: relative;
@@ -78,6 +79,9 @@
   opacity: 0;
   transition-delay: 0ms;
 }
+/* The result is the kit's outline circle with a faint body, as on every
+   finished form (FinishMark): the circle draws first, then the tick from its
+   left end, or the cross one stroke after the other (prototype v60). */
 .gf-otp-result {
   position: absolute;
   left: 50%;
@@ -85,11 +89,9 @@
   width: 64px;
   height: 64px;
   margin: -32px 0 0 -32px;
-  border-radius: 50%;
   display: grid;
   place-items: center;
-  color: #fff;
-  transform: scale(0.3);
+  transform: scale(0.6);
   opacity: 0;
   pointer-events: none;
   transition:
@@ -97,41 +99,60 @@
     opacity 200ms linear;
 }
 .gf-otp-result svg {
-  width: 34px;
-  height: 34px;
+  display: block;
+  width: 64px;
+  height: 64px;
   fill: none;
-  stroke: currentColor;
-  stroke-width: 3;
   stroke-linecap: round;
   stroke-linejoin: round;
+  overflow: visible;
+}
+.gf-otp-ring {
+  stroke-width: 3;
+  stroke-dasharray: 252;
+  stroke-dashoffset: 252;
 }
 .gf-otp-result path {
-  stroke-dasharray: 40;
-  stroke-dashoffset: 40;
+  stroke-width: 5;
+  stroke-dasharray: 60;
+  stroke-dashoffset: 60;
 }
 .gf-otp[data-merged] .gf-otp-result {
   transform: none;
   opacity: 1;
   transition-delay: 160ms;
 }
+.gf-otp[data-merged] .gf-otp-ring {
+  stroke-dashoffset: 0;
+  transition: stroke-dashoffset 620ms var(--gf-ease-out) 200ms;
+}
 .gf-otp[data-merged] .gf-otp-result path {
   stroke-dashoffset: 0;
-  transition: stroke-dashoffset 380ms var(--gf-ease-out) 360ms;
+  transition: stroke-dashoffset 380ms var(--gf-ease-out) 680ms;
 }
-.gf-otp[data-state="ok"] .gf-otp-result {
-  background: var(--gf-green);
-  box-shadow: 0 10px 24px -10px rgb(15 122 61 / 0.6);
+.gf-otp[data-merged] .gf-otp-result .gf-otp-x2 {
+  transition-delay: 860ms;
 }
-.gf-otp[data-state="bad"] .gf-otp-result {
-  background: var(--gf-red);
-  box-shadow: 0 10px 24px -10px rgb(200 30 30 / 0.5);
+.gf-otp[data-state="ok"] .gf-otp-ring {
+  fill: var(--gf-green-tint);
+  stroke: var(--gf-green);
+}
+.gf-otp[data-state="ok"] .gf-otp-result path {
+  stroke: var(--gf-green);
+}
+.gf-otp[data-state="bad"] .gf-otp-ring {
+  fill: var(--gf-red-tint);
+  stroke: var(--gf-red);
+}
+.gf-otp[data-state="bad"] .gf-otp-result path {
+  stroke: var(--gf-red);
 }
 .gf-otp-result .gf-otp-cross,
 .gf-otp[data-state="bad"] .gf-otp-result .gf-otp-tick {
   display: none;
 }
 .gf-otp[data-state="bad"] .gf-otp-result .gf-otp-cross {
-  display: block;
+  display: inline;
 }
 /* A reset jumps straight back to empty boxes. */
 .gf-otp[data-instant],
@@ -142,7 +163,8 @@
 @media (prefers-reduced-motion: reduce) {
   .gf-otp-box,
   .gf-otp-result,
-  .gf-otp-result path {
+  .gf-otp-result path,
+  .gf-otp-ring {
     transition:
       background 160ms linear,
       border-color 160ms linear,
@@ -157,13 +179,15 @@
   .gf-otp[data-merged] .gf-otp-result {
     transform: none;
   }
-  .gf-otp-result path {
+  .gf-otp-result path,
+  .gf-otp-ring {
     stroke-dashoffset: 0;
   }
 }
 html.rm .gf-otp-box,
 html.rm .gf-otp-result,
-html.rm .gf-otp-result path {
+html.rm .gf-otp-result path,
+html.rm .gf-otp-ring {
   transition:
     background 160ms linear,
     border-color 160ms linear,
@@ -178,7 +202,8 @@ html.rm .gf-otp-result,
 html.rm .gf-otp[data-merged] .gf-otp-result {
   transform: none;
 }
-html.rm .gf-otp-result path {
+html.rm .gf-otp-result path,
+html.rm .gf-otp-ring {
   stroke-dashoffset: 0;
 }
 @media (max-width: 360px) {

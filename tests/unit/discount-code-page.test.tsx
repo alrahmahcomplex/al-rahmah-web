@@ -116,7 +116,12 @@ beforeEach(() => {
   stubs.client.mockReset().mockReturnValue({ secret: "client" })
   stubs.discount.mockReset().mockResolvedValue({ ok: true, data: 10000 })
   window.scrollTo = vi.fn() as unknown as typeof window.scrollTo
+  // Each test starts with no draft from the one before (#503 slice 4d).
+  window.sessionStorage.clear()
 })
+
+const DRAFT_KEY = "al-rahmah:discount-code-draft"
+const storedDraft = () => JSON.parse(window.sessionStorage.getItem(DRAFT_KEY) ?? "null") as Record<string, unknown> | null
 
 // The open question: the only step whose controls can be used.
 function openStep() {
@@ -570,6 +575,8 @@ describe("the Discount code page", { timeout: 30_000 }, () => {
     expect(document.body.textContent).not.toMatch(FORBIDDEN)
     first.unmount()
 
+    // A fresh tab, with no draft of the Swahili answers.
+    window.sessionStorage.clear()
     jar.values.set("lang", "en")
     render(await DiscountCodePage())
     await fill(user, "en")
@@ -620,15 +627,24 @@ describe("Start over", { timeout: 30_000 }, () => {
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument()
   })
 
-  it("gives way to Back from the second question", async () => {
+  it("swaps as the Admission form's does: Back on the left from the second question, Start over on the right and the section name above", async () => {
     const user = userEvent.setup()
-    render(await DiscountCodePage())
+    const { container } = render(await DiscountCodePage())
+    const bar = () => container.querySelector(".gf-bar-row") as HTMLElement
+    expect(bar()).not.toHaveClass("gf-chip-up")
     await typeName(user)
     await next(user)
 
-    expect(screen.queryByRole("button", { name: WORDS.sw.startOver })).not.toBeInTheDocument()
+    expect(screen.getByRole("button", { name: WORDS.sw.back })).toBeInTheDocument()
+    // One Start over to reach: the one after the section name.
+    const reset = screen.getByRole("button", { name: WORDS.sw.startOver })
+    expect(reset).toHaveClass("gf-reset-end")
+    expect(bar()).toHaveClass("gf-chip-up")
+
     await user.click(screen.getByRole("button", { name: WORDS.sw.back }))
-    expect(screen.getByRole("button", { name: WORDS.sw.startOver })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: WORDS.sw.startOver })).not.toHaveClass("gf-reset-end")
+    expect(screen.queryByRole("button", { name: WORDS.sw.back })).not.toBeInTheDocument()
+    expect(bar()).not.toHaveClass("gf-chip-up")
   })
 
   it("with answers, asks in a sheet: No keeps them, Yes clears the form", async () => {
@@ -650,20 +666,19 @@ describe("Start over", { timeout: 30_000 }, () => {
     expect(stubs.toast).toHaveBeenCalledWith("Fomu imeanza upya.")
   })
 
-  it("on the finished screen, opens a new form at once", async () => {
+  it("the finished screen has no progress bar and no Start over, and the draft is gone", async () => {
     stubs.submit.mockResolvedValue(REGISTERED)
     const user = userEvent.setup()
-    render(await DiscountCodePage())
+    const { container } = render(await DiscountCodePage())
     await fill(user)
+    expect(storedDraft()).not.toBeNull()
     await send(user)
     await screen.findByRole("heading", { level: 1, name: "Code yako ya Punguzo" })
 
-    await user.click(screen.getByRole("button", { name: WORDS.sw.startOver }))
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument()
-    expect(await screen.findByRole("group", { name: WORDS.sw.name })).toBeInTheDocument()
-    expect(box("sw", "first")).toHaveValue("")
-    expect(screen.queryByText("RAJ-124")).not.toBeInTheDocument()
-    expect(stubs.toast).toHaveBeenCalledWith("Fomu mpya iko tayari.")
+    expect(container.querySelector(".gf-bar-row")).toBeNull()
+    expect(screen.queryByRole("button", { name: WORDS.sw.startOver })).not.toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: WORDS.sw.back })).not.toBeInTheDocument()
+    expect(storedDraft()).toBeNull()
   })
 
   it("the finished screen's way on is 'Ona Wanafunzi Niliowaleta', to the students page, in place of 'Anza tena'", async () => {
@@ -676,5 +691,127 @@ describe("Start over", { timeout: 30_000 }, () => {
 
     expect(screen.getByRole("link", { name: "Ona Wanafunzi Niliowaleta" })).toHaveAttribute("href", "/discount-code/students")
     expect(screen.queryByRole("button", { name: "Anza tena" })).not.toBeInTheDocument()
+  })
+})
+
+// Tapping the answer already chosen goes on (owner, prototype v61): after Back
+// the radio is already checked, so it fires no change of its own.
+describe("Tayari una code? answered again", { timeout: 30_000 }, () => {
+  async function toCodeQuestion(user: User) {
+    await typeName(user)
+    await next(user)
+    await user.type(screen.getByLabelText(WORDS.sw.phone), "0712 345 678")
+    await next(user)
+    await user.type(screen.getByLabelText(WORDS.sw.email), "rehema@example.test")
+    await next(user)
+  }
+
+  it("a tap on Hapana after Back moves on to the review again", async () => {
+    const user = userEvent.setup()
+    render(await DiscountCodePage())
+    await toCodeQuestion(user)
+    await user.click(screen.getByRole("radio", { name: WORDS.sw.no }))
+    await screen.findByRole("button", { name: WORDS.sw.send })
+
+    await user.click(screen.getByRole("button", { name: WORDS.sw.back }))
+    await waitFor(() => expect(screen.queryByRole("button", { name: WORDS.sw.send })).not.toBeInTheDocument())
+    const no = openStep().getByRole("radio", { name: WORDS.sw.no })
+    expect(no).toBeChecked()
+    await user.click(no)
+    expect(await screen.findByRole("button", { name: WORDS.sw.send })).toBeInTheDocument()
+  })
+
+  it("Space or Enter on the checked answer moves on too", async () => {
+    const user = userEvent.setup()
+    render(await DiscountCodePage())
+    await toCodeQuestion(user)
+    await user.click(screen.getByRole("radio", { name: WORDS.sw.no }))
+    await screen.findByRole("button", { name: WORDS.sw.send })
+
+    for (const key of [" ", "{Enter}"]) {
+      await user.click(screen.getByRole("button", { name: WORDS.sw.back }))
+      // The review folds away before the question is answered again.
+      await waitFor(() => expect(screen.queryByRole("button", { name: WORDS.sw.send })).not.toBeInTheDocument())
+      const no = openStep().getByRole("radio", { name: WORDS.sw.no })
+      expect(no).toBeChecked()
+      no.focus()
+      await user.keyboard(key)
+      expect(await screen.findByRole("button", { name: WORDS.sw.send })).toBeInTheDocument()
+    }
+  })
+})
+
+// The answers stay in the tab's sessionStorage through a reload (owner, prototype v60).
+describe("the draft", { timeout: 30_000 }, () => {
+  it("brings the answers back after a reload and opens the first question not answered", async () => {
+    const user = userEvent.setup()
+    const first = render(await DiscountCodePage())
+    await typeName(user)
+    await next(user)
+    await user.type(screen.getByLabelText(WORDS.sw.phone), "0712 345 678")
+    await next(user)
+    expect(storedDraft()).toMatchObject({ firstName: "REHEMA", middleName: "ALI", lastName: "JUMA", phone: "0712 345 678", answered: ["name", "phone"] })
+    // Never the security check's token.
+    expect(JSON.stringify(storedDraft())).not.toContain("fake-token")
+    first.unmount()
+
+    render(await DiscountCodePage())
+    expect(await screen.findByLabelText(WORDS.sw.email)).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Badilisha Jina" })).toBeInTheDocument()
+    expect(screen.getByText("REHEMA ALI JUMA")).toBeInTheDocument()
+  })
+
+  it("brings back Hapana too, which a tap carries on to the review", async () => {
+    const user = userEvent.setup()
+    const first = render(await DiscountCodePage())
+    await typeName(user)
+    await next(user)
+    await user.type(screen.getByLabelText(WORDS.sw.phone), "0712 345 678")
+    await next(user)
+    await user.type(screen.getByLabelText(WORDS.sw.email), "rehema@example.test")
+    await next(user)
+    await user.click(screen.getByRole("radio", { name: WORDS.sw.no }))
+    await screen.findByRole("button", { name: WORDS.sw.send })
+    first.unmount()
+
+    render(await DiscountCodePage())
+    expect(await screen.findByRole("button", { name: WORDS.sw.send })).toBeInTheDocument()
+    await user.click(screen.getByRole("button", { name: WORDS.sw.back }))
+    await waitFor(() => expect(screen.queryByRole("button", { name: WORDS.sw.send })).not.toBeInTheDocument())
+    const no = openStep().getByRole("radio", { name: WORDS.sw.no })
+    expect(no).toBeChecked()
+    await user.click(no)
+    expect(await screen.findByRole("button", { name: WORDS.sw.send })).toBeInTheDocument()
+  })
+
+  it("is cleared by Start over and by the menu's 'Futa fomu yote', and nothing else", async () => {
+    const user = userEvent.setup()
+    render(await DiscountCodePage())
+    await typeName(user)
+    expect(storedDraft()).toMatchObject({ firstName: "REHEMA" })
+
+    await user.click(screen.getByRole("button", { name: WORDS.sw.startOver }))
+    await user.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Ndiyo, futa fomu" }))
+    await waitFor(() => expect(storedDraft()).toBeNull())
+
+    await typeName(user)
+    await next(user)
+    expect(storedDraft()).toMatchObject({ answered: ["name"] })
+    await user.click(screen.getByRole("button", { name: "Menyu" }))
+    await user.click(screen.getByRole("button", { name: "Futa fomu yote" }))
+    await user.click(screen.getByRole("button", { name: "Ndiyo, futa" }))
+    await waitFor(() => expect(storedDraft()).toBeNull())
+  })
+
+  it("comes back empty when storage is blocked, and the form still works", async () => {
+    const spy = vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
+      throw new Error("blocked")
+    })
+    const user = userEvent.setup()
+    render(await DiscountCodePage())
+    await typeName(user)
+    await next(user)
+    expect(screen.getByLabelText(WORDS.sw.phone)).toBeInTheDocument()
+    spy.mockRestore()
   })
 })

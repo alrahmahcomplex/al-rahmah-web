@@ -19,8 +19,10 @@ import "./confirmation-number.css"
 // Inputs): six boxes for a number sent by SMS. They send themselves on the
 // sixth digit, or on a paste or SMS autofill, which spreads across the boxes.
 // Focus never skips ahead. A right number turns the boxes green one by one,
-// then they slide together into a tick; a wrong one turns them red, shakes
-// them and ends in a cross. The page shows the note under them and calls
+// then they slide together into the outline circle with a faint green body,
+// which draws itself before its tick (prototype v60); a wrong one turns them
+// red, shakes them and ends in the same circle in red with a cross. With
+// reduced motion the finished mark shows at once. The page shows the note under them and calls
 // reset() for another try. No words live here: pass both labels.
 
 const LENGTH = 6
@@ -248,9 +250,15 @@ export const ConfirmationNumber = forwardRef<ConfirmationNumberHandle, Confirmat
         ))}
       </div>
       <div className="gf-otp-result" aria-hidden="true">
-        <svg viewBox="0 0 24 24">
-          <path className="gf-otp-tick" d="M20 6 9 17l-5-5" />
-          <path className="gf-otp-cross" d="M18 6 6 18M6 6l12 12" />
+        {/* The kit's outline circle with a faint body (prototype v60): the circle
+            draws first, then the tick from its left end, or the cross stroke by stroke. */}
+        <svg viewBox="0 0 84 84">
+          <circle className="gf-otp-ring" cx="42" cy="42" r="40" />
+          <path className="gf-otp-tick" d="M26 43l11 11 21-23" />
+          <g className="gf-otp-cross">
+            <path d="M31 31l22 22" />
+            <path className="gf-otp-x2" d="M53 31 31 53" />
+          </g>
         </svg>
       </div>
     </div>

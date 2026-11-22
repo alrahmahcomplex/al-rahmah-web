@@ -170,7 +170,7 @@ export function ConfirmationNumberCard() {
   return (
     <Card title="Confirmation number">
       <p className="kp-spec">
-        Six boxes for a number sent by SMS. They send themselves on the sixth digit or a paste; focus never skips ahead. Try <b>{RIGHT_DEMO_NUMBER}</b>, or any other number.
+        Six boxes for a number sent by SMS. They send themselves on the sixth digit or a paste; focus never skips ahead. Right closes into the outline circle with a green tick, anything else into the red circle with a cross, each circle drawn before its mark. Try <b>{RIGHT_DEMO_NUMBER}</b>, or any other number.
       </p>
       <ConfirmationNumber ref={boxes} label="Confirmation number" digitLabel={(n) => `Digit ${n} of 6`} onComplete={check} onSettled={setResult} />
       {result && (

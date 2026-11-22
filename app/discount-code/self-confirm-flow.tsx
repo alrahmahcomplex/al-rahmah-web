@@ -42,7 +42,9 @@ type Step = { at: "choose" } | { at: "sms"; masked: string | null; onRecord: boo
 const RESEND_SECONDS = 60
 const TITLE = "font-exo text-[26px] leading-[1.18] font-extrabold tracking-[-0.01em] text-balance text-blue-600 italic outline-none"
 
-export function SelfConfirmFlow({ language, started, onChangeEmail }: { language: Language; started: Started; onChangeEmail: () => void }) {
+// `onFinished` runs once the email is on its way or the password form is sent:
+// the form's draft is no longer needed (#503 slice 4d).
+export function SelfConfirmFlow({ language, started, onChangeEmail, onFinished }: { language: Language; started: Started; onChangeEmail: () => void; onFinished?: () => void }) {
   const copy = SELF_CONFIRM_COPY[language]
   const [step, setStep] = useState<Step>({ at: "choose" })
   const [problem, setProblem] = useState<string | null>(null)
@@ -84,7 +86,10 @@ export function SelfConfirmFlow({ language, started, onChangeEmail }: { language
     startWork(async () => {
       try {
         const sent = await sendSelfConfirmEmail(started.attempt, started.email)
-        if (sent.status === "sent") return setStep({ at: "email", email: sent.email })
+        if (sent.status === "sent") {
+          onFinished?.()
+          return setStep({ at: "email", email: sent.email })
+        }
         setProblem(sent.status === "email-unusable" ? copy.emailUnusable : sent.status === "no-email" ? copy.noEmail : sent.status === "limited" ? copy.limited : copy.unavailable)
       } catch {
         setProblem(copy.unavailable)
@@ -141,7 +146,7 @@ export function SelfConfirmFlow({ language, started, onChangeEmail }: { language
           )}
         </>
       )}
-      {step.at === "password" && <Password copy={copy} language={language} attempt={started.attempt} phone={step.phone} headingRef={heading} />}
+      {step.at === "password" && <Password copy={copy} language={language} attempt={started.attempt} phone={step.phone} headingRef={heading} onSubmit={onFinished} />}
       {problem && (
         <NoticeBox role="alert" tone="info">
           {problem}
@@ -343,12 +348,14 @@ function Password({
   attempt,
   phone,
   headingRef,
+  onSubmit,
 }: {
   copy: Copy
   language: Language
   attempt: string
   phone: string
   headingRef: React.RefObject<HTMLHeadingElement | null>
+  onSubmit?: () => void
 }) {
   const [state, formAction, pending] = useActionState(finishSelfConfirm, null)
   const turnstile = useRef<TurnstileWidgetHandle>(null)
@@ -370,7 +377,7 @@ function Password({
               ? copy.unavailable
               : null
   return (
-    <form action={formAction} className="flex flex-col gap-3 text-left" noValidate>
+    <form action={formAction} onSubmit={() => onSubmit?.()} className="flex flex-col gap-3 text-left" noValidate>
       <h1 ref={headingRef} tabIndex={-1} className={cn(TITLE, "text-center")}>
         {copy.passwordTitle}
       </h1>

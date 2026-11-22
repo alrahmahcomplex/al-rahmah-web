@@ -374,6 +374,14 @@ The form language is the capsule. Buttons, fields, filter pills, chip buttons, s
 
 All of these are built once and shared. Parent pages and staff pages import the same components; a staff screen never restyles a shadcn default in place.
 
+**The Kit First Rule.** Every screen, staff and public, is built only from the design kit: `components/kit`, the guided form's parts (`components/guided-form`), the icons (`components/icons`), the illustrations (`components/illustrations`) and the brand parts (`components/brand`). A part the kit does not have yet, such as a field variant, a button, a card, a banner, an empty state, an icon or an illustration, is added to the kit first, in this order:
+
+1. The prototype draws it on its Design system page, in every state, and then on the screens that use it. The owner approves both (AGENTS.md, UI and UX changes).
+2. The build adds it to the kit and shows it on the kit page (`/staff/kit`) in every state, with its entry in this file and in the kit's README.
+3. Only then does a screen use it.
+
+A screen never draws its own version of a part, keeps a one-off copy, or changes a kit part's look (colour, size, corners, lines, motion) in its own CSS. The screen owns only the layout around the parts: grids, gaps and order. The owner set this rule on 21 November 2026. Parts built before it that sit outside the kit are listed in #508; each moves into the kit through a prototype the owner approves, not as a side effect of other work.
+
 ### Buttons
 - **Go:** Sunrise Orange pill, 44px, 22px side padding, white Exo 600 italic 16px, Sun lift. Hover: Sunrise Ember and 2px rise. Press: scale 0.96. Pending: 70% opacity, no rise, the label says what is happening ("Saving…"). A Continue button always ends with the `right` chevron.
 - **Ghost:** white pill with a thin Line Strong outline and an indigo label; Lavender Whisper on hover. The other way forward ("Review", "Yes, add a student").
@@ -530,7 +538,7 @@ Only the Admissions Portal's pages carry the web app manifest and the Apple web-
 - **Do** make the next step the one Go button: white Exo 600 italic on `#ee7300` (The ShuleFasta Button Rule).
 - **Do** ask a task's questions one at a time through the guided form, and let folded answers be the review.
 - **Do** open edits and confirmations in a sheet whose title and buttons stay put while its middle scrolls.
-- **Do** use the icon library's set 1 and the six line illustrations; add new ones to the library first.
+- **Do** build every screen from the kit: icon set 1, the line illustrations and the kit's parts. Add a missing part to the kit and the Design system page first (The Kit First Rule).
 - **Do** write counts as words in a sentence.
 - **Do** add a reduced-motion rule with every animation.
 
@@ -544,6 +552,7 @@ Only the Admissions Portal's pages carry the web app manifest and the Apple web-
 - **Don't** use lucide or any other icon set on a staff screen, or draw an icon inline in a page.
 - **Don't** put an illustration on a working screen, beside a field, or in a card header.
 - **Don't** use old shadcn-neutral parts on a staff screen.
+- **Don't** draw a part on a screen that the kit lacks, or change a kit part's look in a screen's own CSS.
 - **Don't** set typed text below 16px on a phone.
 - **Don't** add a colour outside the palette, or style a lead's status outside the status chip.
 - **Don't** invent a screen, layout or line of copy the approved prototype does not show; ask for a prototype first (AGENTS.md).

@@ -2,6 +2,7 @@ import { defineConfig, devices } from "@playwright/test"
 
 import "./tests/support/env"
 import { E2E_PORT, E2E_TURNSTILE_FAILS_PORT } from "./e2e/server"
+import { E2E_OTP_HMAC_SECRET } from "./e2e/self-confirm-secret"
 
 // Cloudflare's published Turnstile test keys: the site key always passes in
 // the browser, and the secrets make siteverify always pass or always fail.
@@ -21,9 +22,10 @@ const INVITE_BUDGET = { EMAIL_DAILY_CAP: "100000", STAFF_INVITE_RESERVE: "20" }
 // one local hour. The integration tests cover the limits themselves.
 const LINK_LIMITS = { PUBLIC_EMAIL_HOURLY_BUDGET: "100000" }
 
-// The fake SMS sender and the local Send SMS hook secret (#503,
-// supabase/config.toml): local Auth calls the hook on the e2e port.
-const SMS = { SMS_FAKE: "1", SEND_SMS_HOOK_SECRET: "v1,whsec_+MGBB5HlwmiVEtF39l8a73U9xuIKvoj/wVb5aIvOecM=" }
+// The fake SMS sender, the local Send SMS hook secret (#503,
+// supabase/config.toml: local Auth calls the hook on the e2e port), and the
+// self-confirm numbers' local HMAC key, which the self-confirm spec also reads.
+const SMS = { SMS_FAKE: "1", SEND_SMS_HOOK_SECRET: "v1,whsec_+MGBB5HlwmiVEtF39l8a73U9xuIKvoj/wVb5aIvOecM=", OTP_HMAC_SECRET: E2E_OTP_HMAC_SECRET }
 
 export default defineConfig({
   testDir: "e2e",

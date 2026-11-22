@@ -101,6 +101,18 @@ describe("checking the number", () => {
     expect(await sessionProvedBy(client, "user-1", "+255712345123")).toBe(false)
   })
 
+  it("keeps an unconfirmed check unconfirmed when the session token can't be checked, and a bad token proves nothing", async () => {
+    const { client, auth } = authClient()
+    auth.getClaims.mockResolvedValueOnce({ data: null, error: { name: "AuthRetryableFetchError", status: 0, message: "fetch failed" } } as never)
+    expect(await sessionProvedBy(client, "user-1", "+255712345123")).toBeNull()
+    auth.getClaims.mockResolvedValueOnce({ data: null, error: { name: "AuthRetryableFetchError", status: 503, message: "jwks" } } as never)
+    expect(await confirmResetSession(client, "user-1", "+255712345123")).toEqual({ ok: false, error: "unconfirmed", userId: "user-1" })
+    auth.getClaims.mockResolvedValueOnce({ data: null, error: { name: "AuthInvalidJwtError", status: 400, message: "invalid" } } as never)
+    expect(await sessionProvedBy(client, "user-1", "+255712345123")).toBe(false)
+    auth.getClaims.mockRejectedValueOnce(new Error("network"))
+    expect(await sessionProvedBy(client, "user-1", "+255712345123")).toBeNull()
+  })
+
   it("ends the session at once for a login that isn't an agent's, or a switched-off agent", async () => {
     const none = authClient({ agent: null })
     expect(await checkResetNumber(none.client, "+255712345123", "246810")).toEqual({ ok: false, error: "no-account" })

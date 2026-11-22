@@ -95,11 +95,16 @@ export async function checkSmsReset(rawPhone: string, code: string, captchaToken
   // A right number already spent here for this same mobile, with only the
   // agent check missing (an outage): finish it on the session it gave, with
   // no second number. A reset in another tab, for another mobile, doesn't
-  // count: that check meets the signed-in guard below.
+  // count: that check meets the signed-in guard below. A token that can't
+  // be checked now is an outage: the cookie stays, for the next try.
   const jar = await cookies()
   const pending = jar.get(PROVEN_COOKIE)?.value
   const supabase = await createClient()
-  if (pending && (await sessionProvedBy(supabase, pending, phone))) return finish(await confirmResetSession(supabase, pending, phone))
+  if (pending) {
+    const proved = await sessionProvedBy(supabase, pending, phone)
+    if (proved === null) return { error: "unavailable" }
+    if (proved) return finish(await confirmResetSession(supabase, pending, phone))
+  }
 
   const signedIn = await signedInAlready()
   if (signedIn === null) return { error: "unavailable" }

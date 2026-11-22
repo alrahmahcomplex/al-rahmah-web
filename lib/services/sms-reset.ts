@@ -89,26 +89,37 @@ export async function checkResetNumber(
 }
 
 // Whether this browser is signed in as `provenUserId` by the number for
-// `phone`: another tab's reset, for another mobile, never counts.
-export async function sessionProvedBy(supabase: SupabaseClient, provenUserId: string, phone: string): Promise<boolean> {
+// `phone`: another tab's reset, for another mobile, never counts. null when
+// the token can't be checked right now (its signing keys didn't load, say):
+// an outage, which must not cost the agent the number already spent.
+export async function sessionProvedBy(supabase: SupabaseClient, provenUserId: string, phone: string): Promise<boolean | null> {
   try {
     const { data, error } = await supabase.auth.getClaims()
-    if (error || !data) return false
+    if (error) {
+      // A 4xx is a missing, spent or bad session; anything else an outage.
+      const status = (error as { status?: number }).status ?? 0
+      if (status >= 400 && status < 500) return false
+      console.error("Reset SMS: could not check the session token", error)
+      return null
+    }
+    if (!data) return false
     return data.claims.sub === provenUserId && data.claims.phone === withoutPlus(phone)
   } catch (error) {
     console.error("Reset SMS: could not check the session token", error)
-    return false
+    return null
   }
 }
 
 // F2 again, after "unconfirmed": the same login, still signed in here by
-// this mobile's number.
+// this mobile's number. Another outage keeps it unconfirmed, for a retry.
 export async function confirmResetSession(
   supabase: SupabaseClient,
   provenUserId: string,
   phone: string,
 ): Promise<Result<{ userId: string }, SmsResetCheckError> | Unconfirmed> {
-  if (!(await sessionProvedBy(supabase, provenUserId, phone))) return { ok: false, error: "wrong-number" }
+  const proved = await sessionProvedBy(supabase, provenUserId, phone)
+  if (proved === null) return { ok: false, error: "unconfirmed", userId: provenUserId }
+  if (!proved) return { ok: false, error: "wrong-number" }
   return agentOnly(supabase, provenUserId)
 }
 

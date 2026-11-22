@@ -55,6 +55,15 @@ export type ActivityRow =
         relationship: Relationship
         relationshipDescription: string | null
       })
+  | (Timed & {
+      kind: "sign_in_removed"
+      agentId: string
+      fullName: string
+      code: string
+      signedInWith: string
+      joinedAt: string | null
+      removedBy: string | null
+    })
   | ({ kind: "class_full"; id: string } & FullClass)
 
 export type ActivityPage = { rows: ActivityRow[]; total: number; page: number; pageCount: number }
@@ -165,6 +174,17 @@ function toRow(row: Row): ActivityRow | null {
         custodianName: row.custodian_name as string,
         relationship: row.relationship as Relationship,
         relationshipDescription: (row.relationship_description as string | null) ?? null,
+      }
+    case "sign_in_removed":
+      return {
+        ...base,
+        kind: "sign_in_removed",
+        agentId: row.agent_id as string,
+        fullName: row.full_name as string,
+        code: row.code as string,
+        signedInWith: row.signed_in_with as string,
+        joinedAt: (row.joined_at as string | null) ?? null,
+        removedBy: (row.removed_by as string | null) ?? null,
       }
     default:
       // A kind a later migration adds before this file knows it.

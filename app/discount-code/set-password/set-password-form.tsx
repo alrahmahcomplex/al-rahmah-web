@@ -87,9 +87,10 @@ export function SetPasswordForm({
   )
 }
 
-// A password pill with a visible label. With `toggle`, it carries the
-// show/hide eye; `shown` belongs to the form, so both boxes show or hide
-// together.
+// A password pill, the kit icon field (#503, v57): the label is the
+// placeholder inside the box, with an sr-only label that keeps its name.
+// With `toggle`, it carries the show/hide eye; `shown` belongs to the form,
+// so both boxes show or hide together.
 function PasswordInput({
   id,
   label,
@@ -104,13 +105,14 @@ function PasswordInput({
 } & Omit<InputHTMLAttributes<HTMLInputElement>, "id" | "type">) {
   return (
     <div className="flex flex-col gap-1.5">
-      <label htmlFor={id} className="text-[15px] font-semibold text-slate-800">
+      <label htmlFor={id} className="sr-only">
         {label}
       </label>
       <div className="relative">
         <FieldInput
           id={id}
           name={id}
+          placeholder={label}
           type={shown ? "text" : "password"}
           autoComplete="new-password"
           required

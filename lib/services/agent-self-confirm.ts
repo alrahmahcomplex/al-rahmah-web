@@ -8,7 +8,7 @@ import { normalizeTanzanianMobile, withoutPlus } from "@/lib/phone"
 
 import { classifySendFailure, type AgentInviteSender } from "./agent-invites"
 import type { Result } from "./result"
-import { sendSms, type SmsSender } from "./sms"
+import { fitsOneSms, sendSms, type SmsSender } from "./sms"
 
 // Agent self-confirm (#503 slice 3), switched off until slice 4. The steps
 // run in the database (20270125120100_agent_self_confirm_flow.sql), with
@@ -255,6 +255,41 @@ export async function joinedBySelfConfirm(supabase: SupabaseClient): Promise<boo
     return false
   }
   return data === true
+}
+
+/**
+ * The courtesy SMS (decision 78, O-N49), after an agent joins by email
+ * self-confirm: once, to the mobile on file, naming the email the account
+ * opened with. `supabase` holds the secret key. Nothing to send (no mobile on
+ * file, not a self-confirm invite, already sent) is not an error.
+ */
+export async function sendCourtesySms(
+  supabase: SupabaseClient,
+  send: SmsSender,
+  login: string,
+  message: (openedWith: string) => string,
+): Promise<Result<{ sent: boolean }, "unavailable" | "too-long">> {
+  const claimed = await call(supabase, "claim_self_confirm_courtesy", { login })
+  if (!claimed.ok) return { ok: false, error: "unavailable" }
+  const row = claimed.data ?? {}
+  if (row.outcome !== "send" || typeof row.phone !== "string" || typeof row.opened_with !== "string") return { ok: true, data: { sent: false } }
+  const words = message(row.opened_with)
+  // A very long email can't fit one SMS; it is logged and not sent.
+  if (!fitsOneSms(words)) {
+    console.error("Self-confirm: the courtesy SMS doesn't fit one SMS for this email; not sent")
+    return { ok: false, error: "too-long" }
+  }
+  const sent = await sendSms(supabase, send, { kind: "courtesy", to: row.phone, agentId: typeof row.agent === "string" ? row.agent : null, message: words })
+  if (!sent.ok) {
+    console.error("Self-confirm: the courtesy SMS was not sent", sent.error)
+    return { ok: false, error: "unavailable" }
+  }
+  return { ok: true, data: { sent: true } }
+}
+
+/** The courtesy SMS words (O-N49), with the office's number as an agent dials it. */
+export function courtesySms(openedWith: string, officePhone: string): string {
+  return `Akaunti yako ya Al-Rahmah imefunguliwa kwa ${openedWith}. Si wewe? Piga ofisi ${officePhone}.`
 }
 
 /** The self-confirm SMS (O-N10), Swahili like the reset SMS; it fits one SMS. */

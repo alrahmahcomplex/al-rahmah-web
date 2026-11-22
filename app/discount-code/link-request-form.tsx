@@ -70,12 +70,14 @@ export function LinkRequestForm({
       <div className="flex flex-col gap-3">
         {guided ? (
           <div className="flex flex-col gap-1.5">
-            <label htmlFor={`${form}-email`} className="text-[15px] font-semibold text-slate-800">
+            {/* The kit icon field (#503, v57): the label is the placeholder inside the box. */}
+            <label htmlFor={`${form}-email`} className="sr-only">
               {copy.email}
             </label>
             <FieldInput
               id={`${form}-email`}
               name="email"
+              placeholder={copy.email}
               type="email"
               inputMode="email"
               autoComplete="email"

@@ -29,7 +29,7 @@ import { WELCOME_COOKIE, WELCOME_MAX_AGE, WELCOME_PATH } from "./students/welcom
 import { BROWSER_COOKIE, browserToken, COOKIE_PATH } from "./self-confirm-browser"
 
 export type NumberStatus =
-  | { status: "sent"; masked: string; onRecord: boolean }
+  | { status: "sent"; masked: string | null; onRecord: boolean }
   | { status: "expired" | "locked" | "too-soon" | "limited" | "no-sms" | "unavailable" }
 
 function mask(phone: string): string {
@@ -46,7 +46,9 @@ export async function sendSelfConfirmNumber(attempt: string): Promise<NumberStat
   if (!sent.ok) return { status: "unavailable" }
   switch (sent.data.kind) {
     case "sent":
-      return { status: "sent", masked: mask(sent.data.phone), onRecord: sent.data.onRecord }
+      // The mobile is shown only when it is the one typed (O-N9): otherwise
+      // not even its masked digits leave the server.
+      return { status: "sent", masked: sent.data.show ? mask(sent.data.phone) : null, onRecord: sent.data.onRecord }
     case "expired":
     case "off":
       return { status: "expired" }
@@ -128,9 +130,10 @@ export async function finishSelfConfirm(_previous: FinishState, formData: FormDa
   const captchaToken = String(formData.get("cf-turnstile-response") ?? "")
   if (!captchaToken) return { error: "check-pending" }
   const supabase = smsClient()
-  if (!supabase || !(await browserToken(false))) return { error: "expired" }
+  const token = await browserToken(false)
+  if (!supabase || !token) return { error: "expired" }
 
-  const made = await createPhoneLogin(supabase, { attempt, phone, password }, MINIMUM_PASSWORD_LENGTH)
+  const made = await createPhoneLogin(supabase, { attempt, browser: token, phone, password }, MINIMUM_PASSWORD_LENGTH)
   if (!made.ok) return { error: made.error === "not-proven" ? "expired" : made.error === "password-too-short" ? "password-too-short" : "unavailable" }
 
   const browser = await createClient()

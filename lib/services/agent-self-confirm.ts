@@ -21,7 +21,7 @@ export type StartOutcome =
   | { kind: "off" | "access_off" | "no_match" | "name_mismatch" | "weak_names" | "pending" | "joined" | "locked" | "setups_limited" }
 
 export type SendOutcome =
-  | { kind: "sent"; phone: string; onRecord: boolean }
+  | { kind: "sent"; phone: string; onRecord: boolean; show: boolean }
   | { kind: "expired" | "off" | "no_mobile" | "locked" | "too_soon" | "code_limited" | "budget_reached" | "mobile_limited" | "not_sent" }
 
 export type CheckOutcome =
@@ -126,7 +126,7 @@ export async function sendConfirmationNumber(
   if (!phone) return { ok: false, error: "unavailable" }
 
   const sent = await sendSms(supabase, send, { kind: "self_confirm", to: phone, agentId: typeof row.agent === "string" ? row.agent : null, message: message(digits) })
-  if (sent.ok) return { ok: true, data: { kind: "sent", phone, onRecord: row.on_record === true } }
+  if (sent.ok) return { ok: true, data: { kind: "sent", phone, onRecord: row.on_record === true, show: row.show === true } }
   await call(supabase, "void_agent_confirm_number", { attempt: input.attempt, browser })
   const kind = sent.error.kind === "budget-reached" ? "budget_reached" : sent.error.kind === "mobile-limited" ? "mobile_limited" : "not_sent"
   return { ok: true, data: { kind } }
@@ -210,7 +210,7 @@ export type FinishError = "password-too-short" | "not-proven" | "unavailable"
  */
 export async function createPhoneLogin(
   supabase: SupabaseClient,
-  input: { attempt: string; phone: string; password: string },
+  input: { attempt: string; browser: string; phone: string; password: string },
   minimumPasswordLength: number,
 ): Promise<Result<{ userId: string }, FinishError>> {
   if (input.password.length < minimumPasswordLength) return { ok: false, error: "password-too-short" }
@@ -219,8 +219,9 @@ export async function createPhoneLogin(
     password: input.password,
     phone_confirm: true,
     // Read by the Auth insert triggers; Auth inserts user_metadata with the
-    // row and app_metadata only after it.
-    user_metadata: { kind: "agent", self_confirm_attempt: input.attempt },
+    // row and app_metadata only after it. The browser's digest binds the
+    // login to the browser that proved the attempt.
+    user_metadata: { kind: "agent", self_confirm_attempt: input.attempt, self_confirm_browser: digestOf(input.browser) },
   })
   if (error || !data.user) {
     // Auth reports a refused insert as a database error; the attempt was
@@ -231,9 +232,19 @@ export async function createPhoneLogin(
   }
   // The marker has done its work at the insert; nothing reads it again, but
   // it is cleared so it never sits on the login.
-  const cleared = await supabase.auth.admin.updateUserById(data.user.id, { user_metadata: { kind: "agent", self_confirm_attempt: null } })
+  const cleared = await supabase.auth.admin.updateUserById(data.user.id, { user_metadata: { kind: "agent", self_confirm_attempt: null, self_confirm_browser: null } })
   if (cleared.error) console.error("Self-confirm: could not clear the login's marker", cleared.error)
   return { ok: true, data: { userId: data.user.id } }
+}
+
+/** Whether the signed-in agent joined through a self-confirm email invite, for the welcome's title. */
+export async function joinedBySelfConfirm(supabase: SupabaseClient): Promise<boolean> {
+  const { data, error } = await supabase.rpc("my_agent_self_confirmed")
+  if (error) {
+    console.error("Self-confirm: could not read how the agent joined", error)
+    return false
+  }
+  return data === true
 }
 
 /** The self-confirm SMS (O-N10), Swahili like the reset SMS; it fits one SMS. */

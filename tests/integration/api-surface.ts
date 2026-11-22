@@ -700,6 +700,11 @@ export const FUNCTIONS: Record<string, FunctionEntry> = {
     },
     agent: { refused: "not_permitted" },
   },
+  "public.my_agent_self_confirmed()": {
+    roles: ["authenticated"],
+    args: {},
+    agent: { returns: [false] },
+  },
   "public.my_notices()": {
     roles: ["authenticated"],
     args: {},

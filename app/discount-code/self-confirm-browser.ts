@@ -21,7 +21,7 @@ export async function browserToken(create: boolean): Promise<string | null> {
   if (kept && /^[0-9a-f]{64}$/.test(kept)) return kept
   if (!create) return null
   const token = randomBytes(32).toString("hex")
-  jar.set(BROWSER_COOKIE, token, { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: COOKIE_PATH, maxAge: 60 * 60 })
+  jar.set(BROWSER_COOKIE, token, { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: COOKIE_PATH, maxAge: 60 * 60 * 24 })
   return token
 }
 

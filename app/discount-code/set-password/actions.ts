@@ -4,6 +4,7 @@ import { cookies } from "next/headers"
 import { redirect } from "next/navigation"
 
 import { acceptAgentInvite, type AcceptAgentInviteError } from "@/lib/services/agent-auth"
+import { joinedBySelfConfirm } from "@/lib/services/agent-self-confirm"
 import { verifiedUserId as sessionUserId } from "@/lib/services/auth-session"
 import { createClient } from "@/utils/supabase/server"
 
@@ -50,7 +51,8 @@ export async function setAgentPassword(_previous: SetAgentPasswordState, formDat
   // account. With no verified session there is nothing to greet.
   const userId = await sessionUserId(supabase)
   if (userId) {
-    jar.set(WELCOME_COOKIE, userId, {
+    // ".self": an email self-confirm, whose welcome says the account is ready (O-N17).
+    jar.set(WELCOME_COOKIE, (await joinedBySelfConfirm(supabase)) ? `${userId}.self` : userId, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",

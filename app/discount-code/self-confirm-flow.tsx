@@ -62,7 +62,7 @@ export function SelfConfirmFlow({ language, started, onChangeEmail }: { language
       } catch {
         sent = { status: "unavailable" }
       }
-      if (sent.status === "sent") return setStep({ at: "sms", masked: sent.onRecord && !started.typedMatches ? null : sent.masked, onRecord: sent.onRecord, sentAt: Date.now() })
+      if (sent.status === "sent") return setStep({ at: "sms", masked: sent.masked, onRecord: sent.onRecord, sentAt: Date.now() })
       if (sent.status === "no-sms") return emailInstead()
       setProblem(numberProblem(sent.status))
     })

@@ -51,6 +51,10 @@ describe("the owner's name rule", () => {
     ["Juma Ali Omari", "Jumaa Ali Omari", true],
     ["Juma Ali Omari", "Jomaa Ali Omari", false],
     ["Amina Ali Omari", "Amena Ali Omari", true],
+    // Two typos on a five-letter name are one too many.
+    ["Amina Ali Omari", "Emena Ali Omari", false],
+    // A typed name longer than the record's counts its extra letters as typos.
+    ["Amina Ali Omari", "Aminata Ali Omari", false],
     // 6-10 letters: two.
     ["Amina Khamis Bakari", "Amina Kamis Bakari", true],
     ["Amina Khamis Bakari", "Amina Kamiz Bakari", true],

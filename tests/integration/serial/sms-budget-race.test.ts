@@ -4,9 +4,10 @@ import { expect, test } from "vitest"
 
 import { asSystem, secretClient } from "../../support/db"
 
-// The SMS budget under requests at once (#503): reserve_sms takes the day's
-// advisory lock before counting, so simultaneous reservations can never take
-// more places than the budget has left. The test sets the budget to two places
+// The SMS budget under requests at once (#503): reserve_sms takes one
+// advisory lock for every reservation, whatever the day, before counting,
+// so simultaneous reservations can never take more places than the budget
+// has left. The test sets the budget to two places
 // above today's spend and fires eight reservations together; exactly two may
 // win. The budget row is shared by the whole database, so this file runs in
 // the serial folder and puts the budget back afterwards.

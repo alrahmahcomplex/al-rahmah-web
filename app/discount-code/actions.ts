@@ -11,6 +11,7 @@ import { verifyTurnstile } from "@/lib/turnstile"
 import { publicFormClient } from "@/utils/supabase/public-form"
 
 import type { DiscountCodeState } from "./outcome"
+import { beginSelfConfirm } from "./self-confirm-browser"
 
 const MESSAGES: Record<Exclude<SignUpOutcome["kind"], "registered" | "claimed">, DiscountCodeState> = {
   code_needed: { status: "code-needed" },
@@ -68,6 +69,38 @@ export async function registerAsAgent(_previous: DiscountCodeState, formData: Fo
     return { status: "unavailable" }
   }
   if (!supabase) return { status: "unavailable" }
+
+  // Self-confirm first (#503), for someone who has a code: an Approved code
+  // with matching names goes on to the choice of how to sign in. While it is
+  // off, and for a Pending code or weak record names, today's claim path.
+  if (parsed.data.hasCode && parsed.data.code) {
+    const started = await beginSelfConfirm({ code: parsed.data.code, names: parsed.data.fullName, phone: parsed.data.phone })
+    switch (started.kind) {
+      case "ready":
+        return {
+          status: "self-confirm",
+          attempt: started.attempt,
+          mobileOnRecord: started.mobileOnRecord,
+          typedMatches: started.typedMatches,
+          canText: started.canText,
+          emailOnRecord: started.emailOnRecord,
+          email: parsed.data.email,
+          phone: parsed.data.phone,
+        }
+      case "name_mismatch":
+        return { status: "name-mismatch" }
+      case "no_match":
+        return { status: "no-match" }
+      case "joined":
+        return { status: "joined" }
+      case "access_off":
+        return { status: "access-off" }
+      case "locked":
+        return { status: "self-confirm-locked" }
+      case "setups_limited":
+        return { status: "rate-limited" }
+    }
+  }
 
   let signedUp
   try {

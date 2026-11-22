@@ -27,7 +27,7 @@ export type SmsSender = (to: string, message: string) => Promise<Result<{ reques
 const BEEM_SEND_URL = "https://apisms.beem.africa/v1/send"
 const TIMEOUT_MS = 10_000
 
-type BeemAnswer = { successful?: boolean; code?: number; request_id?: number | string }
+type BeemAnswer = { successful?: boolean; code?: number; request_id?: number | string; valid?: number }
 
 export function beemSender(
   { apiKey, secretKey, senderId, timeoutMs = TIMEOUT_MS }: { apiKey: string; secretKey: string; senderId: string; timeoutMs?: number },
@@ -64,6 +64,8 @@ export function beemSender(
       response.ok &&
       answer?.successful === true &&
       answer?.code === 100 &&
+      // valid: how many recipients Beem took; none means nothing will go.
+      (answer?.valid === undefined || (typeof answer.valid === "number" && answer.valid > 0)) &&
       ((typeof requestId === "number" && Number.isFinite(requestId)) || (typeof requestId === "string" && requestId.trim() !== ""))
     ) {
       return { ok: true, data: { requestId: String(requestId) } }

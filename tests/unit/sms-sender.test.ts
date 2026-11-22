@@ -83,6 +83,7 @@ describe("beemSender", () => {
 describe("Beem's answer must prove the message was taken", () => {
   test.each([
     ["no request id", { successful: true, code: 100, request_id: null }],
+    ["no valid recipient", { successful: true, code: 100, request_id: 12, valid: 0, invalid: 1 }],
     ["an empty request id", { successful: true, code: 100, request_id: " " }],
     ["successful false", { successful: false, code: 100, request_id: 12 }],
     ['successful "false"', { successful: "false", code: 100, request_id: 12 }],

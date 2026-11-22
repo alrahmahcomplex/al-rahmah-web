@@ -700,7 +700,10 @@ revoke execute on function public.reserve_sms(text, text, uuid) from public, ano
 grant execute on function public.reserve_sms(text, text, uuid) to service_role;
 
 -- ---------------------------------------------------------------------------
--- 5. Switching self-confirm off stops its open email links too
+-- Which invite self-confirm sent. Switching self-confirm off stops new
+-- starts, numbers and emails at once; a link already sent keeps working
+-- until it expires, like any invite (lead decision, #530: off stops new
+-- joins, it doesn't recall them; Remove this sign-in, slice 4, undoes one).
 -- ---------------------------------------------------------------------------
 
 -- An agent whose latest invite is the one a self-confirm attempt sent.
@@ -723,50 +726,6 @@ as $$
 $$;
 
 revoke execute on function public.agent_invited_by_self_confirm(uuid) from public, anon, authenticated, service_role;
-
--- Off also ends what self-confirm sent and nobody has used yet: each such
--- agent's unused invite login (no password) goes, so the link no longer
--- works, and the open attempts are void. A Manager's later invite is kept.
-create or replace function public.set_agent_self_confirm(enabled boolean)
-returns void
-language plpgsql
-security definer
-set search_path = ''
-as $$
-declare
-    actor record;
-    agent record;
-begin
-    if set_agent_self_confirm.enabled is null then
-        raise exception 'invalid';
-    end if;
-    select * into actor from public.audit_actor();
-    if actor.kind is null or actor.kind not in ('staff', 'system') then
-        raise exception 'not_permitted';
-    end if;
-
-    update public.agent_access_settings
-    set self_confirm_enabled = set_agent_self_confirm.enabled;
-
-    if not set_agent_self_confirm.enabled then
-        for agent in
-            select m.id, m.user_id from public.marketing_agents m
-            where m.user_id is not null and public.agent_invited_by_self_confirm(m.id)
-            for update
-        loop
-            perform 1 from auth.users u where u.id = agent.user_id for update;
-            if not public.agent_joined(agent.user_id)
-               and exists (select 1 from auth.users u where u.id = agent.user_id and coalesce(u.encrypted_password, '') = '') then
-                update public.marketing_agents m set user_id = null where m.id = agent.id;
-                delete from auth.users u where u.id = agent.user_id;
-            end if;
-        end loop;
-        update public.agent_confirm_attempts a set state = 'void' where a.state in ('matched', 'sent', 'proven');
-    end if;
-end;
-$$;
-
-revoke execute on function public.set_agent_self_confirm(boolean) from public, anon, authenticated, service_role;
 
 -- ---------------------------------------------------------------------------
 -- 14. The welcome after an email self-confirm says the account is ready

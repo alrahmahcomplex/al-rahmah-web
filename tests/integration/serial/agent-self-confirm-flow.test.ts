@@ -358,29 +358,6 @@ describe("from the first reviews (#530)", () => {
     expect(sent).toMatchObject({ ok: true, data: { kind: "sent" } })
   })
 
-  test("switching off keeps a link sent after the self-confirm invite (a public resend)", async () => {
-    const agent = await agentOnRecord()
-    const browser = randomUUID()
-    const started = await start(agent, browser)
-    if (started.kind !== "ready") throw new Error("not ready")
-    const address = `resend-${randomUUID().slice(0, 8)}@example.test`
-    await sendSelfConfirmInvite(secretClient(), inviteSender, { attempt: started.attempt, browser, email: address, hourlyBudget: 1000 }, REDIRECT)
-    // A later invite with no staff member behind it, as request_agent_link opens one.
-    await asSystem((sql) =>
-      sql.query("insert into public.agent_events (agent_id, kind, result, email, created_by, created_at) values ($1, 'invite', 'started', $2, null, clock_timestamp() + interval '1 second')", [
-        agent.id,
-        address,
-      ]),
-    )
-    await setSelfConfirm(false)
-    try {
-      const linked = await asSystem(async (sql) => (await sql.query("select user_id is not null as linked from public.marketing_agents where id = $1", [agent.id])).rows[0])
-      expect(linked).toEqual({ linked: true })
-    } finally {
-      await setSelfConfirm(true)
-    }
-  })
-
   test("a weak-names record reaches the claim path even past the browser's set-ups", async () => {
     const browser = randomUUID()
     for (let i = 0; i < 3; i++) await start(await agentOnRecord(), browser)
@@ -422,7 +399,7 @@ describe("from the first reviews (#530)", () => {
     })
   })
 
-  test("switching self-confirm off ends its unused email links, and keeps a Manager's", async () => {
+  test("switching off stops new joins but doesn't recall a link already sent", async () => {
     const agent = await agentOnRecord()
     const browser = randomUUID()
     const started = await start(agent, browser)
@@ -431,14 +408,9 @@ describe("from the first reviews (#530)", () => {
     await sendSelfConfirmInvite(secretClient(), inviteSender, { attempt: started.attempt, browser, email: address, hourlyBudget: 1000 }, REDIRECT)
     await setSelfConfirm(false)
     try {
-      const after = await asSystem(async (sql) => {
-        const r = await sql.query<{ linked: boolean; logins: number }>(
-          "select m.user_id is not null as linked, (select count(*)::int from auth.users u where lower(u.email) = $2) as logins from public.marketing_agents m where m.id = $1",
-          [agent.id, address],
-        )
-        return r.rows[0]
-      })
-      expect(after).toEqual({ linked: false, logins: 0 })
+      const linked = await asSystem(async (sql) => (await sql.query("select user_id is not null as linked from public.marketing_agents where id = $1", [agent.id])).rows[0])
+      expect(linked).toEqual({ linked: true })
+      expect(await sendConfirmationNumber(secretClient(), keptSender().send, { attempt: started.attempt, browser }, words, ENV)).toMatchObject({ ok: true, data: { kind: "off" } })
     } finally {
       await setSelfConfirm(true)
     }

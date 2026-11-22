@@ -3,7 +3,7 @@
 import { cookies, headers } from "next/headers"
 import { redirect } from "next/navigation"
 
-import { requestOrigin } from "@/lib/agent-registration"
+import { referralLink, requestOrigin } from "@/lib/agent-registration"
 import { MINIMUM_PASSWORD_LENGTH } from "@/lib/password"
 import { portalOrigin } from "@/lib/site-hosts"
 import {
@@ -12,6 +12,7 @@ import {
   selfConfirmSms,
   sendConfirmationNumber,
   sendSelfConfirmInvite,
+  setNewAgentEmail,
 } from "@/lib/services/agent-self-confirm"
 import { currentSessionKind, passwordSignIn } from "@/lib/services/auth-session"
 import { readLinkLimits } from "@/lib/services/password-link-requests"
@@ -120,6 +121,34 @@ export async function sendSelfConfirmEmail(attempt: string, email: string): Prom
     case "busy":
     case "email_closed":
       return { status: "unavailable" }
+    default:
+      return { status: "expired" }
+  }
+}
+
+export type NewAgentEmailStatus =
+  | { status: "registered"; code: string; link: string; email: string; discount: null }
+  | { status: "expired" | "no-email" | "email-unusable" | "unavailable" }
+
+// A new agent's email path (#503 slice 4d-b): the email goes on their Pending
+// record, bound to this browser's attempt, and nothing is sent now. Today's
+// set-password email follows the office's approval. A waiting code takes
+// nothing off yet, so the share message names no figure.
+export async function setNewAgentEmailAction(attempt: string, email: string): Promise<NewAgentEmailStatus> {
+  const supabase = smsClient()
+  const browser = await browserToken(false)
+  if (!supabase || !browser) return { status: "expired" }
+  const origin = requestOrigin(await headers())
+  if (!origin) return { status: "unavailable" }
+  const set = await setNewAgentEmail(supabase, { attempt: String(attempt), browser, email: String(email) })
+  if (!set.ok) return { status: "unavailable" }
+  switch (set.data.kind) {
+    case "registered":
+      return { status: "registered", code: set.data.code, link: referralLink(origin, set.data.code), email: set.data.email, discount: null }
+    case "no_email":
+      return { status: "no-email" }
+    case "email_unusable":
+      return { status: "email-unusable" }
     default:
       return { status: "expired" }
   }

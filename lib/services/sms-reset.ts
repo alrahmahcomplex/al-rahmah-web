@@ -127,7 +127,8 @@ export async function confirmResetSession(
 // anyone else loses this browser's new session at once. An outage keeps it.
 async function agentOnly(supabase: SupabaseClient, userId: string): Promise<Result<{ userId: string }, SmsResetCheckError> | Unconfirmed> {
   const agent = await getAgentUser(supabase)
-  if (agent.ok) return { ok: true, data: { userId } }
+  // A waiting code's login is the agent's own too (#503 slice 4d-b).
+  if (agent.ok || agent.error === "pending") return { ok: true, data: { userId } }
   if (agent.error === "unavailable" || agent.error === "signed-out") return { ok: false, error: "unconfirmed", userId }
   await supabase.auth.signOut({ scope: "local" })
   return { ok: false, error: agent.error === "not-agent" ? "no-account" : agent.error }
@@ -147,7 +148,7 @@ export async function saveResetPassword(
   // Rechecked here: the agent may have been switched off since F2. An
   // outage keeps the session, so the same form can be sent again.
   const agent = await getAgentUser(supabase)
-  if (!agent.ok) {
+  if (!agent.ok && agent.error !== "pending") {
     if (agent.error === "signed-out") return { ok: false, error: "signed-out" }
     if (agent.error === "unavailable") return { ok: false, error: "unavailable" }
     await supabase.auth.signOut({ scope: "local" })

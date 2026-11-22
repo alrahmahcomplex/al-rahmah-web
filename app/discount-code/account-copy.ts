@@ -90,6 +90,8 @@ export const ACCOUNT_COPY: Record<Language, Copy> = {
       "access-off": { text: PAUSED_SW, code: "access_off" },
       unavailable: { text: "Huduma haipatikani kwa sasa. Jaribu tena baada ya muda mfupi.", code: "unavailable" },
       "signed-out": { text: "Ingia kwanza." },
+      // A waiting code (#503 slice 4d-b); the students page shows the code instead.
+      pending: { text: "Huenda bado tunathibitisha code yako au barua pepe yako." },
       "password-too-short": { text: `Tumia angalau herufi ${MINIMUM_PASSWORD_LENGTH}.` },
       "password-mismatch": { text: "Manenosiri mawili hayafanani." },
       "invalid-link": { text: EXPIRED_SW, code: "invalid_link" },
@@ -135,6 +137,7 @@ export const ACCOUNT_COPY: Record<Language, Copy> = {
       "access-off": { text: PAUSED_EN, code: "access_off" },
       unavailable: { text: "The service isn't available right now. Try again in a moment.", code: "unavailable" },
       "signed-out": { text: "Sign in first." },
+      pending: { text: "We may still be checking your code or your email." },
       "password-too-short": { text: `Use at least ${MINIMUM_PASSWORD_LENGTH} characters.` },
       "password-mismatch": { text: "The two passwords don't match." },
       "invalid-link": { text: EXPIRED_EN, code: "invalid_link" },

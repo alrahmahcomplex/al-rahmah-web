@@ -12,6 +12,8 @@ const stubs = vi.hoisted(() => ({
   client: vi.fn(),
   discount: vi.fn(),
   toast: vi.fn(),
+  // Whether self-confirm is on, as the page reads it (#503 slice 4d-b).
+  selfConfirm: false,
 }))
 
 vi.mock("@/lib/office", () => ({ OFFICE_PHONE: "+255 700 000 001" }))
@@ -120,7 +122,11 @@ beforeEach(() => {
   stubs.reveal.mockReset().mockReturnValue(false)
   stubs.toast.mockReset()
   stubs.token = "fake-token"
-  stubs.client.mockReset().mockReturnValue({ secret: "client" })
+  stubs.selfConfirm = false
+  stubs.client.mockReset().mockReturnValue({
+    secret: "client",
+    rpc: async (fn: string) => (fn === "self_confirm_open" ? { data: stubs.selfConfirm, error: null } : { data: null, error: { message: "not stubbed" } }),
+  })
   stubs.discount.mockReset().mockResolvedValue({ ok: true, data: 10000 })
   window.scrollTo = vi.fn() as unknown as typeof window.scrollTo
   // Each test starts with no draft from the one before (#503 slice 4d).
@@ -187,7 +193,7 @@ describe("the Discount code page", { timeout: 30_000 }, () => {
   it("renders in Swahili under the COMPLEX top bar, one question at a time, with the database's discount", async () => {
     render(await DiscountCodePage())
 
-    expect(stubs.discount).toHaveBeenCalledWith({ secret: "client" })
+    expect(stubs.discount).toHaveBeenCalledWith(expect.objectContaining({ secret: "client" }))
     expect(screen.getByRole("main")).toHaveAttribute("lang", "sw")
     expect(screen.getByText("AL-RAHMAH COMPLEX")).toBeInTheDocument()
     expect(screen.getByRole("link", { name: "Al-Rahmah: ukurasa wa nyumbani" })).toHaveAttribute("href", "https://alrahmahcomplex.or.tz/")
@@ -856,5 +862,85 @@ describe("the draft and a self-confirm flow left behind", { timeout: 30_000 }, (
 
     await act(async () => emailSent({ status: "sent", email: "rehema@example.test" }))
     expect(storedDraft()).toMatchObject({ firstName: "NEEMA" })
+  })
+})
+
+// While self-confirm is on (#503 slice 4d-b), no email question before the
+// send: the email is asked on the email path, or when a send needs one.
+describe("self-confirm's order", { timeout: 30_000 }, () => {
+  async function toReview(user: User, answer: "yes" | "no") {
+    await typeName(user)
+    await next(user)
+    await user.type(screen.getByLabelText(WORDS.sw.phone), "0712 345 678")
+    await next(user)
+    // No email question here.
+    expect(screen.queryByLabelText(WORDS.sw.email)).not.toBeInTheDocument()
+    if (answer === "yes") {
+      await user.click(screen.getByRole("radio", { name: WORDS.sw.yes }))
+      await user.type(await screen.findByLabelText(WORDS.sw.code), "ABC123")
+      await next(user)
+      await screen.findByRole("button", { name: WORDS.sw.sendClaim })
+    } else {
+      await user.click(screen.getByRole("radio", { name: WORDS.sw.no }))
+      await screen.findByRole("button", { name: WORDS.sw.send })
+    }
+  }
+
+  it("a new agent goes from the phone to the code question, sees the code comes at the end (O-N61), and Send opens the choice", async () => {
+    stubs.selfConfirm = true
+    stubs.submit.mockResolvedValue({
+      status: "self-confirm",
+      attempt: "6f1c2c1e-1b2d-4c3e-9f4a-5b6c7d8e9f01",
+      mobileOnRecord: true,
+      typedMatches: true,
+      canText: true,
+      emailOnRecord: false,
+      emailOpen: true,
+      email: "",
+      phone: "0712 345 678",
+      newAgent: true,
+      code: "RAJ-124",
+    })
+    const user = userEvent.setup()
+    render(await DiscountCodePage())
+    await toReview(user, "no")
+    expect(screen.getByText(/Code yako ya Punguzo itaanza na/)).toHaveTextContent(/Utaiona code yote mwishoni\./)
+
+    await send(user)
+    const [, sent] = stubs.submit.mock.calls[0] as [unknown, FormData]
+    expect(sent.get("flow")).toBe("self-confirm")
+    expect(sent.get("email")).toBe("")
+    expect(await screen.findByRole("radio", { name: /Kwa namba ya simu/ })).toBeInTheDocument()
+    expect(screen.getByRole("radio", { name: /Kwa barua pepe/ })).toBeInTheDocument()
+  })
+
+  it("a code holder's review says the names are matched first (O-N1); when the send needs an email, the question comes back", async () => {
+    stubs.selfConfirm = true
+    stubs.submit.mockResolvedValueOnce({ status: "email-needed" })
+    const user = userEvent.setup()
+    render(await DiscountCodePage())
+    await toReview(user, "yes")
+    expect(screen.getByText("Tunalinganisha code hii na majina yako. Kisha utachagua jinsi ya kuingia, na kuweka nenosiri mwenyewe.")).toBeInTheDocument()
+
+    await send(user, "sw", true)
+    const email = await screen.findByLabelText(WORDS.sw.email)
+    expect(stubs.reset).toHaveBeenCalled()
+    await user.type(email, "rehema@example.test")
+    await next(user)
+    stubs.submit.mockResolvedValueOnce({ status: "claim-waiting" })
+    await user.click(await screen.findByRole("button", { name: WORDS.sw.sendClaim }))
+    const [, again] = stubs.submit.mock.calls[1] as [unknown, FormData]
+    expect(again.get("email")).toBe("rehema@example.test")
+    expect(again.get("flow")).toBe("")
+  })
+
+  it("keeps today's order, with the email question, while self-confirm is off", async () => {
+    const user = userEvent.setup()
+    render(await DiscountCodePage())
+    await typeName(user)
+    await next(user)
+    await user.type(screen.getByLabelText(WORDS.sw.phone), "0712 345 678")
+    await next(user)
+    expect(screen.getByLabelText(WORDS.sw.email)).toBeInTheDocument()
   })
 })

@@ -727,6 +727,13 @@ export const FUNCTIONS: Record<string, FunctionEntry> = {
     args: {},
     agent: { returns: [] },
   },
+  // #503 slice 4d-b: the signed-in agent's own code while it waits for the
+  // office (Pending). The seeded agent is Approved, so it reads nothing.
+  "public.my_pending_agent()": {
+    roles: ["authenticated"],
+    args: {},
+    agent: { returns: [] },
+  },
   "public.normalize_phone(phone text)": {
     roles: ["authenticated"],
     args: { phone: "'0700000101'" },

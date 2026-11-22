@@ -39,6 +39,7 @@ import { clearDraft, readDraft, writeDraft } from "./draft"
 import { CARD } from "./frame"
 import { registerAsAgent } from "./actions"
 import { SelfConfirmFlow } from "./self-confirm-flow"
+import { SELF_CONFIRM_COPY } from "./self-confirm-copy"
 import { COPY, discountWords } from "./copy"
 import type { DiscountCodeMessage, DiscountCodeState } from "./outcome"
 
@@ -80,10 +81,8 @@ const ORDER: Step[] = ["name", "phone", "email", "has", "code", "send"]
 // (lib/agent-registration.ts), so the first problem names the earliest step.
 const FIELD_STEP: Record<AgentField, Step> = { full_name: "name", phone: "phone", whatsapp: "phone", email: "email", code: "code" }
 // The progress bar: Wewe holds the name (1), then phone and WhatsApp (2 and
-// 3); Code holds the email, the question, the code box and the review.
+// 3); Code holds the email (when asked), the question, the code box and the review.
 const YOU_STEPS = 3
-const CODE_STEPS = 4
-const CODE_POSITION: Partial<Record<Step, number>> = { email: 0, has: 1, code: 2, send: 3 }
 // How long a picked tile shows its tick before the form moves on.
 const TILE_PAUSE_MS = 240
 
@@ -115,11 +114,15 @@ export function DiscountCodeForm({
   officePhone,
   discount = null,
   showLanguagePrompt = false,
+  selfConfirmOrder = false,
 }: {
   language: Language
   officePhone: string
   discount?: number | null
   showLanguagePrompt?: boolean
+  // Self-confirm is on (#503 slice 4d-b): no email question before the send;
+  // it is asked on the email path, or when a send needs one.
+  selfConfirmOrder?: boolean
 }) {
   const copy = COPY[language]
   const [draft, setDraft] = useState<AgentDraft>(EMPTY)
@@ -147,6 +150,11 @@ export function DiscountCodeForm({
   const tileTimer = useRef<number | undefined>(undefined)
   // The draft is read once, after hydration, before it is written back.
   const [restored, setRestored] = useState(false)
+  // In self-confirm's order, a send that needs the email (today's claim path)
+  // brings the email question back; so does a draft that already holds one.
+  const [emailNeeded, setEmailNeeded] = useState(false)
+  const askEmail = !selfConfirmOrder || emailNeeded || answered.has("email")
+  const skip = (step: Step, answer: CodeAnswer) => skipped(step, answer) || (step === "email" && !askEmail)
 
   // What gets checked and sent: WhatsApp only while its field is shown, the
   // code only after Yes.
@@ -172,13 +180,15 @@ export function DiscountCodeForm({
       setWhatsappOn(wa)
       setCodeAnswer(answer)
       setAnswered(now)
-      setOpen(ORDER.find((k) => !now.has(k) && !skipped(k, answer)) ?? "send")
+      const asks = !selfConfirmOrder || now.has("email")
+      setOpen(ORDER.find((k) => !now.has(k) && !skipped(k, answer) && (asks || k !== "email")) ?? "send")
       setInstant(true)
       window.setTimeout(() => setInstant(false), 0)
     }
     setRestored(true)
     /* eslint-enable react-hooks/set-state-in-effect */
-  }, [])
+    // Once, after hydration: the order is the page's own and never changes.
+  }, [selfConfirmOrder])
 
   // Keeps the draft in step with the answers until the form is sent and done.
   useEffect(() => {
@@ -215,7 +225,7 @@ export function DiscountCodeForm({
 
   // The problem on this step or an earlier one, or null.
   function problemUpTo(step: Step): AgentField | null {
-    const found = agentRegistrationProblem(entries)
+    const found = agentRegistrationProblem(entries, { emailLater: !askEmail })
     if (!found) return null
     return ORDER.indexOf(FIELD_STEP[found]) <= ORDER.indexOf(step) ? found : null
   }
@@ -226,7 +236,7 @@ export function DiscountCodeForm({
     const now = new Set(answered).add(step)
     setAnswered(now)
     setProblem(null)
-    setOpen(ORDER.find((k) => !now.has(k) && !skipped(k, answer)) ?? "send")
+    setOpen(ORDER.find((k) => !now.has(k) && !skip(k, answer)) ?? "send")
   }
 
   function openStep(step: Step) {
@@ -244,7 +254,7 @@ export function DiscountCodeForm({
 
   function back() {
     let i = ORDER.indexOf(open) - 1
-    while (i > 0 && skipped(ORDER[i], codeAnswer)) i -= 1
+    while (i > 0 && skip(ORDER[i], codeAnswer)) i -= 1
     openStep(ORDER[Math.max(0, i)])
   }
 
@@ -288,7 +298,7 @@ export function DiscountCodeForm({
 
   function onSend() {
     if (sending || !form.current) return
-    const found = agentRegistrationProblem(entries)
+    const found = agentRegistrationProblem(entries, { emailLater: !askEmail })
     if (found) return show({ field: found, server: false })
 
     const data = new FormData(form.current)
@@ -304,7 +314,9 @@ export function DiscountCodeForm({
     data.set("lastName", entries.lastName)
     data.set("phone", entries.phone)
     data.set("whatsapp", entries.whatsapp)
-    data.set("email", entries.email)
+    data.set("email", askEmail ? entries.email : "")
+    // Self-confirm's order: the server asks for the email when it needs one.
+    data.set("flow", askEmail ? "" : "self-confirm")
     data.set("has_code", entries.hasCode ? "yes" : "no")
     data.set("code", entries.code)
     setNotice(null)
@@ -330,6 +342,15 @@ export function DiscountCodeForm({
         setSelfConfirm(result)
         return
       }
+      if (result.status === "email-needed") {
+        // Today's claim path, or self-confirm off since the page loaded: the
+        // email question comes back, before a send again.
+        turnstile.current?.reset()
+        moved.current = true
+        setEmailNeeded(true)
+        setOpen("email")
+        return
+      }
       // The token is spent once checked, so get a fresh one for the next try.
       turnstile.current?.reset()
       if (result.status === "invalid") return show({ field: result.field, server: true })
@@ -350,9 +371,23 @@ export function DiscountCodeForm({
           onFinished={() => {
             if (round.current === flowRound.current) clearDraft()
           }}
-          onChangeEmail={() => {
+          // Asked on the form: back to its question. Otherwise the flow asks again itself.
+          onChangeEmail={
+            askEmail
+              ? () => {
+                  setSelfConfirm(null)
+                  setOpen("email")
+                }
+              : undefined
+          }
+          // A new agent's email path: the code is theirs, and the set-password
+          // email follows the office's approval, as today.
+          onRegistered={(registered) => {
+            if (round.current !== flowRound.current) return
+            clearDraft()
+            moved.current = true
             setSelfConfirm(null)
-            setOpen("email")
+            setDone(registered)
           }}
         />
       </>
@@ -403,7 +438,7 @@ export function DiscountCodeForm({
     revealStep(li)
   }
 
-  const visible = (step: Step) => !skipped(step, codeAnswer) && (answered.has(step) || open === step)
+  const visible = (step: Step) => !skip(step, codeAnswer) && (answered.has(step) || open === step)
   const stateOf = (step: Step) => (open === step ? "open" : "folded")
   const change = (step: Step, label: string) => <ChangeLink onClick={() => openStep(step)}>{label}</ChangeLink>
   const describedBy = (...ids: (string | false)[]) => ids.filter(Boolean).join(" ") || undefined
@@ -411,15 +446,17 @@ export function DiscountCodeForm({
   const youDone = (answered.has("name") ? 1 : 0) + (answered.has("phone") ? 2 : 0)
   // The code box counts as done once No has passed it by.
   const codeBoxDone = codeAnswer === "yes" ? answered.has("code") : answered.has("has")
-  const codeDone = answered.has("email") ? (answered.has("has") ? (codeBoxDone ? 3 : 2) : 1) : 0
+  const codeKeys: Step[] = askEmail ? ["email", "has", "code", "send"] : ["has", "code", "send"]
+  const codeSteps = codeKeys.length
+  const codeDone = askEmail && !answered.has("email") ? 0 : (askEmail ? 1 : 0) + (answered.has("has") ? (codeBoxDone ? 2 : 1) : 0)
   const activeGroup = open === "name" || open === "phone" ? 0 : 1
-  const position = activeGroup === 0 ? (open === "name" ? 1 : 2) : (CODE_POSITION[open] ?? 0) + 1
+  const position = activeGroup === 0 ? (open === "name" ? 1 : 2) : Math.max(0, codeKeys.indexOf(open)) + 1
   const status =
     open === "send"
       ? copy.progressDone
       : activeGroup === 0
         ? copy.progress(copy.groups.you, position, YOU_STEPS)
-        : copy.progress(copy.groups.code, position, CODE_STEPS)
+        : copy.progress(copy.groups.code, position, codeSteps)
 
   return (
     <>
@@ -429,7 +466,7 @@ export function DiscountCodeForm({
         <ProgressBar
           groups={[
             { label: copy.groups.you, steps: YOU_STEPS, done: youDone, current: activeGroup === 0 ? position - 1 : undefined },
-            { label: copy.groups.code, steps: CODE_STEPS, done: codeDone, current: activeGroup === 1 ? position - 1 : undefined },
+            { label: copy.groups.code, steps: codeSteps, done: codeDone, current: activeGroup === 1 ? position - 1 : undefined },
           ]}
           activeGroup={activeGroup}
           canBack={open !== "name"}
@@ -683,13 +720,15 @@ export function DiscountCodeForm({
                 <Hint className="-mt-2">{copy.reviewHint}</Hint>
                 {/* Only the person's own initials: the whole code shows after sending. */}
                 <NoticeBox tone="info">
+                  {/* In self-confirm's order a code holder's names are matched, then they
+                      choose how to sign in (O-N1); a new agent sees the code at the end (O-N61). */}
                   {entries.hasCode ? (
-                    copy.claimNote
+                    askEmail ? copy.claimNote : SELF_CONFIRM_COPY[language].reviewNote
                   ) : (
                     <>
                       {copy.newCodeNote.before}
                       <b data-initials>{agentCodePrefix(fullName)}</b>
-                      {copy.newCodeNote.after}
+                      {askEmail ? copy.newCodeNote.after : copy.newCodeNoteAtEnd}
                     </>
                   )}
                 </NoticeBox>

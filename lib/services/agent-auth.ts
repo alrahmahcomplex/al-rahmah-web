@@ -20,20 +20,22 @@ export type AgentAccessError =
   | "access-off"
   | "unavailable"
 
-export type AgentUserError = "signed-out" | AgentAccessError
+// `pending` (#503 slice 4d-b): a new agent who set a password by mobile
+// while their code waits for the office. They may sign in, and see only their
+// waiting code: every agent read answers "not_approved" until the approval.
+export type AgentUserError = "signed-out" | "pending" | AgentAccessError
 // `staff-session`: this browser is signed in as staff, so it must sign out
 // first (one account per browser).
 export type AgentSignInError = SignInFailure | "staff-session" | AgentAccessError
 
-const STATES: Record<string, AgentAccessError> = {
+const STATES: Record<string, AgentAccessError | "pending"> = {
   switched_off: "switched-off",
   retired: "retired",
   access_off: "access-off",
-  // A Pending agent never gets a login; if one did, it can't sign in.
-  not_approved: "switched-off",
+  not_approved: "pending",
 }
 
-async function loadAgentAccount(supabase: SupabaseClient): Promise<Result<AgentAccount, AgentAccessError>> {
+async function loadAgentAccount(supabase: SupabaseClient): Promise<Result<AgentAccount, AgentAccessError | "pending">> {
   const { data, error } = await readWithClockRetry(() =>
     supabase.rpc("current_agent_account").maybeSingle<{ state: string; full_name: string | null; code: string | null }>(),
   )
@@ -83,5 +85,6 @@ export async function acceptAgentInvite(
   const agent = await loadAgentAccount(supabase)
   if (agent.ok) return agent
   await supabase.auth.signOut()
-  return { ok: false, error: agent.error === "unavailable" ? "joined-unavailable" : agent.error }
+  // An invite goes only to an Approved record, so a waiting one here is as before: it may not go on.
+  return { ok: false, error: agent.error === "unavailable" ? "joined-unavailable" : agent.error === "pending" ? "switched-off" : agent.error }
 }

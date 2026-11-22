@@ -12,6 +12,7 @@ import { referralLink, requestOrigin } from "@/lib/agent-registration"
 import { getLanguage, type Language } from "@/lib/language"
 import { OFFICE_PHONE } from "@/lib/office"
 import { getAgentUser } from "@/lib/services/agent-auth"
+import { pendingAgentCode } from "@/lib/services/agent-self-confirm"
 import { verifiedUserId } from "@/lib/services/auth-session"
 import { getAgentStudents, type AgentStudent, type AgentStudentStatus } from "@/lib/services/agent-students"
 import { cn } from "@/lib/utils"
@@ -25,6 +26,7 @@ import { COPY as DISCOUNT_COPY, discountWords } from "../copy"
 import { cardLines, firstName, MAX_SHOWN, PAGE_SIZE, shownFrom, stepFrom, STUDENTS_COPY } from "./copy"
 import { continueToStudents } from "./actions"
 import { MessagePicker, Reminders, ShareCodeButton, type PickerWords } from "./dashboard"
+import { WaitingCode } from "./waiting"
 import { WELCOME_COOKIE } from "./welcome"
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -61,6 +63,8 @@ export default async function AgentStudentsPage({ searchParams }: { searchParams
   const agent = await getAgentUser(supabase)
 
   if (!agent.ok && (agent.error === "signed-out" || agent.error === "not-agent")) redirect(SIGN_IN)
+  // A new agent's mobile login while the code waits (#503 slice 4d-b).
+  if (!agent.ok && agent.error === "pending") return <Waiting language={language} />
   if (!agent.ok) {
     return (
       <AccountShell language={language} wide>
@@ -86,10 +90,11 @@ export default async function AgentStudentsPage({ searchParams }: { searchParams
   const list = await getAgentStudents(supabase, { search, limit: shown, offset: 0, step })
 
   if (!list.ok && list.error === "not-agent") redirect(SIGN_IN)
+  if (list.ok && list.data.kind === "pending") return <Waiting language={language} />
   if (!list.ok || list.data.kind !== "active") {
     return (
       <AccountShell language={language} wide>
-        {list.ok && list.data.kind !== "active" ? (
+        {list.ok && isOff(list.data.kind) ? (
           <AccountOffCard language={language} reason={list.data.kind} />
         ) : (
           <SignOutNotice language={language} message={account.messages.unavailable} back="/auth" />
@@ -251,6 +256,39 @@ export default async function AgentStudentsPage({ searchParams }: { searchParams
           </a>
         </p>
 
+        <form action={signOutAndReturn} className="-ml-2.5 self-start">
+          <input type="hidden" name="back" value="/auth" />
+          <button
+            type="submit"
+            className="inline-flex min-h-11 items-center rounded-full px-2.5 font-exo text-[15px] font-semibold text-blue-600 underline decoration-blue-600/35 underline-offset-4 outline-none hover:bg-blue-50 focus-visible:ring-3 focus-visible:ring-(color:--gf-focus-ring)"
+          >
+            {account.signOut}
+          </button>
+        </form>
+      </div>
+    </AccountShell>
+  )
+}
+
+// A waiting code's page (#503 slice 4d-b): the code, its link, the notes and
+// sign out, read fresh on every visit. The finish mark shows once, right after
+// the password is set (the welcome cookie names this login).
+async function Waiting({ language }: { language: Language }) {
+  const supabase = await createClient()
+  const [code, userId, origin] = await Promise.all([pendingAgentCode(supabase), verifiedUserId(supabase), headers().then(requestOrigin)])
+  const account = ACCOUNT_COPY[language]
+  if (!code.ok || !code.data) {
+    return (
+      <AccountShell language={language} wide>
+        <SignOutNotice language={language} message={account.messages.unavailable} back="/auth" />
+      </AccountShell>
+    )
+  }
+  const welcomed = ((await cookies()).get(WELCOME_COOKIE)?.value ?? "").split(".")[0]
+  return (
+    <AccountShell language={language} wide>
+      <div className="flex flex-col gap-5">
+        <WaitingCode language={language} code={code.data} link={origin ? referralLink(origin, code.data) : null} officePhone={OFFICE_PHONE} justJoined={!!welcomed && welcomed === userId} />
         <form action={signOutAndReturn} className="-ml-2.5 self-start">
           <input type="hidden" name="back" value="/auth" />
           <button

@@ -19,6 +19,7 @@ import { MINIMUM_PASSWORD_LENGTH } from "@/lib/password"
 import { cn } from "@/lib/utils"
 
 import { ACCOUNT_COPY } from "./account-copy"
+import { COPY } from "./copy"
 import { CARD } from "./frame"
 import type { DiscountCodeState } from "./outcome"
 import { SELF_CONFIRM_COPY } from "./self-confirm-copy"
@@ -27,6 +28,7 @@ import {
   finishSelfConfirm,
   sendSelfConfirmEmail,
   sendSelfConfirmNumber,
+  setNewAgentEmailAction,
   type CheckStatus,
   type NumberStatus,
 } from "./self-confirm-actions"
@@ -37,14 +39,37 @@ import {
 // one when none is on file), then a password; by email, today's invite.
 
 type Started = Extract<DiscountCodeState, { status: "self-confirm" }>
-type Step = { at: "choose" } | { at: "sms"; masked: string | null; onRecord: boolean; sentAt: number } | { at: "email"; email: string } | { at: "password"; phone: string } | { at: "mobile-used" }
+type Step =
+  | { at: "choose" }
+  | { at: "sms"; masked: string | null; onRecord: boolean; sentAt: number }
+  // Self-confirm's order (#503 slice 4d-b): the email, asked here on the email path.
+  | { at: "ask-email" }
+  | { at: "email"; email: string }
+  | { at: "password"; phone: string }
+  | { at: "mobile-used" }
+type Registered = Extract<DiscountCodeState, { status: "registered" }>
 
 const RESEND_SECONDS = 60
 const TITLE = "font-exo text-[26px] leading-[1.18] font-extrabold tracking-[-0.01em] text-balance text-blue-600 italic outline-none"
 
 // `onFinished` runs once the email is on its way or the password form is sent:
-// the form's draft is no longer needed (#503 slice 4d).
-export function SelfConfirmFlow({ language, started, onChangeEmail, onFinished }: { language: Language; started: Started; onChangeEmail: () => void; onFinished?: () => void }) {
+// the form's draft is no longer needed (#503 slice 4d). Without
+// `onChangeEmail` the email is asked here, on the email path, when there is
+// none yet (self-confirm's order, #503 slice 4d-b). `onRegistered`: a new
+// agent's email went on their waiting code; the form shows today's finish.
+export function SelfConfirmFlow({
+  language,
+  started,
+  onChangeEmail,
+  onFinished,
+  onRegistered,
+}: {
+  language: Language
+  started: Started
+  onChangeEmail?: () => void
+  onFinished?: () => void
+  onRegistered?: (registered: Registered) => void
+}) {
   const copy = SELF_CONFIRM_COPY[language]
   const [step, setStep] = useState<Step>({ at: "choose" })
   const [problem, setProblem] = useState<string | null>(null)
@@ -81,11 +106,36 @@ export function SelfConfirmFlow({ language, started, onChangeEmail, onFinished }
     })
   }
 
+  // The email typed on the form, or here.
+  const [email, setEmail] = useState(started.email)
+
   function emailInstead() {
     setProblem(null)
+    // Nothing on record and nothing typed yet: ask for it first.
+    if (!started.emailOnRecord && !email.trim()) return setStep({ at: "ask-email" })
+    sendEmail(email)
+  }
+
+  function sendEmail(address: string) {
+    setProblem(null)
     startWork(async () => {
+      if (started.newAgent) {
+        let set
+        try {
+          set = await setNewAgentEmailAction(started.attempt, address)
+        } catch {
+          set = { status: "unavailable" as const }
+        }
+        if (set.status === "registered") {
+          onFinished?.()
+          onRegistered?.(set)
+          return
+        }
+        setProblem(set.status === "email-unusable" ? copy.emailUnusable : set.status === "no-email" ? COPY[language].problems.email : set.status === "expired" ? copy.expired : copy.unavailable)
+        return
+      }
       try {
-        const sent = await sendSelfConfirmEmail(started.attempt, started.email)
+        const sent = await sendSelfConfirmEmail(started.attempt, address)
         if (sent.status === "sent") {
           onFinished?.()
           return setStep({ at: "email", email: sent.email })
@@ -118,6 +168,40 @@ export function SelfConfirmFlow({ language, started, onChangeEmail, onFinished }
           onMobileUsed={() => setStep({ at: "mobile-used" })}
         />
       )}
+      {step.at === "ask-email" && (
+        <form
+          className="flex flex-col gap-4"
+          noValidate
+          onSubmit={(event) => {
+            event.preventDefault()
+            sendEmail(email)
+          }}
+        >
+          <h1 ref={heading} tabIndex={-1} className="sr-only">
+            {COPY[language].emailQuestion}
+          </h1>
+          <QuestionTitle htmlFor="self-confirm-email">{COPY[language].emailQuestion}</QuestionTitle>
+          <p id="self-confirm-email-hint" className="-mt-2 text-sm text-slate-600">
+            {COPY[language].emailHint}
+          </p>
+          <FieldInput
+            id="self-confirm-email"
+            name="email"
+            type="email"
+            inputMode="email"
+            autoComplete="email"
+            autoCapitalize="none"
+            spellCheck={false}
+            maxLength={254}
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+            aria-describedby="self-confirm-email-hint"
+          />
+          <ContinuePill type="submit" pending={pending} disabled={pending}>
+            {copy.continue}
+          </ContinuePill>
+        </form>
+      )}
       {step.at === "email" && (
         <>
           <h1 ref={heading} tabIndex={-1} className={TITLE}>
@@ -126,9 +210,11 @@ export function SelfConfirmFlow({ language, started, onChangeEmail, onFinished }
           <p className="text-[15px] text-slate-600">
             {copy.emailSentTo} <b className="wrap-anywhere text-slate-800">{step.email}</b>. {copy.spam}
           </p>
-          <button type="button" className="font-semibold text-blue-700 underline underline-offset-2" onClick={onChangeEmail}>
-            {copy.changeEmail}
-          </button>
+          {!started.emailOnRecord && (
+            <button type="button" className="font-semibold text-blue-700 underline underline-offset-2" onClick={onChangeEmail ?? (() => setStep({ at: "ask-email" }))}>
+              {copy.changeEmail}
+            </button>
+          )}
         </>
       )}
       {step.at === "mobile-used" && (

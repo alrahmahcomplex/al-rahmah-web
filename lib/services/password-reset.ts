@@ -41,7 +41,8 @@ export async function resetPasswordFromLink(
   if (staff.error !== "not-staff") return refused(staff.error === "signed-out" ? "unavailable" : staff.error)
 
   const agent = await getAgentUser(supabase)
-  if (agent.ok) return { ok: true, data: "agent" }
+  // A waiting code's login is the agent's own too (#503 slice 4d-b).
+  if (agent.ok || agent.error === "pending") return { ok: true, data: "agent" }
   if (agent.error === "not-agent") return refused("no-account")
   return refused(agent.error === "signed-out" ? "unavailable" : agent.error)
 }

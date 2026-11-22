@@ -7,6 +7,7 @@ const actions = vi.hoisted(() => ({
   checkSelfConfirmNumber: vi.fn(),
   sendSelfConfirmEmail: vi.fn(),
   finishSelfConfirm: vi.fn(async () => null),
+  setNewAgentEmailAction: vi.fn(),
 }))
 vi.mock("@/app/discount-code/self-confirm-actions", () => actions)
 vi.mock("@/components/turnstile-widget", () => ({ TurnstileWidget: () => null }))
@@ -126,5 +127,51 @@ describe("SelfConfirmFlow", () => {
     await userEvent.paste("482913")
     expect(await screen.findByRole("heading", { name: "Namba hii tayari inatumika" }, { timeout: 3000 })).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Tumia barua pepe" })).toBeInTheDocument()
+  })
+})
+
+// Self-confirm's order (#503 slice 4d-b): the email is asked here, on the email path.
+describe("SelfConfirmFlow, email asked on its path", () => {
+  const NEW_AGENT = { ...STARTED, mobileOnRecord: true, emailOnRecord: false, email: "", newAgent: true, code: "RAJ-124" }
+
+  it("a new agent by email: the email question, then today's finish with the waiting code", async () => {
+    actions.setNewAgentEmailAction.mockResolvedValue({ status: "registered", code: "RAJ-124", link: "https://alrahmah.example/apply?ref=RAJ-124", email: "baraka@mfano.com", discount: null })
+    const onRegistered = vi.fn()
+    const onFinished = vi.fn()
+    render(<SelfConfirmFlow language="sw" started={NEW_AGENT} onRegistered={onRegistered} onFinished={onFinished} />)
+    await userEvent.click(screen.getByRole("radio", { name: /Kwa barua pepe/ }))
+    await userEvent.click(screen.getByRole("button", { name: "Endelea" }))
+    const box = await screen.findByLabelText("Barua pepe yako?")
+    expect(actions.sendSelfConfirmEmail).not.toHaveBeenCalled()
+    await userEvent.type(box, "baraka@mfano.com")
+    await userEvent.click(screen.getByRole("button", { name: "Endelea" }))
+    await waitFor(() => expect(onRegistered).toHaveBeenCalledWith(expect.objectContaining({ status: "registered", code: "RAJ-124", email: "baraka@mfano.com" })))
+    expect(actions.setNewAgentEmailAction).toHaveBeenCalledWith(NEW_AGENT.attempt, "baraka@mfano.com")
+    expect(onFinished).toHaveBeenCalled()
+  })
+
+  it("a new agent's email someone else uses says so and keeps the question", async () => {
+    actions.setNewAgentEmailAction.mockResolvedValue({ status: "email-unusable" })
+    render(<SelfConfirmFlow language="sw" started={NEW_AGENT} />)
+    await userEvent.click(screen.getByRole("radio", { name: /Kwa barua pepe/ }))
+    await userEvent.click(screen.getByRole("button", { name: "Endelea" }))
+    await userEvent.type(await screen.findByLabelText("Barua pepe yako?"), "taken@mfano.com")
+    await userEvent.click(screen.getByRole("button", { name: "Endelea" }))
+    expect(await screen.findByRole("alert")).toHaveTextContent("Barua pepe hii haiwezi kutumika")
+    expect(screen.getByLabelText("Barua pepe yako?")).toHaveValue("taken@mfano.com")
+  })
+
+  it("a code holder with no email on record and none typed is asked for it, then today's invite goes", async () => {
+    actions.sendSelfConfirmEmail.mockResolvedValue({ status: "sent", email: "neema@mfano.com" })
+    render(<SelfConfirmFlow language="sw" started={{ ...STARTED, email: "" }} />)
+    await userEvent.click(screen.getByRole("radio", { name: /Kwa barua pepe/ }))
+    await userEvent.click(screen.getByRole("button", { name: "Endelea" }))
+    await userEvent.type(await screen.findByLabelText("Barua pepe yako?"), "neema@mfano.com")
+    await userEvent.click(screen.getByRole("button", { name: "Endelea" }))
+    expect(await screen.findByRole("heading", { name: "Angalia barua pepe yako" })).toBeInTheDocument()
+    expect(actions.sendSelfConfirmEmail).toHaveBeenCalledWith(STARTED.attempt, "neema@mfano.com")
+    // Wrong email? Change it brings the question back here.
+    await userEvent.click(screen.getByRole("button", { name: "Barua pepe si sahihi? Ibadilishe" }))
+    expect(await screen.findByLabelText("Barua pepe yako?")).toHaveValue("neema@mfano.com")
   })
 })

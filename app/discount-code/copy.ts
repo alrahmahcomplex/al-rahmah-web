@@ -63,7 +63,12 @@ type Copy = {
   // The review's note: a new code starts with these initials; a claimed one is matched to the phone.
   // Around the initials, which the page shows in bold.
   newCodeNote: { before: string; after: string }
+  // O-N61 (#503 slice 4d-b): the note's ending in self-confirm's order, where
+  // the choice of how to sign in comes before the code.
+  newCodeNoteAtEnd: string
   claimNote: string
+  // O-N62: on a waiting code's page, for a new agent who signed in by mobile.
+  mobileWaitNote: string
   // The two-word links on the folded answers.
   change: { name: string; phone: string; email: string; hasCode: string; code: string }
   signInPrompt: string
@@ -151,7 +156,9 @@ export const COPY: Record<Language, Copy> = {
       before: "Code yako ya Punguzo itaanza na ",
       after: ", herufi za kwanza za majina yako matatu. Utaiona code yote kwenye ukurasa unaofuata.",
     },
+    newCodeNoteAtEnd: ", herufi za kwanza za majina yako matatu. Utaiona code yote mwishoni.",
     claimNote: "Tunalinganisha code hii na namba yako ya simu au majina yako. Kisha Ofisi ya Masoko inaithibitisha.",
+    mobileWaitNote: "Ofisi ya Masoko ikithibitisha code yako, ingia kwa namba yako ya simu na nenosiri hili kuona wanafunzi uliowaleta.",
     change: { name: "Badilisha Jina", phone: "Badilisha Namba", email: "Badilisha Barua pepe", hasCode: "Badilisha Jibu", code: "Badilisha Code" },
     signInPrompt: "Umeshaweka nenosiri?",
     signIn: "Ingia",
@@ -254,7 +261,9 @@ export const COPY: Record<Language, Copy> = {
       before: "Your Discount code will start with ",
       after: ", the first letters of your three names. You see the whole code on the next screen.",
     },
+    newCodeNoteAtEnd: ", the first letters of your three names. You see the whole code at the end.",
     claimNote: "We match this code to your phone number or your names. The Marketing Office then confirms it.",
+    mobileWaitNote: "Once the Marketing Office confirms your code, sign in with your mobile number and this password to see the students you referred.",
     change: { name: "Change Name", phone: "Change Number", email: "Change Email", hasCode: "Change Answer", code: "Change Code" },
     signInPrompt: "Already set a password?",
     signIn: "Sign in",

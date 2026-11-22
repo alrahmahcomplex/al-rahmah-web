@@ -11,7 +11,7 @@ import { verifyTurnstile } from "@/lib/turnstile"
 import { publicFormClient } from "@/utils/supabase/public-form"
 
 import type { DiscountCodeState } from "./outcome"
-import { beginSelfConfirm } from "./self-confirm-browser"
+import { beginNewAgentSelfConfirm, beginSelfConfirm } from "./self-confirm-browser"
 
 const MESSAGES: Record<Exclude<SignUpOutcome["kind"], "registered" | "claimed">, DiscountCodeState> = {
   code_needed: { status: "code-needed" },
@@ -70,6 +70,47 @@ export async function registerAsAgent(_previous: DiscountCodeState, formData: Fo
   }
   if (!supabase) return { status: "unavailable" }
 
+  // Self-confirm's order (#503 slice 4d-b) sends no email: it is asked on the
+  // email path. A send that still needs one (today's claim path, or
+  // self-confirm switched off since the page loaded) asks for it.
+  const emailLater = parsed.data.email === ""
+
+  // A brand-new agent in self-confirm's order: today's Pending record, then the
+  // choice of how to sign in, as a code holder has.
+  if (!parsed.data.hasCode && emailLater) {
+    const started = await beginNewAgentSelfConfirm({ fullName: parsed.data.fullName, phone: parsed.data.phone, whatsapp: parsed.data.whatsapp ?? "" })
+    switch (started.kind) {
+      case "ready":
+        return {
+          status: "self-confirm",
+          attempt: started.attempt,
+          mobileOnRecord: true,
+          typedMatches: true,
+          canText: started.canText,
+          emailOnRecord: false,
+          emailOpen: true,
+          email: "",
+          phone: parsed.data.phone,
+          newAgent: true,
+          code: started.code,
+        }
+      case "invalid":
+        return { status: "invalid", field: started.field }
+      case "code_needed":
+        return { status: "code-needed" }
+      case "joined":
+        return { status: "joined" }
+      case "access_off":
+        return { status: "access-off" }
+      case "setups_limited":
+        return { status: "rate-limited" }
+      case "off":
+        return { status: "email-needed" }
+      default:
+        return { status: "unavailable" }
+    }
+  }
+
   // Self-confirm first (#503), for someone who has a code: an Approved code
   // with matching names goes on to the choice of how to sign in. While it is
   // off, and for a Pending code, weak record names, or email closed on the
@@ -101,7 +142,12 @@ export async function registerAsAgent(_previous: DiscountCodeState, formData: Fo
         return { status: "self-confirm-locked" }
       case "setups_limited":
         return { status: "rate-limited" }
+      case "unavailable":
+        if (emailLater) return { status: "unavailable" }
+        break
     }
+    // Today's claim path needs the email.
+    if (emailLater) return { status: "email-needed" }
   }
 
   let signedUp

@@ -8,6 +8,10 @@ const stubs = vi.hoisted(() => ({
   client: vi.fn(),
   estimate: vi.fn(),
   headers: { value: new Headers() },
+  // Self-confirm's starts (#503): unavailable unless a test says otherwise, so
+  // today's sign-up path answers as before.
+  begin: vi.fn(),
+  beginNew: vi.fn(),
 }))
 
 vi.mock("server-only", () => ({}))
@@ -35,6 +39,11 @@ vi.mock("@/lib/services/agent-sign-up", () => ({
 vi.mock("@/lib/services/referral", async (original) => ({
   ...(await original<typeof import("@/lib/services/referral")>()),
   estimateDiscountCode: (...args: unknown[]) => stubs.estimate(...args),
+}))
+
+vi.mock("@/app/discount-code/self-confirm-browser", () => ({
+  beginSelfConfirm: (...args: unknown[]) => stubs.begin(...args),
+  beginNewAgentSelfConfirm: (...args: unknown[]) => stubs.beginNew(...args),
 }))
 
 import { registerAsAgent } from "@/app/discount-code/actions"
@@ -70,6 +79,8 @@ beforeEach(() => {
   stubs.register.mockReset().mockResolvedValue({ ok: true, data: { kind: "registered", code: "RJ-407", email: "rehema@example.test" } })
   // A new code is Pending: it takes nothing off yet.
   stubs.estimate.mockReset().mockResolvedValue({ ok: true, data: { state: "pending", amount: 50000 } })
+  stubs.begin.mockReset().mockResolvedValue({ kind: "unavailable" })
+  stubs.beginNew.mockReset().mockResolvedValue({ kind: "unavailable" })
 })
 
 describe("registering for a Discount code", () => {
@@ -210,5 +221,54 @@ describe("registering for a Discount code", () => {
     expect(await send(posted())).toEqual({ status: "unavailable" })
     expect(stubs.register).not.toHaveBeenCalled()
     error.mockRestore()
+  })
+})
+
+// Self-confirm's order (#503 slice 4d-b): the form sends no email, flow=self-confirm.
+describe("in self-confirm's order", () => {
+  const later = (fields: Record<string, string> = {}) => posted({ email: "", flow: "self-confirm", ...fields })
+
+  it("a new agent's send opens their attempt and goes on to the choice, with their waiting code", async () => {
+    stubs.beginNew.mockResolvedValue({ kind: "ready", attempt: "att-1", code: "RAJ-124", canText: true })
+    expect(await send(later())).toEqual({
+      status: "self-confirm",
+      attempt: "att-1",
+      mobileOnRecord: true,
+      typedMatches: true,
+      canText: true,
+      emailOnRecord: false,
+      emailOpen: true,
+      email: "",
+      phone: "0712 345 678",
+      newAgent: true,
+      code: "RAJ-124",
+    })
+    expect(stubs.beginNew).toHaveBeenCalledWith({ fullName: "REHEMA ALI JUMA", phone: "0712 345 678", whatsapp: "" })
+    expect(stubs.register).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    [{ kind: "code_needed" }, { status: "code-needed" }],
+    [{ kind: "joined" }, { status: "joined" }],
+    [{ kind: "access_off" }, { status: "access-off" }],
+    [{ kind: "setups_limited" }, { status: "rate-limited" }],
+    [{ kind: "invalid", field: "phone" }, { status: "invalid", field: "phone" }],
+    // Switched off since the page loaded: the email question comes back.
+    [{ kind: "off" }, { status: "email-needed" }],
+    [{ kind: "unavailable" }, { status: "unavailable" }],
+  ])("a new agent's start answering %o shows %o", async (started, state) => {
+    stubs.beginNew.mockResolvedValue(started)
+    expect(await send(later())).toEqual(state)
+    expect(stubs.register).not.toHaveBeenCalled()
+  })
+
+  it("a code holder whose code goes to today's claim path is asked for the email first", async () => {
+    stubs.begin.mockResolvedValue({ kind: "pending" })
+    expect(await send(later({ has_code: "yes", code: "RJ-407" }))).toEqual({ status: "email-needed" })
+    expect(stubs.register).not.toHaveBeenCalled()
+  })
+
+  it("without flow=self-confirm an empty email is still refused, as today", async () => {
+    expect(await send(posted({ email: "" }))).toEqual({ status: "invalid", field: "email" })
   })
 })

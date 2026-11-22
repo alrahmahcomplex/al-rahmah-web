@@ -54,7 +54,8 @@ export async function signIn(
   if (staff.error !== "not-staff") return refused(staff.error === "signed-out" ? "unavailable" : staff.error)
 
   const agent = await getAgentUser(supabase)
-  if (agent.ok) return { ok: true, data: "agent" }
+  // A waiting code's login signs in to see its code (#503 slice 4d-b).
+  if (agent.ok || agent.error === "pending") return { ok: true, data: "agent" }
   if (agent.error === "not-agent") return refused("no-account")
   return refused(agent.error === "signed-out" ? "unavailable" : agent.error)
 }
@@ -68,5 +69,5 @@ export async function signedInHome(supabase: SupabaseClient): Promise<string | n
   if (staff.ok) return HOME.staff
   if (staff.error !== "not-staff") return null
   const agent = await getAgentUser(supabase)
-  return agent.ok ? HOME.agent : null
+  return agent.ok || (!agent.ok && agent.error === "pending") ? HOME.agent : null
 }

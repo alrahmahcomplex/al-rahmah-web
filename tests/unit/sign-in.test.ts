@@ -110,6 +110,18 @@ describe("signing in on the one sign-in page", () => {
     expect(signOut).not.toHaveBeenCalled()
   })
 
+  // #503 slice 4d-b: a new agent's mobile login while the code waits for the
+  // office signs in to see its waiting code; the students page reads nothing.
+  it("signs in a waiting code's mobile login and keeps the session", async () => {
+    const { client, signOut } = fakeSupabase({ agent: { data: { state: "not_approved", full_name: null, code: null }, error: null } })
+
+    expect(await signIn(client, { phone: "0712345678" }, "fixture-password", TOKEN)).toEqual({ ok: true, data: "agent" })
+    expect(signOut).not.toHaveBeenCalled()
+    expect(await signedInHome(fakeSupabase({ signedIn: true, agent: { data: { state: "not_approved", full_name: null, code: null }, error: null } }).client)).toBe(
+      "/discount-code/students",
+    )
+  })
+
   it("never sends a staff login to the agent side, even if both answer", async () => {
     const { client } = fakeSupabase({ staff: STAFF, agent: AGENT })
 

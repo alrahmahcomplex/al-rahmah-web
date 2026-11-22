@@ -7,7 +7,8 @@ import { publicSiteOrigin } from "@/lib/site-hosts"
 // Action, so both check a draft the same way. The phone's format, and
 // whether a code is one, are the database's to judge (`normalize_phone`,
 // `normalize_referral_code`), so here they only have to be present and
-// short enough. An email is required (#193). The name comes in three boxes,
+// short enough. An email is required (#193), except in self-confirm's order
+// (#503 slice 4d-b), where it is asked only on the email path. The name comes in three boxes,
 // First, Middle and Last, all required (v38), and is stored as one full name
 // in capitals. "Do you already have a Discount code?" Yes makes the code
 // required; No sends no code at all, so the database makes a new one.
@@ -72,7 +73,7 @@ export function agentCodePrefix(fullName: string): string {
   return letters.padEnd(3, "X")
 }
 
-function read(draft: AgentDraft): Result<AgentRegistration, AgentField> {
+function read(draft: AgentDraft, { emailLater = false } = {}): Result<AgentRegistration, AgentField> {
   const parts = [draft.firstName, draft.middleName, draft.lastName].map(cleanName)
   const fullName = parts.join(" ")
   // Counted in characters, as the database counts them.
@@ -85,7 +86,7 @@ function read(draft: AgentDraft): Result<AgentRegistration, AgentField> {
   if (whatsapp.length > MAX_PHONE_LENGTH) return { ok: false, error: "whatsapp" }
 
   const email = draft.email.trim().toLowerCase()
-  if (email.length > 254 || !EMAIL.test(email)) return { ok: false, error: "email" }
+  if (!(emailLater && email === "") && (email.length > 254 || !EMAIL.test(email))) return { ok: false, error: "email" }
 
   // No skips the code box: whatever a stale draft holds there is not sent.
   const code = draft.hasCode ? draft.code.trim() : ""
@@ -95,13 +96,14 @@ function read(draft: AgentDraft): Result<AgentRegistration, AgentField> {
 }
 
 // The page's check before sending: the field to fix, or null.
-export function agentRegistrationProblem(draft: AgentDraft): AgentField | null {
-  const result = read(draft)
+export function agentRegistrationProblem(draft: AgentDraft, options: { emailLater?: boolean } = {}): AgentField | null {
+  const result = read(draft, options)
   return result.ok ? null : result.error
 }
 
 // The Server Action's reading of the posted form.
 export function parseAgentRegistration(formData: FormData): Result<AgentRegistration, AgentField> {
+  // `flow=self-confirm`: the form asked in self-confirm's order, with no email yet.
   return read({
     firstName: text(formData.get("firstName")),
     middleName: text(formData.get("middleName")),
@@ -111,7 +113,7 @@ export function parseAgentRegistration(formData: FormData): Result<AgentRegistra
     email: text(formData.get("email")),
     hasCode: formData.get("has_code") === "yes",
     code: text(formData.get("code")),
-  })
+  }, { emailLater: formData.get("flow") === "self-confirm" })
 }
 
 const HOST = /^(?:[a-z0-9-]+(?:\.[a-z0-9-]+)*|\[[0-9a-f:.]+\])(?::\d{1,5})?$/

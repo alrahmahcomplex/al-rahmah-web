@@ -45,7 +45,7 @@ export type AgentStudents =
       discount: number
     }
   // Only the message shows: no code, no share buttons, no students.
-  | { kind: "switched-off" | "retired" | "access-off" }
+  | { kind: "switched-off" | "retired" | "access-off" | "pending" }
 
 export type AgentStudentsError = "not-agent" | "unavailable"
 
@@ -79,12 +79,12 @@ type Answer = {
 
 const NO_STEPS: Record<AgentStudentStatus, number> = { Applied: 0, Visited: 0, Interviewed: 0, Enrolled: 0, Declined: 0 }
 
-const STATES: Record<string, "switched-off" | "retired" | "access-off"> = {
+const STATES: Record<string, "switched-off" | "retired" | "access-off" | "pending"> = {
   switched_off: "switched-off",
   retired: "retired",
   access_off: "access-off",
-  // A Pending agent never gets a login; if one did, it reads nothing.
-  not_approved: "switched-off",
+  // A new agent's mobile login while the code waits (#503 slice 4d-b): it reads nothing.
+  not_approved: "pending",
 }
 
 export async function getAgentStudents(

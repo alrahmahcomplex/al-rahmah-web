@@ -94,6 +94,106 @@ export async function startSelfConfirm(
   return { ok: true, data: { kind } }
 }
 
+export type NewAgentStartOutcome =
+  | { kind: "ready"; attempt: string; code: string; canText: boolean }
+  | { kind: "off" | "access_off" | "code_needed" | "joined" | "setups_limited" }
+  | { kind: "invalid"; field: "full_name" | "phone" | "whatsapp" }
+
+/**
+ * A brand-new agent's send while self-confirm is on (#503 slice 4d-b): today's
+ * Pending record, with no email yet, and an attempt bound to this browser, so
+ * they choose how to sign in as a code holder does. `supabase` holds the secret key.
+ */
+export async function startNewAgentSelfConfirm(
+  supabase: SupabaseClient,
+  input: { fullName: string; phone: string; whatsapp: string; browser: string; ip: string | null },
+): Promise<Result<NewAgentStartOutcome, SelfConfirmError>> {
+  const { data, error } = await supabase.rpc("start_new_agent_self_confirm", {
+    full_name: input.fullName,
+    phone: input.phone,
+    whatsapp: input.whatsapp,
+    browser: digestOf(input.browser),
+    ip: input.ip ? digestOf(input.ip) : null,
+  })
+  if (error) {
+    // agent_draft refuses a name or number it can't read, naming the field.
+    const field = error.message === "invalid" ? invalidField(error.details) : null
+    if (field) return { ok: true, data: { kind: "invalid", field } }
+    console.error("Self-confirm: start_new_agent_self_confirm failed", error)
+    return { ok: false, error: "unavailable" }
+  }
+  const row = (data as Row) ?? {}
+  if (row.outcome === "ready" && typeof row.attempt === "string" && typeof row.code === "string") {
+    return { ok: true, data: { kind: "ready", attempt: row.attempt, code: row.code, canText: row.can_text === true } }
+  }
+  const kind = (["off", "access_off", "code_needed", "joined", "setups_limited"] as const).find((k) => k === row.outcome)
+  if (!kind) {
+    console.error("Self-confirm: unexpected new-agent start answer", row)
+    return { ok: false, error: "unavailable" }
+  }
+  return { ok: true, data: { kind } }
+}
+
+function invalidField(details: string | null | undefined): "full_name" | "phone" | "whatsapp" | null {
+  try {
+    const field = (JSON.parse(details ?? "") as { field?: unknown }).field
+    return field === "full_name" || field === "phone" || field === "whatsapp" ? field : null
+  } catch {
+    return null
+  }
+}
+
+export type NewAgentEmailOutcome = { kind: "registered"; code: string; email: string } | { kind: "expired" | "off" | "no_email" | "email_unusable" }
+
+/** A new agent's email path: the email goes on their Pending record; nothing is sent now. */
+export async function setNewAgentEmail(
+  supabase: SupabaseClient,
+  input: { attempt: string; browser: string; email: string },
+): Promise<Result<NewAgentEmailOutcome, SelfConfirmError>> {
+  const answer = await call(supabase, "set_new_agent_email", { attempt: input.attempt, browser: digestOf(input.browser), typed_email: input.email })
+  if (!answer.ok) return answer
+  const row = answer.data ?? {}
+  if (row.outcome === "registered" && typeof row.code === "string" && typeof row.email === "string") {
+    return { ok: true, data: { kind: "registered", code: row.code, email: row.email } }
+  }
+  const kind = (["expired", "off", "no_email", "email_unusable"] as const).find((k) => k === row.outcome)
+  if (!kind) {
+    console.error("Self-confirm: unexpected new-agent email answer", row)
+    return { ok: false, error: "unavailable" }
+  }
+  return { ok: true, data: { kind } }
+}
+
+/**
+ * Whether self-confirm is on, so the form asks in its order. A failed read,
+ * or one slower than `waitMs` (the page waits for it), keeps today's order.
+ */
+export async function selfConfirmOpen(supabase: SupabaseClient, waitMs = 2000): Promise<boolean> {
+  let answer
+  try {
+    answer = await supabase.rpc("self_confirm_open").abortSignal(AbortSignal.timeout(waitMs))
+  } catch (error) {
+    console.error("Self-confirm: could not read whether it is on", error)
+    return false
+  }
+  const { data, error } = answer
+  if (error) {
+    console.error("Self-confirm: could not read whether it is on", error)
+    return false
+  }
+  return data === true
+}
+
+/** The signed-in agent's own code while their record waits for the office, or null. */
+export async function pendingAgentCode(supabase: SupabaseClient): Promise<Result<string | null, SelfConfirmError>> {
+  const { data, error } = await supabase.rpc("my_pending_agent").maybeSingle<{ code: string }>()
+  if (error) {
+    console.error("Self-confirm: could not read the waiting agent's code", error)
+    return { ok: false, error: "unavailable" }
+  }
+  return { ok: true, data: data?.code ?? null }
+}
+
 /**
  * Makes a new number for the attempt and texts it: to the mobile on record,
  * or the typed one when none is on file. A send the budget or the mobile's

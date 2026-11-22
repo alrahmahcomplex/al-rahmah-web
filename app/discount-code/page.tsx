@@ -4,6 +4,8 @@ import { languagePromptNeeded } from "@/components/brand/language-cookie"
 import { publicInterviewDiscount } from "@/lib/interview-discount"
 import { getLanguage } from "@/lib/language"
 import { OFFICE_PHONE } from "@/lib/office"
+import { selfConfirmOpen } from "@/lib/services/agent-self-confirm"
+import { publicFormClient } from "@/utils/supabase/public-form"
 
 import { DiscountCodeFrame } from "./frame"
 import { COPY } from "./copy"
@@ -25,12 +27,23 @@ export async function generateMetadata(): Promise<Metadata> {
   }
 }
 
+// While self-confirm is on (#503 slice 4d-b), the form asks in its order: no
+// email before the send. A read that fails, or Supabase down, keeps today's.
+async function selfConfirmOrder(): Promise<boolean> {
+  try {
+    const supabase = publicFormClient()
+    return supabase ? await selfConfirmOpen(supabase) : false
+  } catch {
+    return false
+  }
+}
+
 export default async function DiscountCodePage() {
-  const [language, discount, showLanguagePrompt] = await Promise.all([getLanguage(), publicInterviewDiscount(), languagePromptNeeded()])
+  const [language, discount, showLanguagePrompt, selfConfirm] = await Promise.all([getLanguage(), publicInterviewDiscount(), languagePromptNeeded(), selfConfirmOrder()])
 
   return (
     <DiscountCodeFrame language={language}>
-      <DiscountCodeForm language={language} officePhone={OFFICE_PHONE} discount={discount} showLanguagePrompt={showLanguagePrompt} />
+      <DiscountCodeForm language={language} officePhone={OFFICE_PHONE} discount={discount} showLanguagePrompt={showLanguagePrompt} selfConfirmOrder={selfConfirm} />
     </DiscountCodeFrame>
   )
 }

@@ -53,6 +53,7 @@ create table public.agent_confirm_attempts (
 create index agent_confirm_attempts_agent_idx on public.agent_confirm_attempts (agent_id, created_at);
 create index agent_confirm_attempts_browser_idx on public.agent_confirm_attempts (browser_digest, created_at);
 create index agent_confirm_attempts_ip_idx on public.agent_confirm_attempts (ip_digest, created_at);
+create index agent_confirm_attempts_invite_idx on public.agent_confirm_attempts (invite_event);
 
 create table public.agent_confirm_numbers (
     id uuid primary key default gen_random_uuid(),

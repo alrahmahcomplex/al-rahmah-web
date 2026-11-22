@@ -137,6 +137,9 @@ export function DiscountCodeForm({
   const [sending, startSending] = useTransition()
   // Counts restarts, so an answer to a send from before a restart is ignored.
   const round = useRef(0)
+  // The round the self-confirm flow on screen belongs to: a late reply from a
+  // flow the form has since cleared must not clear the newer form's draft.
+  const flowRound = useRef(0)
   const turnstile = useRef<TurnstileWidgetHandle>(null)
   const form = useRef<HTMLFormElement>(null)
   const heading = useRef<HTMLHeadingElement>(null)
@@ -323,6 +326,7 @@ export function DiscountCodeForm({
         return
       }
       if (result.status === "self-confirm") {
+        flowRound.current = sentIn
         setSelfConfirm(result)
         return
       }
@@ -343,7 +347,9 @@ export function DiscountCodeForm({
           language={language}
           started={selfConfirm}
           // The email is on its way or the password is being set: the answers are no longer needed.
-          onFinished={clearDraft}
+          onFinished={() => {
+            if (round.current === flowRound.current) clearDraft()
+          }}
           onChangeEmail={() => {
             setSelfConfirm(null)
             setOpen("email")

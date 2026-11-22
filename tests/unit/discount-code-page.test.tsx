@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from "@testing-library/react"
+import { act, render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { forwardRef, useImperativeHandle, type ImgHTMLAttributes } from "react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
@@ -39,6 +39,13 @@ vi.mock("@/utils/supabase/server", () => ({
 vi.mock("@/utils/supabase/public-form", () => ({ publicFormClient: () => stubs.client() }))
 vi.mock("@/lib/services/referral", () => ({ getInterviewDiscount: (...args: unknown[]) => stubs.discount(...args) }))
 vi.mock("@/app/discount-code/actions", () => ({ registerAsAgent: stubs.submit }))
+const flow = vi.hoisted(() => ({
+  sendSelfConfirmNumber: vi.fn(),
+  checkSelfConfirmNumber: vi.fn(),
+  sendSelfConfirmEmail: vi.fn(),
+  finishSelfConfirm: vi.fn(async () => null),
+}))
+vi.mock("@/app/discount-code/self-confirm-actions", () => flow)
 vi.mock("@/app/actions/language", () => ({ setLanguage: vi.fn() }))
 vi.mock("sonner", () => ({ toast: stubs.toast }))
 vi.mock("@/components/turnstile-widget", () => ({
@@ -813,5 +820,41 @@ describe("the draft", { timeout: 30_000 }, () => {
     await next(user)
     expect(screen.getByLabelText(WORDS.sw.phone)).toBeInTheDocument()
     spy.mockRestore()
+  })
+})
+
+// A late answer from a self-confirm flow the form has since cleared must not
+// clear the newer form's draft (Greptile, #536).
+describe("the draft and a self-confirm flow left behind", { timeout: 30_000 }, () => {
+  it("keeps the new form's draft when the old flow's email goes out after Futa fomu yote", async () => {
+    let emailSent: (value: unknown) => void = () => {}
+    flow.sendSelfConfirmEmail.mockReset().mockImplementation(() => new Promise((resolve) => (emailSent = resolve)))
+    stubs.submit.mockResolvedValue({
+      status: "self-confirm",
+      attempt: "6f1c2c1e-1b2d-4c3e-9f4a-5b6c7d8e9f01",
+      mobileOnRecord: false,
+      typedMatches: false,
+      canText: false,
+      emailOnRecord: false,
+      emailOpen: true,
+      email: "rehema@example.test",
+      phone: "0712345678",
+    })
+    const user = userEvent.setup()
+    render(await DiscountCodePage())
+    await fill(user, "sw", { code: "ABC-123" })
+    await send(user, "sw", true)
+    await user.click(await screen.findByRole("button", { name: "Endelea" }))
+    await waitFor(() => expect(flow.sendSelfConfirmEmail).toHaveBeenCalled())
+
+    // Before the email answers, the menu clears the form and new answers go in.
+    await user.click(screen.getByRole("button", { name: "Menyu" }))
+    await user.click(screen.getByRole("button", { name: "Futa fomu yote" }))
+    await user.click(screen.getByRole("button", { name: "Ndiyo, futa" }))
+    await typeName(user, "sw", "Neema Juma Ali")
+    await waitFor(() => expect(storedDraft()).toMatchObject({ firstName: "NEEMA" }))
+
+    await act(async () => emailSent({ status: "sent", email: "rehema@example.test" }))
+    expect(storedDraft()).toMatchObject({ firstName: "NEEMA" })
   })
 })

@@ -50,6 +50,9 @@ type Entry = { name: string; phone: string; email: string; code?: string; hasCod
 
 async function send(page: Page, entry: Entry) {
   await chooseLanguage(page.context(), "sw")
+  // Each send here is a fresh visit: the form's draft (#503 slice 4d) would
+  // otherwise bring back the answers of the send before it, in the same tab.
+  await page.addInitScript(() => window.sessionStorage.removeItem("al-rahmah:discount-code-draft"))
   await page.goto("/discount-code")
   // hasCode answers "Tayari una code?" with Ndiyo; without it, Hapana.
   if (entry.hasCode) await fillRegistration(page, "sw", entry, { code: entry.code ?? "" })

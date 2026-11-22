@@ -139,6 +139,27 @@ describe("Remove this sign-in", () => {
     expect((asked.data as { outcome: string }[])[0].outcome).toBe("none")
   })
 
+  test("Home's Activity log lists the removal, with who removed it (#503 slice 4b)", async () => {
+    const { agent, userId } = await joinedByMobile()
+    const manager = await signedIn(MANAGER)
+    await removeAgentSignIn(manager, agent.id, true, userId)
+    // Every page of the log, as the Manager sees it.
+    const rows: Record<string, unknown>[] = []
+    for (let offset = 0; ; offset += 100) {
+      const page = await manager.rpc("home_activity", { row_offset: offset, row_limit: 100 })
+      expect(page.error).toBeNull()
+      const { total, rows: found } = page.data as { total: number; rows: Record<string, unknown>[] }
+      rows.push(...found)
+      if (offset + 100 >= total) break
+    }
+    expect(rows.find((row) => row.kind === "sign_in_removed" && row.agent_id === agent.id)).toMatchObject({
+      code: agent.code,
+      signed_in_with: agent.phone,
+      removed_by: MANAGER.name,
+      joined_at: expect.any(String),
+    })
+  })
+
   test("staff without agents.approve can't read or remove a sign-in", async () => {
     const { agent, userId } = await joinedByMobile()
     const staff = await signedIn(ADMISSIONS)

@@ -8,6 +8,44 @@
 
 alter table public.agent_confirm_attempts add column courtesy_claimed_at timestamptz;
 
+-- The self-confirm attempt behind the agent's invite: the one that sent the
+-- latest self-confirm invite, unless a Manager invited the agent since. A
+-- public "Tuma kiungo kipya" resend (no staff member behind it, no attempt)
+-- keeps it: the account still opens from a self-confirm.
+create function public.self_confirm_invite_attempt(agent_id uuid)
+returns uuid
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+    select a.id
+    from public.agent_confirm_attempts a
+    join public.agent_events e on e.id = a.invite_event
+    where a.agent_id = self_confirm_invite_attempt.agent_id
+      and not exists (
+          select 1 from public.agent_events staff
+          where staff.agent_id = self_confirm_invite_attempt.agent_id and staff.kind = 'invite' and staff.result = 'started'
+            and staff.created_by is not null and staff.created_at > e.created_at
+      )
+    order by e.created_at desc, e.id desc
+    limit 1
+$$;
+
+revoke execute on function public.self_confirm_invite_attempt(uuid) from public, anon, authenticated, service_role;
+
+-- Whether the agent's invite came from self-confirm, as above (it read only
+-- the latest invite before, which a public resend replaced).
+create or replace function public.agent_invited_by_self_confirm(agent_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+    select public.self_confirm_invite_attempt(agent_invited_by_self_confirm.agent_id) is not null
+$$;
+
 -- For a login that just set its password from a self-confirm invite: the
 -- mobile on file to text and the email the account opened with, once. Null
 -- outcome fields when there is nothing to send: not an agent's login, not
@@ -30,14 +68,9 @@ begin
        or not public.agent_joined(claim_self_confirm_courtesy.login) then
         return jsonb_build_object('outcome', 'none');
     end if;
-    -- The attempt that sent the agent's latest invite.
+    -- The self-confirm attempt behind the agent's invite.
     select a.* into attempt from public.agent_confirm_attempts a
-    where a.agent_id = agent.id
-      and a.invite_event = (
-          select e.id from public.agent_events e
-          where e.agent_id = agent.id and e.kind = 'invite' and e.result = 'started'
-          order by e.created_at desc, e.id desc limit 1
-      )
+    where a.id = public.self_confirm_invite_attempt(agent.id)
     for update;
     if not found or attempt.courtesy_claimed_at is not null then
         return jsonb_build_object('outcome', 'none');

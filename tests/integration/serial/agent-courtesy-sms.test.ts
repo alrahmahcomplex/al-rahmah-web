@@ -89,6 +89,27 @@ describe("the courtesy SMS", () => {
     expect(sms.sent).toHaveLength(1)
   })
 
+  test("still goes after a public new-link resend, and not after a Manager's invite", async () => {
+    const later = (agentId: string, email: string, by: string | null) =>
+      asSystem((sql) =>
+        sql.query(
+          "insert into public.agent_events (agent_id, kind, result, email, created_by, created_at) values ($1, 'invite', 'started', $2, $3, clock_timestamp() + interval '1 second')",
+          [agentId, email, by],
+        ),
+      )
+    // "Tuma kiungo kipya": a later invite with no staff member behind it.
+    const resent = await joinedByEmail()
+    await later(resent.agent.id, resent.address, null)
+    const sms = keptSender()
+    expect(await sendCourtesySms(secretClient(), sms.send, resent.login, (opened) => courtesySms(opened, OFFICE))).toEqual({ ok: true, data: { sent: true } })
+
+    // A Manager's invite after the self-confirm one: the account opens from it.
+    const invited = await joinedByEmail()
+    await later(invited.agent.id, invited.address, MANAGER.id)
+    expect(await sendCourtesySms(secretClient(), sms.send, invited.login, (opened) => courtesySms(opened, OFFICE))).toEqual({ ok: true, data: { sent: false } })
+    expect(sms.sent).toHaveLength(1)
+  })
+
   test("goes to nobody after a mobile join on the record's own mobile", async () => {
     const created = await createAgent(await signedIn(MANAGER), { fullName: "Neema Simu Juma", phone: mobile(), whatsapp: "", email: "", code: "" })
     if (!created.ok || created.data.kind !== "created") throw new Error("could not create")

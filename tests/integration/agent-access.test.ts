@@ -35,7 +35,10 @@ describe("the agent access switch", () => {
     await inRolledBackTransaction(async (sql) => {
       const history = await sql.query<{ action: string; new_values: { enabled?: boolean }; actor_kind: string; scope: string }>(
         `select action, new_values, actor_kind, scope from public.audit_log
-         where table_name = 'agent_access_settings' order by id limit 2`,
+         where table_name = 'agent_access_settings'
+           -- Agent access's own changes; the self-confirm switch (#503) writes its own rows.
+           and (action = 'insert' or new_values ? 'enabled')
+         order by id limit 2`,
       )
       expect(history.rows).toEqual([
         { action: "insert", new_values: expect.objectContaining({ enabled: false, changed_at: null }), actor_kind: "system", scope: "staff_admin" },

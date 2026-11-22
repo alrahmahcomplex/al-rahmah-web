@@ -34,12 +34,17 @@ describe("WaitingCode", () => {
     expect(screen.getByText("Once the Marketing Office confirms your code, sign in with your mobile number and this password to see the students you referred.")).toBeInTheDocument()
   })
 
-  it("shows the finish mark only right after the password is set", () => {
-    const { container, rerender } = render(<WaitingCode language="sw" code="RAJ-124" link={LINK} officePhone="+255 700 000 001" justJoined />)
+  it("shows the finish mark only right after the password is set, and keeps it through the refresh that spends the greeting", () => {
+    const { container, rerender, unmount } = render(<WaitingCode language="sw" code="RAJ-124" link={LINK} officePhone="+255 700 000 001" justJoined />)
     const marked = container.querySelectorAll("svg").length
-    // The greeting is spent at once, so a refresh shows the page without it.
+    // The greeting is spent at once, so a later visit shows the page without it.
     expect(spend).toHaveBeenCalledTimes(1)
+    // Spending it refreshes the page with justJoined false: the mark stays until its drawing ends (Sol, #538).
     rerender(<WaitingCode language="sw" code="RAJ-124" link={LINK} officePhone="+255 700 000 001" justJoined={false} />)
-    expect(container.querySelectorAll("svg").length).toBeLessThan(marked)
+    expect(container.querySelectorAll("svg").length).toBe(marked)
+    unmount()
+    // A later visit, with the greeting spent: no mark.
+    const later = render(<WaitingCode language="sw" code="RAJ-124" link={LINK} officePhone="+255 700 000 001" justJoined={false} />)
+    expect(later.container.querySelectorAll("svg").length).toBeLessThan(marked)
   })
 })

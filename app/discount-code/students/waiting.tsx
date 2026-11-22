@@ -27,12 +27,15 @@ export function WaitingCode({ language, code, link, officePhone, justJoined }: {
   const copy = COPY[language]
   const [copied, setCopied] = useState<"yes" | "failed" | null>(null)
   const mark = useRef<HTMLSpanElement>(null)
+  // Latched for this visit: spending the greeting refreshes the page with
+  // justJoined false, and the mark must stay until its drawing ends (Sol, #538).
+  const [showMark] = useState(justJoined)
   useEffect(() => {
-    if (!justJoined) return
+    if (!showMark) return
     rainConfetti(mark.current)
     // Once: a refresh or a return shows the page without the mark (Greptile, #538).
     void spendWelcome().catch(() => {})
-  }, [justJoined])
+  }, [showMark])
   // A waiting code takes nothing off yet, so the message names no figure.
   const shareHref = link ? discountCodeShareLink(copy.shareText(code, link, null)) : null
 
@@ -48,7 +51,7 @@ export function WaitingCode({ language, code, link, officePhone, justJoined }: {
 
   return (
     <section className="flex flex-col items-center gap-4 text-center" data-waiting-code>
-      {justJoined && <FinishMark ref={mark} />}
+      {showMark && <FinishMark ref={mark} />}
       <h2 className="font-exo text-[26px] leading-[1.18] font-extrabold tracking-[-0.01em] text-balance text-blue-600 italic">{copy.doneTitle}</h2>
       <p
         data-own-code

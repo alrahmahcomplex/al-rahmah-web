@@ -17,8 +17,8 @@ import { sendSms, type SmsSender } from "./sms"
 // only its HMAC (OTP_HMAC_SECRET, server-only), bound to its attempt.
 
 export type StartOutcome =
-  | { kind: "ready"; attempt: string; mobileOnRecord: boolean; typedMatches: boolean; canText: boolean; emailOnRecord: boolean }
-  | { kind: "off" | "access_off" | "no_match" | "name_mismatch" | "weak_names" | "pending" | "joined" | "locked" | "setups_limited" }
+  | { kind: "ready"; attempt: string; mobileOnRecord: boolean; typedMatches: boolean; canText: boolean; emailOnRecord: boolean; emailOpen: boolean }
+  | { kind: "off" | "access_off" | "no_match" | "name_mismatch" | "weak_names" | "pending" | "joined" | "locked" | "setups_limited" | "email_closed" }
 
 export type SendOutcome =
   | { kind: "sent"; phone: string; onRecord: boolean; show: boolean }
@@ -80,10 +80,12 @@ export async function startSelfConfirm(
         typedMatches: row.typed_matches === true,
         canText: row.can_text === true,
         emailOnRecord: row.email_on_record === true,
+        // Closed after Remove this sign-in with its tick (#503).
+        emailOpen: row.email_open !== false,
       },
     }
   }
-  const known = ["off", "access_off", "no_match", "name_mismatch", "weak_names", "pending", "joined", "locked", "setups_limited"] as const
+  const known = ["off", "access_off", "no_match", "name_mismatch", "weak_names", "pending", "joined", "locked", "setups_limited", "email_closed"] as const
   const kind = known.find((k) => k === outcome)
   if (!kind) {
     console.error("Self-confirm: unexpected start answer", row)
@@ -162,7 +164,7 @@ export async function checkConfirmationNumber(
 
 export type InviteOutcome =
   | { kind: "sent"; email: string; stored: boolean }
-  | { kind: "expired" | "off" | "code_limited" | "no_email" | "email_unusable" | "busy" | "not_sent" }
+  | { kind: "expired" | "off" | "code_limited" | "no_email" | "email_unusable" | "busy" | "email_closed" | "not_sent" }
 
 const INVITE_RESULT = { "rate-limited": "rate_limited", "smtp-error": "smtp_error", "rejected-address": "rejected_address", "other-error": "other_error" } as const
 
@@ -187,7 +189,7 @@ export async function sendSelfConfirmInvite(
   if (!prepared.ok) return prepared
   const row = prepared.data ?? {}
   if (row.outcome !== "ready" || typeof row.email !== "string" || typeof row.event !== "string") {
-    const kind = (["expired", "off", "code_limited", "no_email", "email_unusable", "busy"] as const).find((k) => k === row.outcome)
+    const kind = (["expired", "off", "code_limited", "no_email", "email_unusable", "busy", "email_closed"] as const).find((k) => k === row.outcome)
     if (!kind) {
       console.error("Self-confirm: unexpected invite answer", row)
       return { ok: false, error: "unavailable" }

@@ -118,6 +118,7 @@ export async function sendSelfConfirmEmail(attempt: string, email: string): Prom
       return { status: "email-unusable" }
     case "not_sent":
     case "busy":
+    case "email_closed":
       return { status: "unavailable" }
     default:
       return { status: "expired" }

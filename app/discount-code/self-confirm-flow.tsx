@@ -105,7 +105,8 @@ export function SelfConfirmFlow({ language, started, onChangeEmail }: { language
           headingRef={heading}
           pending={pending}
           onResend={sendNumber}
-          onEmail={emailInstead}
+          // Email is closed on the code after Remove this sign-in with its tick.
+          onEmail={started.emailOpen ? emailInstead : null}
           onRight={(phone) => setStep({ at: "password", phone })}
           onMobileUsed={() => setStep({ at: "mobile-used" })}
         />
@@ -131,9 +132,11 @@ export function SelfConfirmFlow({ language, started, onChangeEmail }: { language
           <NoticeBox role="alert" tone="info">
             {copy.mobileUsed}
           </NoticeBox>
-          <ContinuePill type="button" pending={pending} disabled={pending} onClick={emailInstead}>
-            {copy.useEmail}
-          </ContinuePill>
+          {started.emailOpen && (
+            <ContinuePill type="button" pending={pending} disabled={pending} onClick={emailInstead}>
+              {copy.useEmail}
+            </ContinuePill>
+          )}
         </>
       )}
       {step.at === "password" && <Password copy={copy} language={language} attempt={started.attempt} phone={step.phone} headingRef={heading} />}
@@ -163,10 +166,11 @@ function Choose({
   onMobile: () => void
   onEmail: () => void
 }) {
-  const [choice, setChoice] = useState<string | null>(started.canText ? null : "email")
+  // Email is closed on the code after Remove this sign-in with its tick.
+  const [choice, setChoice] = useState<string | null>(started.canText && started.emailOpen ? null : started.canText ? "mobile" : started.emailOpen ? "email" : null)
   const options = [
     ...(started.canText ? [{ value: "mobile", label: copy.byMobile, description: copy.byMobileHint }] : []),
-    { value: "email", label: copy.byEmail, description: copy.byEmailHint },
+    ...(started.emailOpen ? [{ value: "email", label: copy.byEmail, description: copy.byEmailHint }] : []),
   ]
   return (
     <>
@@ -200,7 +204,7 @@ function Sms({
   headingRef: React.RefObject<HTMLHeadingElement | null>
   pending: boolean
   onResend: () => void
-  onEmail: () => void
+  onEmail: (() => void) | null
   onRight: (phone: string) => void
   onMobileUsed: () => void
 }) {
@@ -274,7 +278,7 @@ function Sms({
               </button>
             </>
           )}
-          {note.status === "locked" && (
+          {note.status === "locked" && onEmail && (
             <>
               <br />
               <button type="button" className="font-semibold text-blue-700 underline underline-offset-2" onClick={onEmail}>
@@ -307,10 +311,14 @@ function Sms({
         {noSms && (
           <div className="flex w-full flex-col gap-3 text-left">
             <p className="text-sm text-slate-600">{copy.noSmsHint}</p>
-            <p className="text-sm text-slate-600">{copy.orEmail}</p>
-            <ContinuePill type="button" pending={pending} disabled={pending} onClick={onEmail}>
-              {copy.useEmail}
-            </ContinuePill>
+            {onEmail && (
+              <>
+                <p className="text-sm text-slate-600">{copy.orEmail}</p>
+                <ContinuePill type="button" pending={pending} disabled={pending} onClick={onEmail}>
+                  {copy.useEmail}
+                </ContinuePill>
+              </>
+            )}
           </div>
         )}
       </div>

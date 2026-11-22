@@ -194,6 +194,30 @@ describe("what each row says", () => {
     expect(activityView({ ...row, differingFields: ["phone"] }, as(OFFICER)).details).toBe("Sent the form again.")
   })
 
+  it("a removed sign-in reads as v58 wrote it, the mobile masked, an email as it is (#503)", () => {
+    const row: ActivityRow = {
+      kind: "sign_in_removed",
+      id: "r1",
+      at: AT,
+      agentId: "a1",
+      fullName: "NEEMA SIMU JUMA",
+      code: "ABK-014",
+      signedInWith: "+255712345123",
+      // 10:42 in Tanzania on 21 November.
+      joinedAt: "2026-11-21T07:42:00Z",
+      removedBy: "Rehema Mussa",
+    }
+    expect(activityView(row, as(OFFICER))).toMatchObject({
+      task: "Sign-in removed",
+      who: "NEEMA SIMU JUMA",
+      about: "ABK-014",
+      details: "Rehema M. removed the sign-in of ABK-014 (07•• ••• 123), joined 21 Nov 10:42. Signed out everywhere.",
+      action: null,
+      recordedBy: "Rehema Mussa",
+    })
+    expect(activityView({ ...row, signedInWith: "amina.k@mfano.com" }, as(OFFICER)).details).toContain("(amina.k@mfano.com)")
+  })
+
   it("a paid school fee gives the amount and type, and no button", () => {
     const row: ActivityRow = { kind: "fee_paid", id: "p1", at: AT, ...LEAD, paymentType: "first_instalment", amount: 600000, recordedBy: "Example Accountant" }
     expect(activityView(row, as(MANAGER))).toMatchObject({ details: "TZS 600,000, first instalment.", action: null, recordedBy: "Example Accountant" })

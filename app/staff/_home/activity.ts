@@ -47,6 +47,19 @@ const dateOnly = (day: string) => new Date(`${day}T00:00:00Z`)
 export const shortDate = (day: string) => SHORT.format(dateOnly(day))
 /** "6 November". */
 export const longDate = (day: string) => LONG.format(dateOnly(day))
+/** "Rehema Mussa" → "Rehema M.", as v58's Activity log line names staff. */
+export function shortStaffName(name: string): string {
+  const words = name.trim().split(/\s+/).filter(Boolean)
+  return words.length > 1 ? `${words[0]} ${words[words.length - 1][0]}.` : (words[0] ?? name)
+}
+
+/** A sign-in as the Activity log shows it: a mobile masked (07•• ••• 123), an email as it is. */
+export function maskSignIn(signedInWith: string): string {
+  if (!/^\+255\d{9}$/.test(signedInWith)) return signedInWith
+  const local = `0${signedInWith.slice(4)}`
+  return `${local.slice(0, 2)}•• ••• ${local.slice(-3)}`
+}
+
 /** The Tanzania calendar day of an instant, YYYY-MM-DD. */
 export const tanzaniaDayOf = (at: string) => DAY_OF.format(new Date(at))
 
@@ -224,6 +237,22 @@ export function activityView(row: ActivityRow, context: ActivityContext): Activi
         note: null,
       }
     }
+    case "sign_in_removed":
+      // v58 R2's line, the mobile masked as the self-confirm page shows it.
+      return {
+        key: `sign_in_removed:${row.id}`,
+        time: timeOf(row.at, today),
+        icon: "agents",
+        task: "Sign-in removed",
+        who: row.fullName,
+        about: row.code,
+        details: `${row.removedBy ? shortStaffName(row.removedBy) : "Someone"} removed the sign-in of ${row.code} (${maskSignIn(row.signedInWith)})${
+          row.joinedAt ? `, joined ${shortDate(tanzaniaDayOf(row.joinedAt))} ${CLOCK.format(new Date(row.joinedAt))}` : ""
+        }. Signed out everywhere.`,
+        action: null,
+        recordedBy: row.removedBy,
+        note: null,
+      }
     case "class_full":
       return {
         key: `class_full:${row.id}`,

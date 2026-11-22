@@ -2,9 +2,13 @@
 
 import { cookies } from "next/headers"
 import { redirect } from "next/navigation"
+import { after } from "next/server"
 
 import { acceptAgentInvite, type AcceptAgentInviteError } from "@/lib/services/agent-auth"
-import { joinedBySelfConfirm } from "@/lib/services/agent-self-confirm"
+import { localOfficePhone } from "@/lib/office"
+import { courtesySms, joinedBySelfConfirm, sendCourtesySms } from "@/lib/services/agent-self-confirm"
+import { smsSender } from "@/lib/services/sms"
+import { smsClient } from "@/utils/supabase/sms"
 import { verifiedUserId as sessionUserId } from "@/lib/services/auth-session"
 import { createClient } from "@/utils/supabase/server"
 
@@ -51,8 +55,19 @@ export async function setAgentPassword(_previous: SetAgentPasswordState, formDat
   // account. With no verified session there is nothing to greet.
   const userId = await sessionUserId(supabase)
   if (userId) {
+    const selfConfirmed = await joinedBySelfConfirm(supabase)
+    // The courtesy SMS (decision 78) to the mobile on file, after the answer.
+    if (selfConfirmed) {
+      const secret = smsClient()
+      if (secret) {
+        after(async () => {
+          const sent = await sendCourtesySms(secret, smsSender(), userId, (openedWith) => courtesySms(openedWith, localOfficePhone()))
+          if (!sent.ok) console.error(`Courtesy SMS: not sent (${sent.error})`)
+        })
+      }
+    }
     // ".self": an email self-confirm, whose welcome says the account is ready (O-N17).
-    jar.set(WELCOME_COOKIE, (await joinedBySelfConfirm(supabase)) ? `${userId}.self` : userId, {
+    jar.set(WELCOME_COOKIE, selfConfirmed ? `${userId}.self` : userId, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",

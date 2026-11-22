@@ -4,7 +4,7 @@
 -- with agents.approve remove a joined agent's sign-in. In one step, on the
 -- agent's row lock: the Auth user is deleted (its sessions and refresh tokens
 -- go with it), the agent is no longer linked or joined, open self-confirm
--- attempts are void, and one history row is written, which the Activity log
+-- attempts are void, and one history row is written, which the Audit page
 -- shows. The code, names and students stay.
 --
 -- An access token issued before the removal stays valid until it expires,
@@ -56,7 +56,7 @@ create trigger refuse_truncate
     execute function public.refuse_delete();
 
 -- Audit (ADR 4): lead scope with no lead id, as for the other agent tables.
--- The insert is the removal's Activity log line.
+-- The insert is the removal's Audit line.
 insert into public.audit_scopes (table_name, scope, lead_id_column) values
     ('public.agent_sign_in_removals', 'lead', null);
 
@@ -95,7 +95,7 @@ revoke execute on function public.agent_email_self_confirm_closed(uuid) from pub
 -- ---------------------------------------------------------------------------
 
 create function public.agent_sign_in(agent_id uuid)
-returns table (signed_in_with text, joined_at timestamptz)
+returns table (login uuid, signed_in_with text, joined_at timestamptz)
 language plpgsql
 stable
 security definer
@@ -106,7 +106,7 @@ begin
         raise exception 'not_permitted';
     end if;
     return query
-    select coalesce(nullif(u.email, ''), '+' || u.phone)::text,
+    select u.id, coalesce(nullif(u.email, ''), '+' || u.phone)::text,
            coalesce(u.phone_confirmed_at, u.email_confirmed_at, u.created_at)
     from public.marketing_agents m
     join auth.users u on u.id = m.user_id
@@ -121,10 +121,12 @@ grant execute on function public.agent_sign_in(uuid) to authenticated;
 -- The removal
 -- ---------------------------------------------------------------------------
 
--- Refuses not_permitted, invalid, not_found, retired, and not_joined (no
--- joined sign-in to remove: already removed, or never joined). Returns what
--- the removed login signed in with.
-create function public.remove_agent_sign_in(agent_id uuid, close_email boolean)
+-- Refuses not_permitted, invalid, not_found, retired, not_joined (no joined
+-- sign-in to remove: already removed, or never joined) and changed: the
+-- agent's login is no longer `login`, the one the sheet showed (someone
+-- removed it and the real agent joined since). Returns what the removed
+-- login signed in with.
+create function public.remove_agent_sign_in(agent_id uuid, close_email boolean, login uuid)
 returns jsonb
 language plpgsql
 security definer
@@ -132,15 +134,15 @@ set search_path = ''
 as $$
 declare
     agent public.marketing_agents;
-    login auth.users;
+    removed auth.users;
     actor record;
     shown text;
 begin
     if auth.role() is distinct from 'authenticated' or not public.has_permission('agents.approve') then
         raise exception 'not_permitted';
     end if;
-    if remove_agent_sign_in.close_email is null then
-        raise exception 'invalid' using detail = jsonb_build_object('field', 'close_email')::text;
+    if remove_agent_sign_in.close_email is null or remove_agent_sign_in.login is null then
+        raise exception 'invalid' using detail = jsonb_build_object('field', case when remove_agent_sign_in.close_email is null then 'close_email' else 'login' end)::text;
     end if;
     select * into actor from public.audit_actor();
     if actor.staff_id is null then
@@ -158,18 +160,27 @@ begin
     if agent.user_id is null then
         raise exception 'not_joined';
     end if;
-    select * into login from auth.users u where u.id = agent.user_id for update;
+    if agent.user_id <> remove_agent_sign_in.login then
+        raise exception 'changed';
+    end if;
+    select * into removed from auth.users u where u.id = agent.user_id for update;
     if not found or not public.agent_joined(agent.user_id) then
         raise exception 'not_joined';
     end if;
-    shown := coalesce(nullif(login.email, ''), '+' || login.phone);
+    shown := coalesce(nullif(removed.email, ''), '+' || removed.phone);
 
     insert into public.agent_sign_in_removals (agent_id, signed_in_with, joined_at, close_email, removed_by)
-    values (agent.id, shown, coalesce(login.phone_confirmed_at, login.email_confirmed_at, login.created_at),
+    values (agent.id, shown, coalesce(removed.phone_confirmed_at, removed.email_confirmed_at, removed.created_at),
             remove_agent_sign_in.close_email, actor.staff_id);
-    update public.marketing_agents m set user_id = null where m.id = agent.id;
+    -- The record forgets an email the removed login signed in with, so the
+    -- public "Tuma kiungo kipya" can't invite that address back; the row
+    -- reads "No email", and the Manager enters the real agent's email.
+    update public.marketing_agents m
+    set user_id = null,
+        email = case when removed.email is not null and m.email = lower(removed.email) then null else m.email end
+    where m.id = agent.id;
     -- Its sessions and refresh tokens go with it.
-    delete from auth.users u where u.id = login.id;
+    delete from auth.users u where u.id = removed.id;
     update public.agent_confirm_attempts a set state = 'void'
     where a.agent_id = agent.id and a.state in ('matched', 'sent', 'proven');
 
@@ -177,8 +188,8 @@ begin
 end;
 $$;
 
-revoke execute on function public.remove_agent_sign_in(uuid, boolean) from public, anon;
-grant execute on function public.remove_agent_sign_in(uuid, boolean) to authenticated;
+revoke execute on function public.remove_agent_sign_in(uuid, boolean, uuid) from public, anon;
+grant execute on function public.remove_agent_sign_in(uuid, boolean, uuid) to authenticated;
 
 -- ---------------------------------------------------------------------------
 -- The Agents screen's line under a removed agent (R3)

@@ -230,9 +230,9 @@ export const FUNCTIONS: Record<string, FunctionEntry> = {
     },
     agent: { refused: "not_permitted" },
   },
-  "public.remove_agent_sign_in(agent_id uuid, close_email boolean)": {
+  "public.remove_agent_sign_in(agent_id uuid, close_email boolean, login uuid)": {
     roles: ["authenticated"],
-    args: { agent_id: "'a4a4a4a4-0000-4000-8000-000000000003'", close_email: "true" },
+    args: { agent_id: "'a4a4a4a4-0000-4000-8000-000000000003'", close_email: "true", login: "'77777777-7777-4777-8777-777777777777'" },
     agent: { refused: "not_permitted" },
   },
   "public.change_marketing_agent_status(agent_id uuid, kind text, reason text)": {

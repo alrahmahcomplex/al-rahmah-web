@@ -39,11 +39,13 @@ export function RemoveSignIn({ agent }: { agent: Agent }) {
   }
 
   function remove() {
+    if (signIn.status !== "ready") return
+    const login = signIn.login
     setRefusal(null)
     startTransition(async () => {
       let outcome
       try {
-        outcome = await removeSignIn(agent.id, closeEmail)
+        outcome = await removeSignIn(agent.id, closeEmail, login)
       } catch {
         outcome = { status: "refused" as const, message: "We lost the answer, so the sign-in may or may not have been removed. Reload the page to check." }
       }

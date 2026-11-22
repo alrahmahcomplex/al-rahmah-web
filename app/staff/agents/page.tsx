@@ -394,8 +394,9 @@ function Results({
   const rows: AgentRow[] = agents.map((agent) => {
     const invite = invites?.get(agent.id)
     const removed = removals?.get(agent.id)
-    // R3: "Not joined · sign-in removed 22 Nov 2026 by …", over the invite's own line.
-    const lines = [removed ? removedLine(removed) : null, invite ? inviteLine(invite) : null].filter(Boolean).join(" · ")
+    // R3: "Not joined · sign-in removed 22 Nov 2026 by …", under the status,
+    // where it shows whatever the account badge (a switched-off agent has none).
+    const statusLines = [statusChangeLine(agent), removed ? removedLine(removed) : null].filter(Boolean).join(". ")
     return {
       id: agent.id,
       fullName: agent.fullName,
@@ -409,8 +410,8 @@ function Results({
       approved: agent.status === "Approved",
       retired: agent.retiredAt !== null,
       switchedOff: agent.switchedOffAt !== null,
-      statusLine: statusChangeLine(agent) || null,
-      invite: invite ? { state: invite.state, line: lines || null } : null,
+      statusLine: statusLines || null,
+      invite: invite ? { state: invite.state, line: inviteLine(invite) } : null,
       discount: discountAgent(agent),
       discountAmount: agent.discountAmount,
       onStandard: agent.interviewDiscount === null,

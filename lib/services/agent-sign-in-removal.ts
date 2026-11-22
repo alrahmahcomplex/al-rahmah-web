@@ -7,7 +7,7 @@ import type { Result } from "./result"
 // database checks it and does the whole removal in one step
 // (20270126120100_agent_remove_sign_in.sql).
 
-export type SignInRemovalError = "forbidden" | "not-found" | "retired" | "not-joined" | "unavailable"
+export type SignInRemovalError = "forbidden" | "not-found" | "retired" | "not-joined" | "changed" | "unavailable"
 
 function removalError(error: { message: string; code?: string }, what: string): SignInRemovalError {
   // 42501: the function isn't granted to the caller, as for someone signed out.
@@ -16,19 +16,21 @@ function removalError(error: { message: string; code?: string }, what: string): 
   if (error.message === "not_found" || error.code === "22P02") return "not-found"
   if (error.message === "retired") return "retired"
   if (error.message === "not_joined") return "not-joined"
+  if (error.message === "changed") return "changed"
   console.error(what, error)
   return "unavailable"
 }
 
-export type AgentSignIn = { signedInWith: string; joinedAt: string | null }
+// `login`: the Auth user the sheet shows, which the removal must still find.
+export type AgentSignIn = { login: string; signedInWith: string; joinedAt: string | null }
 
 /** What the joined agent signs in with, and when they joined, for the sheet. */
 export async function getAgentSignIn(supabase: SupabaseClient, agentId: string): Promise<Result<AgentSignIn, SignInRemovalError>> {
   const { data, error } = await supabase.rpc("agent_sign_in", { agent_id: agentId })
   if (error) return { ok: false, error: removalError(error, "Could not read an agent's sign-in") }
-  const row = (data as { signed_in_with: string; joined_at: string | null }[] | null)?.[0]
+  const row = (data as { login: string; signed_in_with: string; joined_at: string | null }[] | null)?.[0]
   if (!row) return { ok: false, error: "not-joined" }
-  return { ok: true, data: { signedInWith: row.signed_in_with, joinedAt: row.joined_at } }
+  return { ok: true, data: { login: row.login, signedInWith: row.signed_in_with, joinedAt: row.joined_at } }
 }
 
 /**
@@ -41,8 +43,9 @@ export async function removeAgentSignIn(
   supabase: SupabaseClient,
   agentId: string,
   closeEmail: boolean,
+  login: string,
 ): Promise<Result<{ signedInWith: string }, SignInRemovalError | "uncertain">> {
-  const { data, error } = await supabase.rpc("remove_agent_sign_in", { agent_id: agentId, close_email: closeEmail })
+  const { data, error } = await supabase.rpc("remove_agent_sign_in", { agent_id: agentId, close_email: closeEmail, login })
   if (error) {
     const refused = removalError(error, "Could not remove an agent's sign-in")
     return { ok: false, error: refused === "unavailable" ? "uncertain" : refused }

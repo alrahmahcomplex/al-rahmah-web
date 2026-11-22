@@ -17,7 +17,7 @@ const AGENT = { id: "6f1c2c1e-1b2d-4c3e-9f4a-5b6c7d8e9f01", fullName: "Neema Sim
 
 beforeEach(() => {
   Object.values(actions).forEach((fn) => fn.mockReset())
-  actions.readAgentSignIn.mockResolvedValue({ status: "ready", signedInWith: "+255712345123", joinedAt: "2026-11-21T07:42:00Z" })
+  actions.readAgentSignIn.mockResolvedValue({ status: "ready", login: "9f1c2c1e-1b2d-4c3e-9f4a-5b6c7d8e9f02", signedInWith: "+255712345123", joinedAt: "2026-11-21T07:42:00Z" })
 })
 
 async function openSheet() {
@@ -43,7 +43,7 @@ describe("RemoveSignIn", () => {
     await userEvent.click(screen.getByRole("checkbox", { name: /Close email self-confirm on this code/ }))
     const buttons = screen.getAllByRole("button", { name: "Remove this sign-in" })
     await userEvent.click(buttons[buttons.length - 1])
-    expect(actions.removeSignIn).toHaveBeenCalledWith(AGENT.id, false)
+    expect(actions.removeSignIn).toHaveBeenCalledWith(AGENT.id, false, "9f1c2c1e-1b2d-4c3e-9f4a-5b6c7d8e9f02")
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "Remove this sign-in?" })).toBeNull())
   })
 
@@ -54,6 +54,6 @@ describe("RemoveSignIn", () => {
     const buttons = screen.getAllByRole("button", { name: "Remove this sign-in" })
     await userEvent.click(buttons[buttons.length - 1])
     expect(await screen.findByRole("alert")).toHaveTextContent("This agent has no sign-in to remove.")
-    expect(actions.removeSignIn).toHaveBeenCalledWith(AGENT.id, true)
+    expect(actions.removeSignIn).toHaveBeenCalledWith(AGENT.id, true, "9f1c2c1e-1b2d-4c3e-9f4a-5b6c7d8e9f02")
   })
 })

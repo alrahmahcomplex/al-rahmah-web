@@ -68,6 +68,8 @@ export function SelfConfirmFlow({ language, started, onChangeEmail }: { language
       if (sent.status === "sent") return setStep({ at: "sms", masked: sent.masked, onRecord: sent.onRecord, sentAt: Date.now() })
       if (sent.status === "no-sms") {
         // No SMS can go to this mobile now: the choice again, with email only.
+        // With email closed on the code too, the mobile stays, to try later.
+        if (!started.emailOpen) return setProblem(copy.unavailable)
         setSmsOff(true)
         setStep({ at: "choose" })
         setProblem(copy.unavailable)

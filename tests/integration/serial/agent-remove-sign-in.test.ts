@@ -6,6 +6,9 @@ vi.mock("server-only", () => ({}))
 
 import { getAgentSignIn, getSignInRemovals, removeAgentSignIn } from "@/lib/services/agent-sign-in-removal"
 import { checkConfirmationNumber, createPhoneLogin, sendConfirmationNumber, sendSelfConfirmInvite, startSelfConfirm } from "@/lib/services/agent-self-confirm"
+import { confirmationOf } from "@/lib/agent-import"
+import { toCsv } from "@/lib/import"
+import { checkAgentImportFile, confirmAgentImport } from "@/lib/services/agent-import"
 import { createAgent } from "@/lib/services/marketing-agents"
 import type { SmsSender } from "@/lib/services/sms"
 
@@ -177,6 +180,32 @@ describe("Remove this sign-in", () => {
       ok: true,
       data: { kind: "sent" },
     })
+  })
+
+  test("with the tick, a record with no mobile can't be retaken with a typed mobile either", async () => {
+    // An imported record with no mobile, joined with a typed mobile.
+    const letter = () => String.fromCharCode(65 + randomInt(0, 26))
+    const code = `R${letter()}${letter()}-${randomInt(100, 1000)}`
+    const manager = await signedIn(MANAGER)
+    const rows = toCsv([["Code", "Full name", "Mobile", "WhatsApp", "Email"], [code, "Neema Simu Juma", "", "", ""]])
+    const checked = await checkAgentImportFile(manager, `remove-${randomUUID().slice(0, 8)}.csv`, new TextEncoder().encode(rows))
+    if (!checked.ok) throw new Error("import check failed")
+    const done = await confirmAgentImport(manager, confirmationOf(checked.data))
+    if (!done.ok || done.data.kind !== "imported") throw new Error("import failed")
+    const agentId = await asSystem(async (sql) => (await sql.query<{ id: string }>("select id from public.marketing_agents where code = $1", [code])).rows[0].id)
+    const typed = `+2557${String(randomInt(10_000_000, 100_000_000))}`
+    const browser = randomUUID()
+    const started = await startSelfConfirm(secretClient(), { code, names: "Neema Simu Juma", phone: typed, browser, ip: null })
+    if (!started.ok || started.data.kind !== "ready") throw new Error("not ready")
+    const sms = keptSender()
+    await sendConfirmationNumber(secretClient(), sms.send, { attempt: started.data.attempt, browser }, words, ENV)
+    await checkConfirmationNumber(secretClient(), { attempt: started.data.attempt, browser, digits: sms.lastDigits() }, ENV)
+    const login = await createPhoneLogin(secretClient(), { attempt: started.data.attempt, browser, phone: typed, password: PASSWORD }, 6)
+    if (!login.ok) throw new Error("no login")
+
+    expect((await removeAgentSignIn(manager, agentId, true, login.data.userId)).ok).toBe(true)
+    const again = await startSelfConfirm(secretClient(), { code, names: "Neema Simu Juma", phone: mobile(), browser: randomUUID(), ip: null })
+    expect(again).toEqual({ ok: true, data: { kind: "email_closed" } })
   })
 
   test("without the tick, email self-confirm stays open", async () => {

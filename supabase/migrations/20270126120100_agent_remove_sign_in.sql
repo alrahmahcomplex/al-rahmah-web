@@ -237,6 +237,7 @@ declare
     agent record;
     phone text := nullif(public.normalize_phone(start_agent_self_confirm.typed_phone), '');
     attempt_id uuid;
+    closed boolean;
 begin
     if not public.agent_self_confirm_on() then
         return jsonb_build_object('outcome', case when (select a.enabled from public.agent_access() a) then 'off' else 'access_off' end);
@@ -273,11 +274,12 @@ begin
         return jsonb_build_object('outcome', 'name_mismatch');
     end if;
 
-    -- After Remove this sign-in with its tick, email self-confirm is closed
-    -- on this code until the real agent joins. With no SMS possible either,
-    -- today's claim path takes it, where the Manager decides.
-    if public.agent_email_self_confirm_closed(agent.id)
-       and not coalesce(coalesce(agent.phone, phone) ~ '^\+255[67][0-9]{8}$', false) then
+    -- After Remove this sign-in with its tick, only the mobile on record
+    -- proves the person until the real agent joins: no email, and no typed
+    -- mobile (the person removed may have joined with one). With no mobile on
+    -- record, today's claim path takes it, where the Manager decides.
+    closed := public.agent_email_self_confirm_closed(agent.id);
+    if closed and not coalesce(agent.phone ~ '^\+255[67][0-9]{8}$', false) then
         return jsonb_build_object('outcome', 'email_closed');
     end if;
 
@@ -287,7 +289,7 @@ begin
 
     insert into public.agent_confirm_attempts (agent_id, browser_digest, ip_digest, typed_phone, shown_mobile)
     values (agent.id, start_agent_self_confirm.browser, start_agent_self_confirm.ip,
-            case when agent.phone is null then phone end, phone)
+            case when agent.phone is null and not closed then phone end, phone)
     returning id into attempt_id;
 
     return jsonb_build_object(
@@ -296,9 +298,9 @@ begin
         'mobile_on_record', agent.phone is not null,
         -- Only when the typed mobile is the one on file may the page show it.
         'typed_matches', agent.phone is not null and phone is not distinct from agent.phone,
-        'can_text', coalesce(agent.phone, phone) ~ '^\+255[67][0-9]{8}$',
+        'can_text', case when closed then agent.phone else coalesce(agent.phone, phone) end ~ '^\+255[67][0-9]{8}$',
         'email_on_record', agent.email is not null,
-        'email_open', not public.agent_email_self_confirm_closed(agent.id)
+        'email_open', not closed
     );
 end;
 $$;

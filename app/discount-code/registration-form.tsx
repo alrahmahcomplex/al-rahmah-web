@@ -274,6 +274,8 @@ export function DiscountCodeForm({
     window.clearTimeout(tileTimer.current)
     clearDraft()
     setDraft(EMPTY)
+    // A new form asks in the page's own order again (Sol, #538).
+    setEmailNeeded(false)
     setWhatsappOn(false)
     setCodeAnswer(null)
     setAnswered(new Set())

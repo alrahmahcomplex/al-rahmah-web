@@ -104,13 +104,16 @@ describe("a new agent's start", () => {
     expect(attempt).toEqual({ new_agent: true, state: "matched" })
   })
 
-  test("the same person sending again goes on with their Pending record; anyone else's mobile has a code already", async () => {
+  test("the same person sending again from the same browser goes on with their Pending record; any other browser or name finds the mobile has a code", async () => {
     const fullName = names()
     const phone = mobile()
-    const first = await startNew(fullName, phone, randomUUID())
-    const again = await startNew(fullName, phone, randomUUID())
+    const browser = randomUUID()
+    const first = await startNew(fullName, phone, browser)
+    const again = await startNew(fullName, phone, browser)
     expect(again.kind === "ready" && first.kind === "ready" && again.code === first.code).toBe(true)
-    expect(await startNew(names(), phone, randomUUID())).toEqual({ kind: "code_needed" })
+    // A name and a mobile alone never adopt the record from another browser (Sol, #538).
+    expect(await startNew(fullName, phone, randomUUID())).toEqual({ kind: "code_needed" })
+    expect(await startNew(names(), phone, browser)).toEqual({ kind: "code_needed" })
 
     const onRecord = await createAgent(await signedIn(MANAGER), { fullName: names(), phone: mobile(), whatsapp: "", email: "", code: "" })
     if (!onRecord.ok || onRecord.data.kind !== "created") throw new Error("could not create")
@@ -203,6 +206,19 @@ describe("a new agent by email", () => {
     // The attempt is done: no number can go out for it any more.
     const sms = keptSender()
     expect(await sendConfirmationNumber(secretClient(), sms.send, { attempt: started.attempt, browser }, words, ENV)).toEqual({ ok: true, data: { kind: "expired" } })
+  })
+
+  test("never replaces an email the office put on the record while the attempt was open", async () => {
+    const browser = randomUUID()
+    const started = await startNew(names(), mobile(), browser)
+    if (started.kind !== "ready") throw new Error("not ready")
+    const office = `office-${randomUUID().slice(0, 8)}@example.test`
+    await asSystem((sql) => sql.query("update public.marketing_agents set email = $2 where code = $1", [started.code, office]))
+    expect(await setNewAgentEmail(secretClient(), { attempt: started.attempt, browser, email: `other-${randomUUID().slice(0, 8)}@example.test` })).toEqual({
+      ok: true,
+      data: { kind: "email_unusable" },
+    })
+    expect(await record(started.code)).toMatchObject({ email: office })
   })
 
   test("refuses an email someone else uses, or none, and only from the browser that started", async () => {

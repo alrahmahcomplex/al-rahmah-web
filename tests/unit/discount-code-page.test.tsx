@@ -934,6 +934,27 @@ describe("self-confirm's order", { timeout: 30_000 }, () => {
     expect(again.get("flow")).toBe("")
   })
 
+  it("Start over after an email-needed answer opens a form in self-confirm's order again", async () => {
+    stubs.selfConfirm = true
+    stubs.submit.mockResolvedValueOnce({ status: "email-needed" })
+    const user = userEvent.setup()
+    render(await DiscountCodePage())
+    await toReview(user, "yes")
+    await send(user, "sw", true)
+    await screen.findByLabelText(WORDS.sw.email)
+
+    await user.click(screen.getByRole("button", { name: "Menyu" }))
+    await user.click(screen.getByRole("button", { name: "Futa fomu yote" }))
+    await user.click(screen.getByRole("button", { name: "Ndiyo, futa" }))
+    await waitFor(() => expect(box("sw", "first")).toHaveValue(""))
+    // A fresh new agent: no email question before the send again, so the choice follows.
+    await toReview(user, "no")
+    stubs.submit.mockResolvedValueOnce({ status: "unavailable" })
+    await send(user)
+    const [, sent] = stubs.submit.mock.calls[1] as [unknown, FormData]
+    expect(sent.get("flow")).toBe("self-confirm")
+  })
+
   it("keeps today's order, with the email question, while self-confirm is off", async () => {
     const user = userEvent.setup()
     render(await DiscountCodePage())

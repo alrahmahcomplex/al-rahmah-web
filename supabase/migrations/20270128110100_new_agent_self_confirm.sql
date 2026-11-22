@@ -92,10 +92,16 @@ begin
     select * into by_phone from public.marketing_agents a where a.phone = draft.agent_phone and a.retired_at is null;
 
     if by_phone.id is not null then
-        -- The same person sending again before they finished: their Pending
-        -- record goes on. Anyone else's mobile has a code already.
+        -- The same person sending again from the same browser before they
+        -- finished: the Pending record this browser opened goes on. A name and
+        -- a mobile alone never adopt a record (Sol, #538): from any other
+        -- browser, the mobile has a code already.
         if by_phone.status = 'Pending' and by_phone.switched_off_at is null and by_phone.full_name = draft.agent_name
-           and by_phone.email is null and (by_phone.user_id is null or not public.agent_joined(by_phone.user_id)) then
+           and by_phone.email is null and (by_phone.user_id is null or not public.agent_joined(by_phone.user_id))
+           and exists (
+               select 1 from public.agent_confirm_attempts a
+               where a.agent_id = by_phone.id and a.new_agent and a.browser_digest = start_new_agent_self_confirm.browser
+           ) then
             agent := by_phone;
         elsif by_phone.user_id is not null and public.agent_joined(by_phone.user_id) then
             return jsonb_build_object('outcome', 'joined');
@@ -369,7 +375,12 @@ begin
     if address is null or address !~ '^[^@\s]+@[^@\s]+\.[^@\s]+$' or char_length(address) > 254 then
         return jsonb_build_object('outcome', 'no_email');
     end if;
-    if agent.email is distinct from address then
+    -- An email already on the record (the office may have added one while
+    -- the attempt was open) is never replaced from the public page (Sol, #538).
+    if agent.email is not null and agent.email <> address then
+        return jsonb_build_object('outcome', 'email_unusable');
+    end if;
+    if agent.email is null then
         perform public.lock_login_email(address);
         if public.agent_email_taken(address) or exists (select 1 from auth.users u where lower(u.email) = address) then
             return jsonb_build_object('outcome', 'email_unusable');

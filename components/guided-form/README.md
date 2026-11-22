@@ -44,7 +44,7 @@ The language control posts to `setLanguage`, so the page re-renders through the 
 ```
 
 - `done` fills chips from the left; `current` (default `done` in the active group) draws the faint chip. Pass `current` when the parent reopens an earlier step.
-- A group whose `done` reaches `steps` merges, gets the green tick and, 820 ms later, the number cheers (pop, shake, bubbles, deep orange). A group already full on first paint shows the orange number without the cheer.
+- A group whose `done` reaches `steps` merges, gets the outline circle with a faint green body, which draws itself before its tick (decision 88), and, 820 ms later, the number cheers (pop, shake, bubbles, deep orange). A group already full on first paint shows the orange number without the cheer.
 - `activeGroup` past the last group (the send step) keeps the last label in the chip. Hide the whole bar on the success screen.
 - `status` goes to an `aria-live="polite"` line; build it with the page's words.
 - `endReset`: from the second question on, Back keeps the left slot and Start over shows after the section chip (#511, v50). Pass `canReset` with it.
@@ -84,7 +84,7 @@ Prototype CSS: `.stack`, `.item`, `.step`, `.sum-w`, `.fold`, `.settled`, `.head
 
 | Component | Use | Prototype |
 |---|---|---|
-| `SummaryRow` | Folded answer: tick dot, label over value, action on the right | `.sum` |
+| `SummaryRow` | Folded answer, one group per question: tick dot and label on the left, the answer right-aligned with its action right under it; stacks when too narrow | `.sum` |
 | `ChangeLink` | Two-word "Badilisha …" button; give it an `aria-label` naming the student when there are several | `.btn-text` |
 | `QuestionTitle` | Centred Exo italic question; `htmlFor` makes it the field label | `h2.q` |
 | `Hint` | Grey help line | `.hint` |

@@ -411,7 +411,7 @@ From the Admission form, unchanged:
 ### Guided form
 The Admission form and the staff flows the prototype shows as guided (registering students and check-in) ask one question at a time through `components/guided-form/`. Small edits on a record (a fee, the father's name, the previous school) stay inline editors inside the record's sheet, as the prototype shows. Its README documents the props.
 - **Progress bar:** a sticky row on top of the task card. Back on the left, Start over in its place on the first question, both 44px round. Groups of 6px chips follow, one chip per step, each group led by its number in Exo italic. When a group finishes, its chips close into one bar, a light runs through it, a green tick lands on its end, and the number cheers, throws small bubbles and turns Sunrise Deep (after 820ms in the React `ProgressBar`, which staff pages reuse). An outlined section chip on the right names the group; it hides under 380px.
-- **Questions:** the open question is centred, its title in the Question style. Answering folds the card into a summary row: a 28px Lavender Whisper dot with a tick, the label (13px, Slate Quiet) over the value (16px, 600), and a two-word change link on the right. The folded rows are the review; there is no separate check page. Group titles sit between groups.
+- **Questions:** the open question is centred, its title in the Question style. Answering folds the card into a summary row, one group per question (Law of Proximity, #503): a 28px Lavender Whisper dot with a tick and the question’s label (14px) on the left; the answer (16px, 600) right-aligned, with its two-word change link right under it, right-aligned too. A long answer wraps in its own column, never under the label; where the row is too narrow for two columns, label, answer and link stack. The folded rows are the review; there is no separate check page. Group titles sit between groups.
 - **Continue:** a wide Go button ending in ›.
 - **Finished:** see States.
 
@@ -520,7 +520,7 @@ The table gives the timing of each motion; the illustration bob, confetti, the s
 | Question folds | 300ms (`--gf-fold`) on the ease-out curve. |
 | Sidebar fold and drawer | 460ms; the drawer 420ms. |
 | Sheet | 320ms. Popover 180ms. Toast 280ms. |
-| Progress group finishes | Bar closes in 420ms; light runs for 1.1s after 120ms; the tick waits 380ms, then pops in over 380ms; the number cheers for 720ms. |
+| Progress group finishes | Bar closes in 420ms; light runs for 1.1s after 120ms; the mark waits 380ms, then its outline circle (faint Green Tint body) draws in 420ms and its tick in 260ms from the left end, with no filled disc (decision 88); under reduced motion the finished mark shows at once; the number cheers for 720ms. |
 
 **The Reduced Motion Rule.** Under `prefers-reduced-motion: reduce` the tokens collapse (fast 1ms, medium 120ms, slow 160ms, fold 0ms, fade 120ms, sidebar 1ms). The page rise, label roll, illustration bob, number cheer, bubbles and confetti are off, and sheets fade in place instead of sliding. Every new animation adds its reduced-motion rule in the same change.
 

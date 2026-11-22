@@ -87,7 +87,7 @@ function makeBubbles(): Bubble[] {
   })
 }
 
-/** One group: its number, its chips, the liquid merge and the green tick. Cheers once each time it fills. */
+/** One group: its number, its chips, the liquid merge and the outline tick. Cheers once each time it fills. */
 function Group({ group, index, active, who, cheerDelay }: { group: ProgressGroup; index: number; active: boolean; who?: string; cheerDelay: number }) {
   const full = group.steps > 0 && group.done >= group.steps
   // A group already full on first paint (a restored draft) shows its orange number without the cheer.
@@ -145,8 +145,12 @@ function Group({ group, index, active, who, cheerDelay }: { group: ProgressGroup
           )
         })}
         <span className="gf-liquid" />
+        {/* The outline circle with a faint body, drawn before its tick (decision 88). */}
         <span className="gf-ok">
-          <Icon name="check" />
+          <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+            <circle className="gf-ok-ring" cx="10" cy="10" r="8.5" />
+            <path className="gf-ok-tick" d="M6.2 10.3l2.6 2.6 5-5.4" />
+          </svg>
         </span>
       </div>
     </div>

@@ -272,7 +272,7 @@ function DesignSystem({ tab, today }: { tab: string; today: string }) {
             Play it
           </Button>
           <p className="kp-spec">
-            Chips fill one by one. A finished group closes into one bar, light runs through it, a green tick lands and the number cheers. Folds take{" "}
+            Chips fill one by one. A finished group closes into one bar, light runs through it, the outline circle draws itself, then its tick, and the number cheers. Folds take{" "}
             <code>300ms</code> on <code>cubic-bezier(0.16, 1, 0.3, 1)</code>.
           </p>
         </Card>

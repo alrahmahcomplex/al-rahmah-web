@@ -36,7 +36,7 @@ describe("ProgressBar", () => {
     expect(chips(container, 2)).toEqual(["todo", "todo"])
   })
 
-  it("merges a finished group into one bar with the green tick, and only that group", () => {
+  it("merges a finished group into one bar with the outline tick, and only that group", () => {
     const { container } = bar({
       groups: [
         { label: "Mwanafunzi", steps: 3, done: 3 },
@@ -49,6 +49,9 @@ describe("ProgressBar", () => {
     expect(container.querySelector('[data-group="0"]')).toHaveClass("gf-full")
     expect(container.querySelector('[data-group="1"]')).not.toHaveClass("gf-full")
     expect(container.querySelector('[data-group="0"] .gf-ok')).not.toBeNull()
+    // Decision 88: the outline circle with a faint body, drawn before its tick; no filled disc.
+    expect(container.querySelector('[data-group="0"] .gf-ok .gf-ok-ring')).not.toBeNull()
+    expect(container.querySelector('[data-group="0"] .gf-ok .gf-ok-tick')).not.toBeNull()
     // Already full on first paint (a restored draft): the number is orange without the cheer.
     expect(container.querySelector('[data-group="0"] .gf-gn')).toHaveClass("gf-won")
   })

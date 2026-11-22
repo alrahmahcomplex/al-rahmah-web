@@ -51,6 +51,27 @@ describe("SelfConfirmFlow", () => {
     expect(document.querySelector('input[name="phone"]')).toHaveValue("+255712345123")
   })
 
+  // From Send on there is nothing to go back to (owner, #503 slice 4d-c): the
+  // choice, the SMS boxes and Set password have no progress bar, section name or Start over.
+  it("shows no progress bar on the choice, the SMS boxes or Set password", async () => {
+    actions.sendSelfConfirmNumber.mockResolvedValue({ status: "sent", masked: "07•• ••• 123", onRecord: true })
+    actions.checkSelfConfirmNumber.mockResolvedValue({ status: "right", phone: "+255712345123" })
+    render(<SelfConfirmFlow language="sw" started={STARTED} onChangeEmail={() => {}} />)
+    const noBar = () => {
+      expect(document.querySelector(".gf-bar-row")).toBeNull()
+      expect(screen.queryByRole("button", { name: "Anza upya" })).not.toBeInTheDocument()
+    }
+    noBar()
+    await userEvent.click(screen.getByRole("radio", { name: /Kwa namba ya simu/ }))
+    await userEvent.click(screen.getByRole("button", { name: "Endelea" }))
+    await screen.findByRole("heading", { name: "Angalia SMS yako" })
+    noBar()
+    await userEvent.click(screen.getByRole("textbox", { name: "Tarakimu 1 kati ya 6" }))
+    await userEvent.paste("482913")
+    await screen.findByRole("heading", { name: "Weka nenosiri lako" }, { timeout: 3000 })
+    noBar()
+  })
+
   it("a wrong number says so with the tries left", async () => {
     actions.sendSelfConfirmNumber.mockResolvedValue({ status: "sent", masked: "07•• ••• 123", onRecord: true })
     actions.checkSelfConfirmNumber.mockResolvedValue({ status: "wrong", triesLeft: 4 })

@@ -34,16 +34,20 @@ create table public.agent_confirm_attempts (
     proven_at timestamptz,
     finished_at timestamptz,
     -- The email this attempt put on a record that had none (E3), so a later
-    -- attempt may correct it while it is still unconfirmed.
-    stored_email boolean not null default false,
-    -- Whether the page may show the mobile texted: the typed one, or the one
-    -- on file when the typed mobile is that one (O-N9).
-    show_mobile boolean not null default false,
+    -- attempt may correct it while it is still unconfirmed. Kept when the
+    -- attempt goes on by mobile instead.
+    email_put_on_record text,
+    -- The invite this attempt sent, so switching off can tell a self-confirm
+    -- invite from a Manager's or a public resend (both also have no or
+    -- another sender).
+    invite_event uuid references public.agent_events (id),
+    -- The mobile the page may show (O-N9): the one typed, when it is the one
+    -- texted. A number sent anywhere else is never shown, even masked.
+    shown_mobile text,
     -- A void attempt keeps whatever it reached: any state can be voided.
     check (state = 'void' or (state in ('proven', 'finished')) = (proven_at is not null)),
     check ((state = 'finished') = (finished_at is not null)),
-    check (state in ('matched', 'void') or channel is not null),
-    check (not stored_email or channel = 'email')
+    check (state in ('matched', 'void') or channel is not null)
 );
 
 create index agent_confirm_attempts_agent_idx on public.agent_confirm_attempts (agent_id, created_at);
@@ -138,12 +142,14 @@ begin
         return jsonb_build_object('outcome', case when (select a.enabled from public.agent_access() a) then 'off' else 'access_off' end);
     end if;
 
-    select m.* into agent from public.marketing_agents m
-    where m.code = public.normalize_referral_code(start_agent_self_confirm.code)
-      and m.switched_off_at is null and m.retired_at is null;
+    select m.* into agent from public.agent_for_code(start_agent_self_confirm.code) m
+    where m.switched_off_at is null;
     if agent.id is null then return jsonb_build_object('outcome', 'no_match'); end if;
     if agent.user_id is not null and public.agent_joined(agent.user_id) then return jsonb_build_object('outcome', 'joined'); end if;
     if agent.status <> 'Approved' then return jsonb_build_object('outcome', 'pending'); end if;
+    -- A record with weak names never self-confirms, so neither its names nor
+    -- self-confirm's locks and limits apply: today's claim path takes it.
+    if not public.agent_names_strong(agent.full_name) then return jsonb_build_object('outcome', 'weak_names'); end if;
 
     perform 1 from public.marketing_agents m where m.id = agent.id for update;
 
@@ -162,9 +168,6 @@ begin
         return jsonb_build_object('outcome', 'setups_limited');
     end if;
 
-    -- A record with weak names never self-confirms, so its names aren't
-    -- compared here: today's claim path takes it, as before.
-    if not public.agent_names_strong(agent.full_name) then return jsonb_build_object('outcome', 'weak_names'); end if;
     if not public.agent_names_match(agent.full_name, start_agent_self_confirm.typed_names) then
         insert into public.agent_confirm_misses (agent_id, kind) values (agent.id, 'names');
         return jsonb_build_object('outcome', 'name_mismatch');
@@ -174,10 +177,9 @@ begin
     update public.agent_confirm_attempts a set state = 'void'
     where a.agent_id = agent.id and a.state in ('matched', 'sent', 'proven');
 
-    insert into public.agent_confirm_attempts (agent_id, browser_digest, ip_digest, typed_phone, show_mobile)
+    insert into public.agent_confirm_attempts (agent_id, browser_digest, ip_digest, typed_phone, shown_mobile)
     values (agent.id, start_agent_self_confirm.browser, start_agent_self_confirm.ip,
-            case when agent.phone is null then phone end,
-            coalesce(agent.phone, phone) is not null and phone is not distinct from coalesce(agent.phone, phone))
+            case when agent.phone is null then phone end, phone)
     returning id into attempt_id;
 
     return jsonb_build_object(
@@ -267,7 +269,7 @@ begin
     insert into public.agent_confirm_numbers (attempt_id, digest) values (a.id, issue_agent_confirm_number.digest);
     update public.agent_confirm_attempts o set channel = 'mobile', destination = target, state = 'sent' where o.id = a.id;
 
-    return jsonb_build_object('outcome', 'issued', 'phone', target, 'agent', a.agent_id, 'on_record', agent.phone is not null, 'show', a.show_mobile);
+    return jsonb_build_object('outcome', 'issued', 'phone', target, 'agent', a.agent_id, 'on_record', agent.phone is not null, 'show', target = a.shown_mobile);
 end;
 $$;
 
@@ -326,7 +328,10 @@ begin
     if n.digest <> check_agent_confirm_number.digest then
         update public.agent_confirm_numbers x set tries = x.tries + 1 where x.id = n.id;
         insert into public.agent_confirm_misses (agent_id, kind) values (a.agent_id, 'number');
-        if n.tries + 1 >= 5 then return jsonb_build_object('outcome', 'locked'); end if;
+        if n.tries + 1 >= 5
+           or (select count(*) from public.agent_confirm_misses x where x.agent_id = a.agent_id and x.kind = 'number' and x.at > clock_timestamp() - interval '1 day') >= 10 then
+            return jsonb_build_object('outcome', 'locked');
+        end if;
         return jsonb_build_object('outcome', 'wrong', 'tries_left', 5 - (n.tries + 1));
     end if;
 
@@ -357,7 +362,7 @@ grant execute on function public.check_agent_confirm_number(uuid, text, text) to
 -- with none on record, the typed email, if no one else uses it, is stored
 -- (system actor). Opens an invite event like prepare_agent_invite, with no
 -- staff member behind it. The app then sends the invite and records it.
-create function public.prepare_self_confirm_invite(attempt uuid, browser text, typed_email text)
+create function public.prepare_self_confirm_invite(attempt uuid, browser text, typed_email text, hourly_budget integer)
 returns jsonb
 language plpgsql
 security definer
@@ -383,6 +388,13 @@ begin
     if public.self_confirm_sends_today(agent.id) >= 5 then
         return jsonb_build_object('outcome', 'code_limited');
     end if;
+    -- The public hourly email budget, shared with "Tuma kiungo kipya", so
+    -- staff invites and resets keep their share of Auth's hourly emails.
+    delete from public.agent_link_requests r where r.requested_at < now() - interval '1 hour';
+    if prepare_self_confirm_invite.hourly_budget is null
+       or (select count(*) from public.agent_link_requests) >= prepare_self_confirm_invite.hourly_budget then
+        return jsonb_build_object('outcome', 'busy');
+    end if;
 
     -- The record's email may be set here when it has none, or corrected
     -- when an earlier self-confirm attempt put it there and it is still
@@ -390,8 +402,9 @@ begin
     -- email staff entered is never changed here.
     if agent.email is null
        or (address is not null and address is distinct from agent.email
-           and exists (select 1 from public.agent_confirm_attempts o
-                       where o.agent_id = agent.id and o.stored_email and o.destination = agent.email)) then
+           and (select o.email_put_on_record from public.agent_confirm_attempts o
+                where o.agent_id = agent.id and o.email_put_on_record is not null
+                order by o.created_at desc limit 1) = agent.email) then
         if address is null or address !~ '^[^@\s]+@[^@\s]+\.[^@\s]+$' or char_length(address) > 254 then
             return jsonb_build_object('outcome', 'no_email');
         end if;
@@ -420,11 +433,15 @@ begin
         delete from auth.users u where u.id = agent.user_id and coalesce(u.encrypted_password, '') = '';
     end if;
 
+    insert into public.agent_link_requests (email_hash) values (encode(sha256(convert_to(agent.email, 'UTF8')), 'hex'));
     insert into public.agent_events (agent_id, kind, result, email, created_by)
     values (agent.id, 'invite', 'started', agent.email, null)
     returning id into event_id;
     update public.agent_confirm_numbers n set voided_at = clock_timestamp() where n.attempt_id = a.id and n.used_at is null and n.voided_at is null;
-    update public.agent_confirm_attempts o set channel = 'email', destination = agent.email, state = 'sent', stored_email = put_on_record where o.id = a.id;
+    update public.agent_confirm_attempts o
+    set channel = 'email', destination = agent.email, state = 'sent', invite_event = event_id,
+        email_put_on_record = case when put_on_record then agent.email else o.email_put_on_record end
+    where o.id = a.id;
 
     -- `stored`: the email was already on record (the typed one was ignored).
     return jsonb_build_object('outcome', 'ready', 'email', agent.email, 'event', event_id, 'stored', address is distinct from agent.email);
@@ -457,9 +474,9 @@ begin
 end;
 $$;
 
-revoke execute on function public.prepare_self_confirm_invite(uuid, text, text) from public, anon, authenticated;
+revoke execute on function public.prepare_self_confirm_invite(uuid, text, text, integer) from public, anon, authenticated;
 revoke execute on function public.record_self_confirm_invite(uuid, text, text) from public, anon, authenticated;
-grant execute on function public.prepare_self_confirm_invite(uuid, text, text) to service_role;
+grant execute on function public.prepare_self_confirm_invite(uuid, text, text, integer) to service_role;
 grant execute on function public.record_self_confirm_invite(uuid, text, text) to service_role;
 
 -- ---------------------------------------------------------------------------
@@ -686,8 +703,7 @@ grant execute on function public.reserve_sms(text, text, uuid) to service_role;
 -- 5. Switching self-confirm off stops its open email links too
 -- ---------------------------------------------------------------------------
 
--- An agent whose latest invite is a self-confirm one (no staff member
--- behind it), from an email attempt.
+-- An agent whose latest invite is the one a self-confirm attempt sent.
 create function public.agent_invited_by_self_confirm(agent_id uuid)
 returns boolean
 language sql
@@ -695,12 +711,15 @@ stable
 security definer
 set search_path = ''
 as $$
-    select coalesce((
-        select e.created_by is null from public.agent_events e
-        where e.agent_id = agent_invited_by_self_confirm.agent_id and e.kind = 'invite' and e.result = 'started'
-        order by e.created_at desc limit 1
-    ), false)
-    and exists (select 1 from public.agent_confirm_attempts a where a.agent_id = agent_invited_by_self_confirm.agent_id and a.channel = 'email')
+    select exists (
+        select 1 from public.agent_confirm_attempts a
+        where a.agent_id = agent_invited_by_self_confirm.agent_id
+          and a.invite_event = (
+              select e.id from public.agent_events e
+              where e.agent_id = agent_invited_by_self_confirm.agent_id and e.kind = 'invite' and e.result = 'started'
+              order by e.created_at desc, e.id desc limit 1
+          )
+    )
 $$;
 
 revoke execute on function public.agent_invited_by_self_confirm(uuid) from public, anon, authenticated, service_role;
@@ -766,3 +785,51 @@ $$;
 
 revoke execute on function public.my_agent_self_confirmed() from public, anon;
 grant execute on function public.my_agent_self_confirmed() to authenticated;
+
+-- ---------------------------------------------------------------------------
+-- account_state, as 20261127120700_agent_email_claims.sql made it, with
+-- joined read before the email checks: a self-confirm phone login has no
+-- email, and the Agents screen shows it joined, not waiting for one.
+-- ---------------------------------------------------------------------------
+
+create or replace function public.account_state(agent public.marketing_agents)
+returns text
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+declare
+    sent_at timestamptz;
+begin
+    if not public.has_permission('leads.view') then
+        return null;
+    end if;
+    if agent.retired_at is not null then
+        return 'retired';
+    end if;
+    if agent.switched_off_at is not null then
+        return 'switched_off';
+    end if;
+    if agent.status = 'Approved' and agent.user_id is not null and public.agent_joined(agent.user_id) then
+        return 'joined';
+    end if;
+    if agent.email is null and exists (select 1 from public.agent_open_claims(agent.id)) then
+        return 'awaiting_confirmation';
+    end if;
+    if agent.status <> 'Approved' then
+        return null;
+    end if;
+    if agent.email is null then
+        return 'no_email';
+    end if;
+    sent_at := public.agent_invite_sent_at(agent.id, agent.email);
+    if sent_at is null then
+        return 'invite_not_sent';
+    end if;
+    if sent_at <= now() - public.invite_link_lifetime() then
+        return 'invite_expired';
+    end if;
+    return 'invited';
+end;
+$$;

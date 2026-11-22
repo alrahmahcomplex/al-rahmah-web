@@ -126,7 +126,10 @@ export async function sendConfirmationNumber(
   if (!phone) return { ok: false, error: "unavailable" }
 
   const sent = await sendSms(supabase, send, { kind: "self_confirm", to: phone, agentId: typeof row.agent === "string" ? row.agent : null, message: message(digits) })
-  if (sent.ok) return { ok: true, data: { kind: "sent", phone, onRecord: row.on_record === true, show: row.show === true } }
+  // A Beem timeout may still deliver the SMS, so its number stays usable and
+  // counted, as the reset hook keeps one.
+  const delivered = sent.ok || (sent.error.kind === "provider-error" && sent.error.code === "timeout")
+  if (delivered) return { ok: true, data: { kind: "sent", phone, onRecord: row.on_record === true, show: row.show === true } }
   await call(supabase, "void_agent_confirm_number", { attempt: input.attempt, browser })
   const kind = sent.error.kind === "budget-reached" ? "budget_reached" : sent.error.kind === "mobile-limited" ? "mobile_limited" : "not_sent"
   return { ok: true, data: { kind } }
@@ -159,7 +162,7 @@ export async function checkConfirmationNumber(
 
 export type InviteOutcome =
   | { kind: "sent"; email: string; stored: boolean }
-  | { kind: "expired" | "off" | "code_limited" | "no_email" | "email_unusable" | "not_sent" }
+  | { kind: "expired" | "off" | "code_limited" | "no_email" | "email_unusable" | "busy" | "not_sent" }
 
 const INVITE_RESULT = { "rate-limited": "rate_limited", "smtp-error": "smtp_error", "rejected-address": "rejected_address", "other-error": "other_error" } as const
 
@@ -172,14 +175,19 @@ const INVITE_RESULT = { "rate-limited": "rate_limited", "smtp-error": "smtp_erro
 export async function sendSelfConfirmInvite(
   supabase: SupabaseClient,
   send: AgentInviteSender,
-  input: { attempt: string; browser: string; email: string },
+  input: { attempt: string; browser: string; email: string; hourlyBudget: number },
   redirectTo: string,
 ): Promise<Result<InviteOutcome, SelfConfirmError>> {
-  const prepared = await call(supabase, "prepare_self_confirm_invite", { attempt: input.attempt, browser: digestOf(input.browser), typed_email: input.email })
+  const prepared = await call(supabase, "prepare_self_confirm_invite", {
+    attempt: input.attempt,
+    browser: digestOf(input.browser),
+    typed_email: input.email,
+    hourly_budget: input.hourlyBudget,
+  })
   if (!prepared.ok) return prepared
   const row = prepared.data ?? {}
   if (row.outcome !== "ready" || typeof row.email !== "string" || typeof row.event !== "string") {
-    const kind = (["expired", "off", "code_limited", "no_email", "email_unusable"] as const).find((k) => k === row.outcome)
+    const kind = (["expired", "off", "code_limited", "no_email", "email_unusable", "busy"] as const).find((k) => k === row.outcome)
     if (!kind) {
       console.error("Self-confirm: unexpected invite answer", row)
       return { ok: false, error: "unavailable" }

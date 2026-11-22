@@ -292,7 +292,7 @@ describe("from the first reviews (#530)", () => {
     const browser = randomUUID()
     const first = await start(agent, browser)
     if (first.kind !== "ready") throw new Error("not ready")
-    await sendSelfConfirmInvite(secretClient(), inviteSender, { attempt: first.attempt, browser, email: `limit-${randomUUID().slice(0, 8)}@example.test` }, REDIRECT)
+    await sendSelfConfirmInvite(secretClient(), inviteSender, { attempt: first.attempt, browser, email: `limit-${randomUUID().slice(0, 8)}@example.test`, hourlyBudget: 1000 }, REDIRECT)
     const outcomes: string[] = []
     for (let i = 0; i < 5; i++) {
       // A fresh browser each time: the set-ups per browser are 3 a day.
@@ -328,11 +328,11 @@ describe("from the first reviews (#530)", () => {
     const first = await start(agent, browser)
     if (first.kind !== "ready") throw new Error("not ready")
     const typo = `typo-${randomUUID().slice(0, 8)}@example.test`
-    await sendSelfConfirmInvite(secretClient(), inviteSender, { attempt: first.attempt, browser, email: typo }, REDIRECT)
+    await sendSelfConfirmInvite(secretClient(), inviteSender, { attempt: first.attempt, browser, email: typo, hourlyBudget: 1000 }, REDIRECT)
     const again = await start(agent, browser)
     if (again.kind !== "ready") throw new Error("not ready")
     const right = `right-${randomUUID().slice(0, 8)}@example.test`
-    expect(await sendSelfConfirmInvite(secretClient(), inviteSender, { attempt: again.attempt, browser, email: right }, REDIRECT)).toEqual({
+    expect(await sendSelfConfirmInvite(secretClient(), inviteSender, { attempt: again.attempt, browser, email: right, hourlyBudget: 1000 }, REDIRECT)).toEqual({
       ok: true,
       data: { kind: "sent", email: right, stored: false },
     })
@@ -346,13 +346,89 @@ describe("from the first reviews (#530)", () => {
     expect(after).toEqual({ email: right, typo_logins: 0 })
   })
 
+  test("after an email that didn't go, the same attempt can go on by mobile", async () => {
+    const agent = await agentOnRecord()
+    const browser = randomUUID()
+    const started = await start(agent, browser)
+    if (started.kind !== "ready") throw new Error("not ready")
+    const failing = async () => ({ error: { message: "smtp down", status: 500, code: "unexpected_failure" } })
+    const address = `failed-${randomUUID().slice(0, 8)}@example.test`
+    await sendSelfConfirmInvite(secretClient(), failing, { attempt: started.attempt, browser, email: address, hourlyBudget: 1000 }, REDIRECT)
+    const sent = await sendConfirmationNumber(secretClient(), keptSender().send, { attempt: started.attempt, browser }, words, ENV)
+    expect(sent).toMatchObject({ ok: true, data: { kind: "sent" } })
+  })
+
+  test("switching off keeps a link sent after the self-confirm invite (a public resend)", async () => {
+    const agent = await agentOnRecord()
+    const browser = randomUUID()
+    const started = await start(agent, browser)
+    if (started.kind !== "ready") throw new Error("not ready")
+    const address = `resend-${randomUUID().slice(0, 8)}@example.test`
+    await sendSelfConfirmInvite(secretClient(), inviteSender, { attempt: started.attempt, browser, email: address, hourlyBudget: 1000 }, REDIRECT)
+    // A later invite with no staff member behind it, as request_agent_link opens one.
+    await asSystem((sql) =>
+      sql.query("insert into public.agent_events (agent_id, kind, result, email, created_by, created_at) values ($1, 'invite', 'started', $2, null, clock_timestamp() + interval '1 second')", [
+        agent.id,
+        address,
+      ]),
+    )
+    await setSelfConfirm(false)
+    try {
+      const linked = await asSystem(async (sql) => (await sql.query("select user_id is not null as linked from public.marketing_agents where id = $1", [agent.id])).rows[0])
+      expect(linked).toEqual({ linked: true })
+    } finally {
+      await setSelfConfirm(true)
+    }
+  })
+
+  test("a weak-names record reaches the claim path even past the browser's set-ups", async () => {
+    const browser = randomUUID()
+    for (let i = 0; i < 3; i++) await start(await agentOnRecord(), browser)
+    const weak = await agentOnRecord({ names: "J Ali Omari" })
+    expect(await startSelfConfirm(secretClient(), { code: weak.code, names: "Juma Ali Omari", phone: null, browser, ip: null })).toEqual({ ok: true, data: { kind: "weak_names" } })
+  })
+
+  test("a number Beem timed out on stays usable", async () => {
+    const agent = await agentOnRecord()
+    const browser = randomUUID()
+    const started = await start(agent, browser)
+    if (started.kind !== "ready") throw new Error("not ready")
+    let digits = ""
+    const slow: SmsSender = async (_to, message) => {
+      digits = /(\d{6})/.exec(message)?.[1] ?? ""
+      return { ok: false, error: "timeout" }
+    }
+    expect(await sendConfirmationNumber(secretClient(), slow, { attempt: started.attempt, browser }, words, ENV)).toMatchObject({ ok: true, data: { kind: "sent" } })
+    expect(await checkConfirmationNumber(secretClient(), { attempt: started.attempt, browser, digits }, ENV)).toEqual({ ok: true, data: { kind: "right", phone: agent.phone } })
+  })
+
+  test("the masked mobile is shown only for the mobile typed", async () => {
+    const agent = await agentOnRecord()
+    const browser = randomUUID()
+    const typedOther = await start(agent, browser, mobile())
+    if (typedOther.kind !== "ready") throw new Error("not ready")
+    expect(await sendConfirmationNumber(secretClient(), keptSender().send, { attempt: typedOther.attempt, browser }, words, ENV)).toMatchObject({ ok: true, data: { kind: "sent", show: false } })
+  })
+
+  test("a self-confirm email waits when the public hourly email budget is spent", async () => {
+    const agent = await agentOnRecord()
+    const browser = randomUUID()
+    const started = await start(agent, browser)
+    if (started.kind !== "ready") throw new Error("not ready")
+    const address = `busy-${randomUUID().slice(0, 8)}@example.test`
+    expect(await sendSelfConfirmInvite(secretClient(), inviteSender, { attempt: started.attempt, browser, email: address, hourlyBudget: 0 }, REDIRECT)).toEqual({
+      ok: true,
+      data: { kind: "busy" },
+    })
+  })
+
   test("switching self-confirm off ends its unused email links, and keeps a Manager's", async () => {
     const agent = await agentOnRecord()
     const browser = randomUUID()
     const started = await start(agent, browser)
     if (started.kind !== "ready") throw new Error("not ready")
     const address = `off-${randomUUID().slice(0, 8)}@example.test`
-    await sendSelfConfirmInvite(secretClient(), inviteSender, { attempt: started.attempt, browser, email: address }, REDIRECT)
+    await sendSelfConfirmInvite(secretClient(), inviteSender, { attempt: started.attempt, browser, email: address, hourlyBudget: 1000 }, REDIRECT)
     await setSelfConfirm(false)
     try {
       const after = await asSystem(async (sql) => {
@@ -396,7 +472,7 @@ describe("email instead", () => {
     const started = await start(agent, browser)
     if (started.kind !== "ready") throw new Error("not ready")
     const address = `self-confirm-${randomUUID().slice(0, 8)}@example.test`
-    expect(await sendSelfConfirmInvite(secretClient(), inviteSender, { attempt: started.attempt, browser, email: address }, REDIRECT)).toEqual({
+    expect(await sendSelfConfirmInvite(secretClient(), inviteSender, { attempt: started.attempt, browser, email: address, hourlyBudget: 1000 }, REDIRECT)).toEqual({
       ok: true,
       data: { kind: "sent", email: address, stored: false },
     })
@@ -420,7 +496,7 @@ describe("email instead", () => {
     const started = await start(agent, browser)
     if (started.kind !== "ready") throw new Error("not ready")
     expect(started.emailOnRecord).toBe(true)
-    const sent = await sendSelfConfirmInvite(secretClient(), inviteSender, { attempt: started.attempt, browser, email: "someone-else@example.test" }, REDIRECT)
+    const sent = await sendSelfConfirmInvite(secretClient(), inviteSender, { attempt: started.attempt, browser, email: "someone-else@example.test", hourlyBudget: 1000 }, REDIRECT)
     expect(sent).toEqual({ ok: true, data: { kind: "sent", email: stored, stored: true } })
   })
 
@@ -429,7 +505,7 @@ describe("email instead", () => {
     const browser = randomUUID()
     const started = await start(agent, browser)
     if (started.kind !== "ready") throw new Error("not ready")
-    expect(await sendSelfConfirmInvite(secretClient(), inviteSender, { attempt: started.attempt, browser, email: MANAGER.email }, REDIRECT)).toEqual({
+    expect(await sendSelfConfirmInvite(secretClient(), inviteSender, { attempt: started.attempt, browser, email: MANAGER.email, hourlyBudget: 1000 }, REDIRECT)).toEqual({
       ok: true,
       data: { kind: "email_unusable" },
     })
@@ -443,7 +519,7 @@ describe("email instead", () => {
     const first = await start(agent, browser)
     if (first.kind !== "ready") throw new Error("not ready")
     const address = `unused-${randomUUID().slice(0, 8)}@example.test`
-    await sendSelfConfirmInvite(secretClient(), inviteSender, { attempt: first.attempt, browser, email: address }, REDIRECT)
+    await sendSelfConfirmInvite(secretClient(), inviteSender, { attempt: first.attempt, browser, email: address, hourlyBudget: 1000 }, REDIRECT)
 
     const again = await start(agent, browser)
     if (again.kind !== "ready") throw new Error(`not ready: ${again.kind}`)

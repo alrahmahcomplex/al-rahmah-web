@@ -62,11 +62,15 @@ describe("SelfConfirmFlow", () => {
     await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("Namba hii si sahihi. Ihakiki, kisha ujaribu tena. Umebakiwa na majaribio 4"), { timeout: 3000 })
   })
 
-  it("no SMS possible: email instead, at the typed email", async () => {
+  it("no SMS possible: the choice again with email only, and email goes when the agent chooses it", async () => {
     actions.sendSelfConfirmNumber.mockResolvedValue({ status: "no-sms" })
     actions.sendSelfConfirmEmail.mockResolvedValue({ status: "sent", email: "neema@mfano.com" })
     render(<SelfConfirmFlow language="sw" started={STARTED} onChangeEmail={() => {}} />)
     await userEvent.click(screen.getByRole("radio", { name: /Kwa namba ya simu/ }))
+    await userEvent.click(screen.getByRole("button", { name: "Endelea" }))
+    await waitFor(() => expect(screen.queryByRole("radio", { name: /Kwa namba ya simu/ })).toBeNull())
+    expect(actions.sendSelfConfirmEmail).not.toHaveBeenCalled()
+    expect(screen.getByRole("radio", { name: /Kwa barua pepe/ })).toBeChecked()
     await userEvent.click(screen.getByRole("button", { name: "Endelea" }))
     expect(await screen.findByRole("heading", { name: "Angalia barua pepe yako" })).toBeInTheDocument()
     expect(actions.sendSelfConfirmEmail).toHaveBeenCalledWith(STARTED.attempt, "neema@mfano.com")

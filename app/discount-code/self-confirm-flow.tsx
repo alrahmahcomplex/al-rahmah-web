@@ -18,6 +18,7 @@ import type { Language } from "@/lib/language"
 import { MINIMUM_PASSWORD_LENGTH } from "@/lib/password"
 import { cn } from "@/lib/utils"
 
+import { ACCOUNT_COPY } from "./account-copy"
 import { CARD } from "./frame"
 import type { DiscountCodeState } from "./outcome"
 import { SELF_CONFIRM_COPY } from "./self-confirm-copy"
@@ -45,6 +46,8 @@ export function SelfConfirmFlow({ language, started, onChangeEmail }: { language
   const copy = SELF_CONFIRM_COPY[language]
   const [step, setStep] = useState<Step>({ at: "choose" })
   const [problem, setProblem] = useState<string | null>(null)
+  // No SMS could go to the mobile: the choice offers email only.
+  const [smsOff, setSmsOff] = useState(false)
   const [pending, startWork] = useTransition()
   const heading = useRef<HTMLHeadingElement>(null)
 
@@ -63,7 +66,13 @@ export function SelfConfirmFlow({ language, started, onChangeEmail }: { language
         sent = { status: "unavailable" }
       }
       if (sent.status === "sent") return setStep({ at: "sms", masked: sent.masked, onRecord: sent.onRecord, sentAt: Date.now() })
-      if (sent.status === "no-sms") return emailInstead()
+      if (sent.status === "no-sms") {
+        // No SMS can go to this mobile now: the choice again, with email only.
+        setSmsOff(true)
+        setStep({ at: "choose" })
+        setProblem(copy.unavailable)
+        return
+      }
       setProblem(numberProblem(sent.status))
     })
   }
@@ -83,7 +92,9 @@ export function SelfConfirmFlow({ language, started, onChangeEmail }: { language
 
   return (
     <section className={cn(CARD, "flex flex-col gap-5 text-center")}>
-      {step.at === "choose" && <Choose copy={copy} started={started} pending={pending} headingRef={heading} onMobile={sendNumber} onEmail={emailInstead} />}
+      {step.at === "choose" && (
+        <Choose key={String(smsOff)} copy={copy} started={smsOff ? { ...started, canText: false } : started} pending={pending} headingRef={heading} onMobile={sendNumber} onEmail={emailInstead} />
+      )}
       {step.at === "sms" && (
         <Sms
           // A new number starts the step afresh: empty boxes, no note.
@@ -341,7 +352,9 @@ function Password({
         ? copy.passwordTooShort
         : state?.error === "check-pending"
           ? copy.checkPending
-          : state?.error === "expired"
+          : state?.error === "staff-session"
+            ? ACCOUNT_COPY[language].messages["staff-session"].text
+            : state?.error === "expired"
             ? copy.expired
             : state
               ? copy.unavailable

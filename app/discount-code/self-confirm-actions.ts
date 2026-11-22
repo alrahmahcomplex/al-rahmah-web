@@ -13,7 +13,8 @@ import {
   sendConfirmationNumber,
   sendSelfConfirmInvite,
 } from "@/lib/services/agent-self-confirm"
-import { passwordSignIn } from "@/lib/services/auth-session"
+import { currentSessionKind, passwordSignIn } from "@/lib/services/auth-session"
+import { readLinkLimits } from "@/lib/services/password-link-requests"
 import { smsSender } from "@/lib/services/sms"
 import { agentInviteSender } from "@/utils/supabase/admin"
 import { createClient } from "@/utils/supabase/server"
@@ -26,7 +27,7 @@ import { WELCOME_COOKIE, WELCOME_MAX_AGE, WELCOME_PATH } from "./students/welcom
 // bound to this browser by an httpOnly cookie holding a random token (the
 // database keeps only its digest), so another browser can't use it.
 
-import { BROWSER_COOKIE, browserToken, COOKIE_PATH } from "./self-confirm-browser"
+import { browserToken } from "./self-confirm-browser"
 
 export type NumberStatus =
   | { status: "sent"; masked: string | null; onRecord: boolean }
@@ -99,7 +100,12 @@ export async function sendSelfConfirmEmail(attempt: string, email: string): Prom
   const origin = requestOrigin(await headers())
   if (!origin) return { status: "unavailable" }
   const redirectTo = `${portalOrigin(origin)}/discount-code/set-password`
-  const sent = await sendSelfConfirmInvite(supabase, agentInviteSender(), { attempt: String(attempt), browser, email: String(email) }, redirectTo)
+  const sent = await sendSelfConfirmInvite(
+    supabase,
+    agentInviteSender(),
+    { attempt: String(attempt), browser, email: String(email), hourlyBudget: readLinkLimits().hourlyBudget },
+    redirectTo,
+  )
   if (!sent.ok) return { status: "unavailable" }
   switch (sent.data.kind) {
     case "sent":
@@ -111,13 +117,14 @@ export async function sendSelfConfirmEmail(attempt: string, email: string): Prom
     case "email_unusable":
       return { status: "email-unusable" }
     case "not_sent":
+    case "busy":
       return { status: "unavailable" }
     default:
       return { status: "expired" }
   }
 }
 
-export type FinishState = { error: "password-mismatch" | "password-too-short" | "expired" | "check-pending" | "unavailable" } | null
+export type FinishState = { error: "password-mismatch" | "password-too-short" | "expired" | "check-pending" | "staff-session" | "unavailable" } | null
 
 // The password for a proven mobile: the phone login, then this browser
 // signs in with it and lands on the students page's one-time welcome.
@@ -132,14 +139,19 @@ export async function finishSelfConfirm(_previous: FinishState, formData: FormDa
   const supabase = smsClient()
   const token = await browserToken(false)
   if (!supabase || !token) return { error: "expired" }
+  // A staff member signed in here keeps their session: the agent's sign-in
+  // would replace it. Sign out first, as the invite link's page asks.
+  const browser = await createClient()
+  const session = await currentSessionKind(browser)
+  if (!session.ok) return { error: "unavailable" }
+  if (session.data === "staff") return { error: "staff-session" }
 
   const made = await createPhoneLogin(supabase, { attempt, browser: token, phone, password }, MINIMUM_PASSWORD_LENGTH)
   if (!made.ok) return { error: made.error === "not-proven" ? "expired" : made.error === "password-too-short" ? "password-too-short" : "unavailable" }
 
-  const browser = await createClient()
   const signedIn = await passwordSignIn(browser, { phone: phone.startsWith("+") ? phone : `+${phone}` }, password, captchaToken)
   const jar = await cookies()
-  jar.delete({ name: BROWSER_COOKIE, path: COOKIE_PATH })
+  // The browser token stays: it counts this browser's set-ups for the day.
   if (!signedIn.ok) redirect("/auth")
   // ".self": the welcome says the account is ready (O-N17).
   jar.set(WELCOME_COOKIE, `${made.data.userId}.self`, {

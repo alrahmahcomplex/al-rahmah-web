@@ -1525,7 +1525,11 @@ export const RELATIONS: Record<string, RelationEntry> = {
   // its secret-key functions only.
   "public.agent_confirm_attempts": { authenticated: [], anon: [] },
   "public.agent_confirm_misses": { authenticated: [], anon: [] },
-  "public.agent_sign_in_removals": { authenticated: [], anon: [] },
+  // Read by the Super Admin, as agent_status_changes (#503).
+  "public.agent_sign_in_removals": {
+    authenticated: ["select", "references", "trigger", "maintain"],
+    anon: ["select", "references", "trigger", "maintain"],
+  },
   "public.agent_confirm_numbers": { authenticated: [], anon: [] },
   // The SMS log and its budget (#503): reserve_sms and record_sms only.
   "public.sms_sends": { authenticated: [], anon: [] },
@@ -1563,6 +1567,12 @@ export const RELATIONS: Record<string, RelationEntry> = {
 export const POLICIES: Record<string, PolicyEntry> = {
   // The full history is the Super Admin's (#237).
   "public.agent_status_changes: Only the Super Admin reads agent status changes": {
+    command: "SELECT",
+    roles: ["authenticated"],
+    using: "( SELECT has_permission('audit.view'::text) AS has_permission)",
+    check: null,
+  },
+  "public.agent_sign_in_removals: Only the Super Admin reads sign-in removals": {
     command: "SELECT",
     roles: ["authenticated"],
     using: "( SELECT has_permission('audit.view'::text) AS has_permission)",

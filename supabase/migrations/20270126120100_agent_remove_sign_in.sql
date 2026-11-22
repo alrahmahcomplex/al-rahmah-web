@@ -66,7 +66,15 @@ create trigger audit_row_change
     execute function public.audit_row_change();
 
 alter table public.agent_sign_in_removals enable row level security;
-revoke all on public.agent_sign_in_removals from anon, authenticated, service_role;
+-- Written only through remove_agent_sign_in() below. The full history is
+-- the Super Admin's, as agent_status_changes is (#237); the Agents screen
+-- reads its line through agent_sign_in_removals().
+revoke insert, update, delete, truncate on public.agent_sign_in_removals from anon, authenticated, service_role;
+create policy "Only the Super Admin reads sign-in removals"
+    on public.agent_sign_in_removals
+    for select
+    to authenticated
+    using ((select public.has_permission('audit.view')));
 
 -- Whether email self-confirm is closed on the agent's code: the latest
 -- removal had the tick, and the agent hasn't joined since.

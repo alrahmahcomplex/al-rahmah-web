@@ -108,7 +108,7 @@ describe("Remove this sign-in", () => {
     expect(kept).toEqual({ user_id: userId })
   })
 
-  test("an email join's removal forgets that email, so the public new-link form can't invite it back", async () => {
+  test("an email join's removal forgets the record's email, even after the login changed address, so the public new-link form can't invite it back", async () => {
     const agent = await agentOnRecord()
     const browser = randomUUID()
     const started = await startSelfConfirm(secretClient(), { code: agent.code, names: agent.fullName, phone: null, browser, ip: null })
@@ -127,8 +127,11 @@ describe("Remove this sign-in", () => {
     const login = await asSystem(async (sql) => (await sql.query<{ user_id: string }>("select user_id from public.marketing_agents where id = $1", [agent.id])).rows[0].user_id)
     const joined = await secretClient().auth.admin.updateUserById(login, { password: PASSWORD, email_confirm: true })
     expect(joined.error).toBeNull()
+    // Then they sign in with another email: the record still holds the first.
+    const later = `later-${randomUUID().slice(0, 8)}@example.test`
+    expect((await secretClient().auth.admin.updateUserById(login, { email: later, email_confirm: true })).error).toBeNull()
 
-    expect(await removeAgentSignIn(await signedIn(MANAGER), agent.id, true, login)).toEqual({ ok: true, data: { signedInWith: address } })
+    expect(await removeAgentSignIn(await signedIn(MANAGER), agent.id, true, login)).toEqual({ ok: true, data: { signedInWith: later } })
     const record = await asSystem(async (sql) => (await sql.query("select email, user_id from public.marketing_agents where id = $1", [agent.id])).rows[0])
     expect(record).toEqual({ email: null, user_id: null })
     const asked = await secretClient().rpc("request_password_link", { email: address, per_email_limit: 5, hourly_budget: 1000 })

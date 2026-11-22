@@ -172,13 +172,12 @@ begin
     insert into public.agent_sign_in_removals (agent_id, signed_in_with, joined_at, close_email, removed_by)
     values (agent.id, shown, coalesce(removed.phone_confirmed_at, removed.email_confirmed_at, removed.created_at),
             remove_agent_sign_in.close_email, actor.staff_id);
-    -- The record forgets an email the removed login signed in with, so the
-    -- public "Tuma kiungo kipya" can't invite that address back; the row
-    -- reads "No email", and the Manager enters the real agent's email.
-    update public.marketing_agents m
-    set user_id = null,
-        email = case when removed.email is not null and m.email = lower(removed.email) then null else m.email end
-    where m.id = agent.id;
+    -- The record forgets its email too, whichever address it holds (the one
+    -- the removed login joined with, even if it signed in with another
+    -- since): the public "Tuma kiungo kipya" can't invite it back. The row
+    -- reads "No email", as v58 R3 shows, and the Manager enters the real
+    -- agent's email.
+    update public.marketing_agents m set user_id = null, email = null where m.id = agent.id;
     -- Its sessions and refresh tokens go with it.
     delete from auth.users u where u.id = removed.id;
     update public.agent_confirm_attempts a set state = 'void'

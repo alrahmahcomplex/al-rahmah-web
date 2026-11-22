@@ -17,6 +17,7 @@ import {
 import { getStandardDiscountSummary, type StandardDiscountSummary } from "@/lib/services/discount-codes"
 import { getEmailClaimQueue, getSignUpNotes, type SignUpNote } from "@/lib/services/agent-email-claims"
 import { getAgentAccountCounts, getAgentInvites, type AgentInviteNote } from "@/lib/services/agent-invites"
+import { getSignInRemovals, type SignInRemovalNote } from "@/lib/services/agent-sign-in-removal"
 import { getPendingAgentCount, listAgents, type AgentFilter, type AgentList } from "@/lib/services/marketing-agents"
 import { createClient } from "@/utils/supabase/server"
 
@@ -31,7 +32,7 @@ import { SendInvites } from "./invite-batch"
 import { budgetLine } from "./invite-batch-outcome"
 import { InviteBatchReportPanel } from "./invite-batch-report"
 import { inviteLine, needsAttention } from "./invite-outcome"
-import { statusChangeLine } from "./outcome"
+import { removedLine, statusChangeLine } from "./outcome"
 import { StandardDiscount } from "./standard-discount-sheet"
 import { accountParam, agentsHref, outcomeParam, parseAgentSearch, statusParam, type AgentScreenSearch } from "./search-params"
 import "./agents.css"
@@ -125,9 +126,9 @@ export default async function MarketingAgentsPage({
   // The invite badge and line, and any code typed at sign-up, for each agent
   // on this page.
   const agentIds = results.ok ? results.data.agents.map((agent) => agent.id) : []
-  const [invites, signUpNotes] = results.ok
-    ? await Promise.all([getAgentInvites(supabase, agentIds), getSignUpNotes(supabase, agentIds)])
-    : [null, null]
+  const [invites, signUpNotes, removals] = results.ok
+    ? await Promise.all([getAgentInvites(supabase, agentIds), getSignUpNotes(supabase, agentIds), getSignInRemovals(supabase, agentIds)])
+    : [null, null, null]
   const attention = counts.ok ? needsAttention(counts.data) : null
 
   // The status filters, then the account-state filters with their counts.
@@ -318,6 +319,7 @@ export default async function MarketingAgentsPage({
           canApprove={canApprove}
           invites={invites?.ok ? invites.data : null}
           signUpNotes={signUpNotes?.ok ? signUpNotes.data : null}
+          removals={removals?.ok ? removals.data : null}
           standard={standard.ok ? standard.data : null}
           canManageDiscounts={canManageDiscounts}
         />
@@ -363,6 +365,7 @@ function Results({
   canApprove,
   invites,
   signUpNotes,
+  removals,
   standard,
   canManageDiscounts,
 }: {
@@ -373,6 +376,8 @@ function Results({
   invites: Map<string, AgentInviteNote> | null
   // Codes typed at sign-up that weren't adopted; null when unread.
   signUpNotes: Map<string, SignUpNote> | null
+  // Sign-ins removed from agents not joined since (#503 R3); null when unread.
+  removals: Map<string, SignInRemovalNote> | null
   // Null when it couldn't be read: the amounts show without their sheet.
   standard: StandardDiscountSummary | null
   canManageDiscounts: boolean
@@ -388,6 +393,10 @@ function Results({
 
   const rows: AgentRow[] = agents.map((agent) => {
     const invite = invites?.get(agent.id)
+    const removed = removals?.get(agent.id)
+    // R3: "Not joined · sign-in removed 22 Nov 2026 by …", under the status,
+    // where it shows whatever the account badge (a switched-off agent has none).
+    const statusLines = [statusChangeLine(agent), removed ? removedLine(removed) : null].filter(Boolean).join(". ")
     return {
       id: agent.id,
       fullName: agent.fullName,
@@ -401,7 +410,7 @@ function Results({
       approved: agent.status === "Approved",
       retired: agent.retiredAt !== null,
       switchedOff: agent.switchedOffAt !== null,
-      statusLine: statusChangeLine(agent) || null,
+      statusLine: statusLines || null,
       invite: invite ? { state: invite.state, line: inviteLine(invite) } : null,
       discount: discountAgent(agent),
       discountAmount: agent.discountAmount,

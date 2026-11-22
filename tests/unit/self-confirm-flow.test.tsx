@@ -23,6 +23,7 @@ const STARTED = {
   typedMatches: true,
   canText: true,
   emailOnRecord: false,
+  emailOpen: true,
   email: "neema@mfano.com",
   phone: "0712345123",
 }
@@ -80,6 +81,17 @@ describe("SelfConfirmFlow", () => {
     render(<SelfConfirmFlow language="sw" started={{ ...STARTED, mobileOnRecord: false, canText: false }} onChangeEmail={() => {}} />)
     expect(screen.queryByRole("radio", { name: /Kwa namba ya simu/ })).toBeNull()
     expect(screen.getByRole("radio", { name: /Kwa barua pepe/ })).toBeChecked()
+  })
+
+  it("with email closed on the code, only the mobile is offered, and no email way out", async () => {
+    actions.sendSelfConfirmNumber.mockResolvedValue({ status: "sent", masked: "07•• ••• 123", onRecord: true })
+    render(<SelfConfirmFlow language="sw" started={{ ...STARTED, emailOpen: false }} onChangeEmail={() => {}} />)
+    expect(screen.queryByRole("radio", { name: /Kwa barua pepe/ })).toBeNull()
+    expect(screen.getByRole("radio", { name: /Kwa namba ya simu/ })).toBeChecked()
+    await userEvent.click(screen.getByRole("button", { name: "Endelea" }))
+    await screen.findByRole("heading", { name: "Angalia SMS yako" })
+    await userEvent.click(screen.getByRole("button", { name: "Hujapata SMS?" }))
+    expect(screen.queryByRole("button", { name: "Tumia barua pepe" })).toBeNull()
   })
 
   it("a mobile that already signs in elsewhere is offered email (E8)", async () => {

@@ -9,6 +9,7 @@ import { ApproveAgent } from "./approve-agent"
 import { AgentDiscount, type DiscountAgent } from "./discount-sheet"
 import { tzs } from "./discount-outcome"
 import { RecreateAgent } from "./recreate-agent"
+import { RemoveSignIn } from "./remove-sign-in"
 import "./agents.css"
 
 // One agent as the Marketing Agents table shows them, read and worded on the
@@ -162,6 +163,7 @@ export function AgentsTable({
             />
             <AgentStatusActions agent={who} switchedOff={agent.switchedOff} />
             <RecreateAgent agent={who} />
+            {agent.joined && <RemoveSignIn agent={who} />}
           </div>
         )
       },

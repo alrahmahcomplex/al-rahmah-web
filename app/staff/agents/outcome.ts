@@ -129,6 +129,13 @@ export function statusChangeLine(agent: {
   return `Retired${by}${on}${replaced}`
 }
 
+// The line under an agent whose sign-in was removed and who hasn't joined
+// since (#503, v58 R3, O-N59): "Not joined · sign-in removed 22 Nov 2026 by
+// [name]".
+export function removedLine(removed: { removedAt: string; removedBy: string | null }): string {
+  return `Not joined · sign-in removed ${DAY.format(new Date(removed.removedAt))}${removed.removedBy ? ` by ${removed.removedBy}` : ""}`
+}
+
 // ---------------------------------------------------------------------------
 // Creating an agent, and Recreate (#189).
 // ---------------------------------------------------------------------------

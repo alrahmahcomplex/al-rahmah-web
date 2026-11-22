@@ -23,6 +23,7 @@ type Trigger = {
 const APPEND_ONLY = [
   "agent_email_claims",
   "agent_events",
+  "agent_sign_in_removals",
   "agent_status_changes",
   "discount_amount_changes",
   "export_log",
@@ -37,6 +38,7 @@ const APPEND_ONLY = [
 const INSERT_ONLY_AUDIT = [
   "agent_email_claims",
   "agent_events",
+  "agent_sign_in_removals",
   "agent_status_changes",
   "discount_amount_changes",
   "export_log",

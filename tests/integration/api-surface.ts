@@ -133,6 +133,18 @@ export const FUNCTIONS: Record<string, FunctionEntry> = {
     args: { agent_ids: "array['a4a4a4a4-0000-4000-8000-000000000002']::uuid[]" },
     agent: { refused: "not_permitted" },
   },
+  // Remove this sign-in (#503): the seeded agent is joined, so the staff
+  // sample reads and removes a real sign-in, rolled back.
+  "public.agent_sign_in(agent_id uuid)": {
+    roles: ["authenticated"],
+    args: { agent_id: "'a4a4a4a4-0000-4000-8000-000000000003'" },
+    agent: { refused: "not_permitted" },
+  },
+  "public.agent_sign_in_removals(agent_ids uuid[])": {
+    roles: ["authenticated"],
+    args: { agent_ids: "array['a4a4a4a4-0000-4000-8000-000000000003']::uuid[]" },
+    agent: { refused: "not_permitted" },
+  },
   "public.agent_recreate_preview(agent_id uuid)": {
     roles: ["authenticated"],
     args: { agent_id: "'a4a4a4a4-0000-4000-8000-000000000002'" },
@@ -216,6 +228,11 @@ export const FUNCTIONS: Record<string, FunctionEntry> = {
       reason: "'A sample reason'",
       note: "'A note'",
     },
+    agent: { refused: "not_permitted" },
+  },
+  "public.remove_agent_sign_in(agent_id uuid, close_email boolean, login uuid)": {
+    roles: ["authenticated"],
+    args: { agent_id: "'a4a4a4a4-0000-4000-8000-000000000003'", close_email: "true", login: "'77777777-7777-4777-8777-777777777777'" },
     agent: { refused: "not_permitted" },
   },
   "public.change_marketing_agent_status(agent_id uuid, kind text, reason text)": {
@@ -1508,6 +1525,11 @@ export const RELATIONS: Record<string, RelationEntry> = {
   // its secret-key functions only.
   "public.agent_confirm_attempts": { authenticated: [], anon: [] },
   "public.agent_confirm_misses": { authenticated: [], anon: [] },
+  // Read by the Super Admin, as agent_status_changes (#503).
+  "public.agent_sign_in_removals": {
+    authenticated: ["select", "references", "trigger", "maintain"],
+    anon: ["select", "references", "trigger", "maintain"],
+  },
   "public.agent_confirm_numbers": { authenticated: [], anon: [] },
   // The SMS log and its budget (#503): reserve_sms and record_sms only.
   "public.sms_sends": { authenticated: [], anon: [] },
@@ -1545,6 +1567,12 @@ export const RELATIONS: Record<string, RelationEntry> = {
 export const POLICIES: Record<string, PolicyEntry> = {
   // The full history is the Super Admin's (#237).
   "public.agent_status_changes: Only the Super Admin reads agent status changes": {
+    command: "SELECT",
+    roles: ["authenticated"],
+    using: "( SELECT has_permission('audit.view'::text) AS has_permission)",
+    check: null,
+  },
+  "public.agent_sign_in_removals: Only the Super Admin reads sign-in removals": {
     command: "SELECT",
     roles: ["authenticated"],
     using: "( SELECT has_permission('audit.view'::text) AS has_permission)",

@@ -148,7 +148,7 @@ const LABELS = { first: "First name", middle: "Middle name", last: "Last name" }
 
 ## Confirmation number
 
-Six boxes for a number sent by SMS (#503), from prototype v57. It has its own stylesheet, `confirmation-number.css` (`gf-otp-*`).
+Six boxes for a number sent by SMS (#503), from prototype v57. Since v60 they close into the kit’s outline circle with a faint body (green with a tick, red with a cross), drawn circle first, as FinishMark is. It has its own stylesheet, `confirmation-number.css` (`gf-otp-*`).
 
 ```tsx
 const boxes = useRef<ConfirmationNumberHandle>(null)

@@ -112,6 +112,35 @@ describe("ConfirmationNumber", () => {
     expect(onSettled).toHaveBeenCalledWith("bad", "000000")
   })
 
+  // The page moves on in onSettled: a right number must have drawn its whole
+  // mark first, the circle and then the tick, which ends 1060ms after the merge.
+  it("settles a right number only after its tick has drawn", async () => {
+    let answer: (result: ConfirmationResult) => void = () => {}
+    const onComplete = vi.fn(() => new Promise<ConfirmationResult>((resolve) => (answer = resolve)))
+    const onSettled = vi.fn()
+    render(<ConfirmationNumber label="n" digitLabel={(n) => `d${n}`} onComplete={onComplete} onSettled={onSettled} />)
+    const boxes = screen.getAllByRole("textbox")
+    await userEvent.click(boxes[0])
+    await userEvent.paste("123456")
+
+    vi.useFakeTimers()
+    await act(async () => answer("ok"))
+    const group = screen.getByRole("group").parentElement!
+    // The green wave runs box by box (6 × 70 + 260 ms), then the boxes merge.
+    await act(async () => {
+      vi.advanceTimersByTime(6 * 70 + 260)
+    })
+    expect(group).toHaveAttribute("data-merged")
+    await act(async () => {
+      vi.advanceTimersByTime(1060)
+    })
+    expect(onSettled).not.toHaveBeenCalled()
+    await act(async () => {
+      vi.advanceTimersByTime(100)
+    })
+    expect(onSettled).toHaveBeenCalledWith("ok", "123456")
+  })
+
   it("empties the boxes and focuses the first on reset", async () => {
     const { boxes, ref, onSettled } = renderBoxes("bad")
     await userEvent.click(boxes[0])

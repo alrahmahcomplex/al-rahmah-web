@@ -30,6 +30,16 @@ const EMPTY = Array<string>(LENGTH).fill("")
 
 export type ConfirmationResult = "ok" | "bad"
 
+// How long after the boxes merge the result counts as landed, in ms. A right
+// number waits for its whole mark: the circle draws from 200 to 820 and the
+// tick from 680 to 1060 (confirmation-number.css), so the page never moves on
+// before the tick is seen. A wrong one settles as the cross starts, so its
+// note shows while the cross draws. Reduced motion has no drawing.
+export function settleAfter(result: ConfirmationResult, reducedMotion: boolean): number {
+  if (reducedMotion) return 300
+  return result === "ok" ? 1120 : 420
+}
+
 export type ConfirmationNumberProps = {
   /** The group's name for screen readers, e.g. "Namba ya kuthibitisha". */
   label: string
@@ -126,7 +136,7 @@ export const ConfirmationNumber = forwardRef<ConfirmationNumberHandle, Confirmat
       later(colour, () => {
         measureSlide()
         setMerged(true)
-        later(result === "ok" ? 650 : 420, () => onSettled?.(result, code))
+        later(settleAfter(result, still), () => onSettled?.(result, code))
       })
     })
   }

@@ -116,12 +116,13 @@ describe("the self-confirm switch", () => {
     return rows[0]
   }
 
-  test("is off from setup, and on only while agent access is on too", async () => {
+  test("is on since go-live (20270128120100), and on only while agent access is on too", async () => {
     await inRolledBackTransaction(async (sql) => {
-      expect((await state(sql)).setting).toBe(false)
-      expect((await state(sql)).on).toBe(false)
+      expect(await state(sql)).toEqual({ on: true, setting: true })
 
       await sql.query("select public.set_audit_actor('system')")
+      await sql.query("select public.set_agent_self_confirm(false)")
+      expect(await state(sql)).toEqual({ on: false, setting: false })
       await sql.query("select public.set_agent_self_confirm(true)")
       await sql.query("select public.set_agent_access(false)")
       expect(await state(sql)).toEqual({ on: false, setting: true })

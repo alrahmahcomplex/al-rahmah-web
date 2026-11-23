@@ -8,6 +8,7 @@ import {
   chooseLanguage,
   continueFrom,
   FORBIDDEN,
+  afterSend,
   fillRegistration,
   nameBox,
   newcomer,
@@ -41,6 +42,8 @@ async function register(page: Page, lang: Lang, who: ReturnType<typeof newcomer>
   await fillRegistration(page, lang, who, { whatsapp })
   await waitForSecurityCheck(page)
   await sendButton(page, lang).click()
+  // Self-confirm's order: the choice, then the email path, then today's finish.
+  await afterSend(page, lang, who)
   await expect(page.getByRole("heading", { level: 1, name: t.done })).toBeVisible()
   const code = (await page.getByText(CODE).textContent())!.trim()
   return code
@@ -109,23 +112,23 @@ for (const lang of ["sw", "en"] as const satisfies Lang[]) {
   })
 }
 
-test("registering again with the same details shows the same code; another name on the phone is told to say it has a code", async ({
-  page,
-}) => {
+// Since self-confirm (#503 slice 4d-b), a mobile with a finished new code has
+// a code: the same details again, or another name, are told to say so.
+test("the same mobile again, with the same name or another, is told it has a code already", async ({ page }) => {
   const who = newcomer()
-  const first = await register(page, "sw", who)
+  await register(page, "sw", who)
 
-  const second = await register(page, "sw", who)
-  expect(second).toBe(first)
-  await expect(page.getByText(`${ORIGIN}/apply?ref=${first}`, { exact: true })).toBeVisible()
-
-  await page.goto("/discount-code")
-  await fillRegistration(page, "sw", { ...who, name: `${who.name} TENA` })
-  await waitForSecurityCheck(page)
-  await sendButton(page, "sw").click()
-  await expect(page.getByRole("main").getByRole("alert")).toHaveText(
-    "Namba hii tayari ina Code ya Punguzo. Weka alama kwenye 'Tayari una code?' na uiandike, au piga simu ofisini.",
-  )
+  for (const name of [who.name, `${who.name} TENA`]) {
+    // A refused send keeps the draft in the tab; each try starts empty.
+    await page.evaluate(() => window.sessionStorage.removeItem("al-rahmah:discount-code-draft"))
+    await page.goto("/discount-code")
+    await fillRegistration(page, "sw", { ...who, name })
+    await waitForSecurityCheck(page)
+    await sendButton(page, "sw").click()
+    await expect(page.getByRole("main").getByRole("alert")).toHaveText(
+      "Namba hii tayari ina Code ya Punguzo. Weka alama kwenye 'Tayari una code?' na uiandike, au piga simu ofisini.",
+    )
+  }
 })
 
 test("the new agent arrives Pending on the Marketing Agents screen", async ({ page }) => {
@@ -194,8 +197,8 @@ test("No skips the code box and goes straight to the review, which names only th
   await continueFrom(page, "sw")
   await page.getByLabel(WORDS.sw.phone).fill(who.phone)
   await continueFrom(page, "sw")
-  await page.getByLabel(WORDS.sw.email).fill(who.email)
-  await continueFrom(page, "sw")
+  // Self-confirm's order: no email question on the form.
+  await expect(page.getByLabel(WORDS.sw.email)).toHaveCount(0)
   await pickTile(page, WORDS.sw.no)
 
   await expect(sendButton(page, "sw")).toBeVisible()
@@ -211,8 +214,6 @@ test("Yes opens the code box, which adds the hyphen by itself", async ({ page })
   await continueFrom(page, "en")
   await page.getByLabel(WORDS.en.phone).fill(who.phone)
   await continueFrom(page, "en")
-  await page.getByLabel(WORDS.en.email).fill(who.email)
-  await continueFrom(page, "en")
   await pickTile(page, WORDS.en.yes)
 
   const box = page.getByLabel(WORDS.en.code, { exact: true })
@@ -220,7 +221,8 @@ test("Yes opens the code box, which adds the hyphen by itself", async ({ page })
   await expect(box).toHaveValue("AAN-132")
   await continueFrom(page, "en")
   await expect(sendButton(page, "en", true)).toBeVisible()
-  await expect(page.getByText("We match this code to your phone number or your names. The Marketing Office then confirms it.")).toBeVisible()
+  // Self-confirm's review note: the person signs in themselves after the match.
+  await expect(page.getByText("We match this code to your names. Then you choose how to sign in and set your password yourself.")).toBeVisible()
 })
 
 test("no page or response before the finish carries an agent's code, and the finish carries only the person's own", async ({ page }) => {
@@ -268,6 +270,7 @@ test("no page or response before the finish carries an agent's code, and the fin
   })
   await sendButton(page, "en").click()
   const sent = await answer
+  await afterSend(page, "en", who)
   await expect(page.getByRole("heading", { level: 1, name: WORDS.en.done })).toBeVisible()
   const own = (await page.locator("[data-own-code]").textContent())!.trim()
   expect(own).toMatch(CODE)
@@ -297,6 +300,7 @@ test("Start over swaps as the Admission form's does: left on the first question,
   await fillRegistration(page, "sw", who)
   await waitForSecurityCheck(page)
   await sendButton(page, "sw").click()
+  await afterSend(page, "sw", who)
   await expect(page.getByRole("heading", { level: 1, name: WORDS.sw.done })).toBeVisible()
   await expect(page.locator(".gf-bar-row")).toHaveCount(0)
   await expect(startOver).toHaveCount(0)
@@ -313,11 +317,9 @@ test("a reload keeps the answers, and Hapana picked again after Back or a reload
   await page.getByLabel(WORDS.sw.phone).fill(who.phone)
   await continueFrom(page, "sw")
   await page.reload()
-  // Back on the email question, with the name and phone folded above it.
+  // Back on "Tayari una code?", with the name and phone folded above it.
   await expect(page.getByRole("button", { name: "Badilisha Jina" })).toBeVisible()
   await expect(page.getByRole("button", { name: "Badilisha Namba" })).toBeVisible()
-  await page.getByLabel(WORDS.sw.email).fill(who.email)
-  await continueFrom(page, "sw")
   const no = page.getByRole("radio", { name: WORDS.sw.no })
   await pickTile(page, WORDS.sw.no)
   await expect(sendButton(page, "sw")).toBeVisible()

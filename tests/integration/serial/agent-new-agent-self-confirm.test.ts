@@ -32,7 +32,8 @@ async function setSelfConfirm(enabled: boolean) {
 }
 
 beforeAll(() => setSelfConfirm(true))
-afterAll(() => setSelfConfirm(false))
+// Back on, as go-live left it (20270128120100), for the files after this one.
+afterAll(() => setSelfConfirm(true))
 
 const mobile = () => `07${String(randomInt(10_000_000, 100_000_000))}`
 const e164 = (local: string) => `+255${local.slice(1)}`

@@ -1,9 +1,11 @@
 import type { Metadata } from "next"
+import { headers } from "next/headers"
 import { redirect } from "next/navigation"
 
 import { AuthCard } from "@/components/auth-card"
 import { getLanguage } from "@/lib/language"
 import { signedInHome } from "@/lib/services/sign-in"
+import { requestHostAudience } from "@/lib/site-hosts"
 import { createClient } from "@/utils/supabase/server"
 
 import { LOGIN_COPY, LOGIN_NOTICES } from "./copy"
@@ -21,9 +23,9 @@ export async function generateMetadata(): Promise<Metadata> {
 // accounts' sessions. `from=students` comes from the Discount code students
 // page and puts a note above the form saying why to sign in (#497 state 5).
 export default async function LoginPage({ searchParams }: { searchParams: Promise<{ error?: string; from?: string }> }) {
-  const [language, { error, from }] = await Promise.all([getLanguage(), searchParams])
-  const home = await signedInHome(await createClient())
-  if (home) redirect(home)
+  const [language, { error, from }, requestHeaders] = await Promise.all([getLanguage(), searchParams, headers()])
+  const home = await signedInHome(await createClient(), requestHostAudience(requestHeaders))
+  if (home.kind === "home") redirect(home.path)
 
   const notice = LOGIN_NOTICES.find((n) => n === error) ?? null
   return (

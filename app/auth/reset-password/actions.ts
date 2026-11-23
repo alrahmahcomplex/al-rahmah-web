@@ -1,11 +1,12 @@
 "use server"
 
-import { cookies } from "next/headers"
+import { cookies, headers } from "next/headers"
 import { redirect } from "next/navigation"
 
 import { RESET_PATH, RESET_VERIFIED_COOKIE as VERIFIED_COOKIE, retryFor } from "@/lib/password-reset"
 import { resetPasswordFromLink, type ResetPasswordError } from "@/lib/services/password-reset"
 import { HOME } from "@/lib/services/sign-in"
+import { requestHostAudience } from "@/lib/site-hosts"
 import { createClient } from "@/utils/supabase/server"
 
 export type ResetPasswordState = { error: ResetPasswordError | "password-mismatch" } | null
@@ -24,7 +25,13 @@ export async function resetPassword(_previous: ResetPasswordState, formData: For
   const verifiedUserId = retryFor(jar.get(VERIFIED_COOKIE)?.value, tokenHash)
   const retrying = verifiedUserId !== null
 
-  const result = await resetPasswordFromLink(await createClient(), tokenHash, password, retrying ? { verifiedUserId } : {})
+  const audience = requestHostAudience(await headers())
+  const result = await resetPasswordFromLink(
+    await createClient(),
+    tokenHash,
+    password,
+    retrying ? { verifiedUserId, audience } : { audience },
+  )
   if (!result.ok) {
     if ("userId" in result) {
       jar.set(VERIFIED_COOKIE, `${tokenHash} ${result.userId}`, {
@@ -34,6 +41,11 @@ export async function resetPassword(_previous: ResetPasswordState, formData: For
         path: RESET_PATH,
         maxAge: 60 * 60,
       })
+      return { error: result.error }
+    }
+    if (result.error === "wrong-host") {
+      if (retrying) jar.delete({ name: VERIFIED_COOKIE, path: RESET_PATH })
+      return { error: "no-account" }
     }
     return { error: result.error }
   }

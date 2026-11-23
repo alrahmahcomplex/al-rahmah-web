@@ -5,7 +5,7 @@ import { redirect } from "next/navigation"
 
 import { referralLink, requestOrigin } from "@/lib/agent-registration"
 import { MINIMUM_PASSWORD_LENGTH } from "@/lib/password"
-import { portalOrigin } from "@/lib/site-hosts"
+import { agentsOrigin } from "@/lib/site-hosts"
 import {
   checkConfirmationNumber,
   createPhoneLogin,
@@ -100,7 +100,7 @@ export async function sendSelfConfirmEmail(attempt: string, email: string): Prom
   if (!supabase || !browser) return { status: "expired" }
   const origin = requestOrigin(await headers())
   if (!origin) return { status: "unavailable" }
-  const redirectTo = `${portalOrigin(origin)}/discount-code/set-password`
+  const redirectTo = `${agentsOrigin(origin)}/discount-code/set-password`
   const sent = await sendSelfConfirmInvite(
     supabase,
     agentInviteSender(),

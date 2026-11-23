@@ -99,6 +99,28 @@ describe("the shared reset page", () => {
     const { client } = fakeSupabase({ staff: STAFF(true), updateError: { message: "down" } })
     expect(await resetPasswordFromLink(client, "token", PASSWORD)).toEqual({ ok: false, error: "password-not-saved", userId: "user-1" })
   })
+
+  it("saves the password, signs out locally and flags wrong-host when an agent opens an old reset link on portal", async () => {
+    const { client, auth } = fakeSupabase({ agent: AGENT("active") })
+    expect(await resetPasswordFromLink(client, "token", PASSWORD, { audience: "portal" })).toEqual({
+      ok: false,
+      error: "wrong-host",
+      expected: "agents",
+    })
+    expect(auth.updateUser).toHaveBeenCalledWith({ password: PASSWORD })
+    expect(auth.signOut).toHaveBeenCalledWith({ scope: "local" })
+  })
+
+  it("saves the password, signs out locally and flags wrong-host when staff opens a reset link on agents", async () => {
+    const { client, auth } = fakeSupabase({ staff: STAFF(true) })
+    expect(await resetPasswordFromLink(client, "token", PASSWORD, { audience: "agents" })).toEqual({
+      ok: false,
+      error: "wrong-host",
+      expected: "portal",
+    })
+    expect(auth.updateUser).toHaveBeenCalledWith({ password: PASSWORD })
+    expect(auth.signOut).toHaveBeenCalledWith({ scope: "local" })
+  })
 })
 
 describe("the retry cookie", () => {

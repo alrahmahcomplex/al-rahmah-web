@@ -1,10 +1,11 @@
-import type { Metadata } from "next"
+import type { Metadata, Viewport } from "next"
 
-import { PORTAL_APP_METADATA } from "@/lib/portal-app"
+import { AGENTS_THEME_COLOR, PORTAL_APP_METADATA } from "@/lib/portal-app"
 
-// Everything a Discount code agent uses belongs to the portal, which installs
-// as an app (#497).
+// Everything a Discount code holder uses belongs to the agents app (#539).
 export const metadata: Metadata = PORTAL_APP_METADATA
+
+export const viewport: Viewport = { themeColor: AGENTS_THEME_COLOR }
 
 export default function DiscountCodeLayout({ children }: { children: React.ReactNode }) {
   return children

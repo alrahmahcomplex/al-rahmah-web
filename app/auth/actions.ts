@@ -6,6 +6,7 @@ import { redirect } from "next/navigation"
 import { readSignInLogin } from "@/lib/phone"
 import { checkPublicFormLimit } from "@/lib/rate-limit"
 import { HOME, signIn as signInAnyone, type SignInError } from "@/lib/services/sign-in"
+import { requestHostAudience } from "@/lib/site-hosts"
 import { createClient } from "@/utils/supabase/server"
 
 export type SignInState = { error: SignInError } | null
@@ -33,13 +34,18 @@ export async function signIn(_previous: SignInState, formData: FormData): Promis
 
   // The limit's key holds the email or the mobile as stored, so 0712… and
   // +255712… count as one person.
+  const requestHeaders = await headers()
   const subject = "email" in login ? login.email : login.phone
-  if ((await checkPublicFormLimit({ headers: await headers(), key: "sign-in", subject })) === "limited") {
+  if ((await checkPublicFormLimit({ headers: requestHeaders, key: "sign-in", subject })) === "limited") {
     return { error: "rate-limited" }
   }
 
-  const result = await signInAnyone(await createClient(), login, password, captchaToken)
-  if (!result.ok) return { error: result.error }
+  const audience = requestHostAudience(requestHeaders)
+  const result = await signInAnyone(await createClient(), login, password, captchaToken, audience)
+  if (!result.ok) {
+    if (result.error === "wrong-host") return { error: "no-account" }
+    return { error: result.error }
+  }
 
   redirect(HOME[result.data])
 }

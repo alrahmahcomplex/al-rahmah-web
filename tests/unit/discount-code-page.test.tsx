@@ -461,7 +461,7 @@ describe("the Discount code page", { timeout: 30_000 }, () => {
     expect(text).toMatch(/Discount code RAJ-124/)
     expect(text).not.toMatch(FORBIDDEN)
     expect(screen.getByText(/once the Marketing Office confirms your code, and they'll contact you\./)).toHaveTextContent(/start sharing your code and link now/)
-    expect(screen.getByRole("link", { name: "See my Referred Students" })).toHaveAttribute("href", "/discount-code/students")
+    expect(screen.getByRole("link", { name: "See my Referred Students" })).toHaveAttribute("href", "/home")
     expect(screen.getByText(/email at rehema@example\.test to set your password/)).toBeInTheDocument()
     expect(document.body.textContent).not.toMatch(FORBIDDEN)
   })
@@ -704,7 +704,7 @@ describe("Start over", { timeout: 30_000 }, () => {
     await send(user)
     await screen.findByRole("heading", { level: 1, name: "Code yako ya Punguzo" })
 
-    expect(screen.getByRole("link", { name: "Ona Wanafunzi Niliowaleta" })).toHaveAttribute("href", "/discount-code/students")
+    expect(screen.getByRole("link", { name: "Ona Wanafunzi Niliowaleta" })).toHaveAttribute("href", "/home")
     expect(screen.queryByRole("button", { name: "Anza tena" })).not.toBeInTheDocument()
   })
 })

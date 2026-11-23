@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { afterEach, describe, expect, it, vi } from "vitest"
 
-import { signedInHome, signIn } from "@/lib/services/sign-in"
+import { homeFor, signedInHome, signIn } from "@/lib/services/sign-in"
 
 // Cloudflare's dummy Turnstile token, what the always-pass test site key gives.
 const TOKEN = "XXXX.DUMMY.TOKEN.XXXX"
@@ -117,8 +117,8 @@ describe("signing in on the one sign-in page", () => {
 
     expect(await signIn(client, { phone: "0712345678" }, "fixture-password", TOKEN)).toEqual({ ok: true, data: "agent" })
     expect(signOut).not.toHaveBeenCalled()
-    expect(await signedInHome(fakeSupabase({ signedIn: true, agent: { data: { state: "not_approved", full_name: null, code: null }, error: null } }).client)).toBe(
-      "/discount-code/students",
+    expect(await signedInHome(fakeSupabase({ signedIn: true, agent: { data: { state: "not_approved", full_name: null, code: null }, error: null } }).client)).toEqual(
+      { kind: "home", path: "/home" },
     )
   })
 
@@ -205,20 +205,96 @@ describe("signing in on the one sign-in page", () => {
   })
 })
 
-describe("where /auth sends a browser that is already signed in", () => {
-  it("shows the form to a signed-out browser", async () => {
-    expect(await signedInHome(fakeSupabase().client)).toBeNull()
+describe("host-aware sign-in and wrong-host refusal (#539)", () => {
+  it("resolves home or wrong-host per audience", () => {
+    expect(homeFor("staff", "portal")).toEqual({ kind: "home", path: "/staff" })
+    expect(homeFor("staff", "agents")).toEqual({ kind: "wrong-host", expected: "portal" })
+    expect(homeFor("agent", "agents")).toEqual({ kind: "home", path: "/home" })
+    expect(homeFor("agent", "portal")).toEqual({ kind: "wrong-host", expected: "agents" })
+    expect(homeFor("staff", "both")).toEqual({ kind: "home", path: "/staff" })
+    expect(homeFor("agent", "both")).toEqual({ kind: "home", path: "/home" })
   })
 
-  it("sends active staff to /staff and an active agent to their students", async () => {
-    expect(await signedInHome(fakeSupabase({ signedIn: true, staff: STAFF }).client)).toBe("/staff")
-    expect(await signedInHome(fakeSupabase({ signedIn: true, agent: AGENT }).client)).toBe("/discount-code/students")
+  it("refuses a code holder on portal only after the password is right, signing out locally only", async () => {
+    const { client, signOut } = fakeSupabase({ agent: AGENT })
+
+    expect(await signIn(client, { email: "neema@example.test" }, "fixture-password", TOKEN, "portal")).toEqual({
+      ok: false,
+      error: "wrong-host",
+      expected: "agents",
+    })
+    expect(signOut).toHaveBeenCalledTimes(1)
+    expect(signOut).toHaveBeenCalledWith({ scope: "local" })
+  })
+
+  it("refuses staff on agents only after the password is right, signing out locally only", async () => {
+    const { client, signOut } = fakeSupabase({ staff: STAFF })
+
+    expect(await signIn(client, { email: "manager@example.test" }, "fixture-password", TOKEN, "agents")).toEqual({
+      ok: false,
+      error: "wrong-host",
+      expected: "portal",
+    })
+    expect(signOut).toHaveBeenCalledTimes(1)
+    expect(signOut).toHaveBeenCalledWith({ scope: "local" })
+  })
+
+  it("never reveals wrong host when the password is wrong", async () => {
+    const { client, signOut, rpc } = fakeSupabase({
+      signInError: { message: "Invalid login credentials", code: "invalid_credentials" },
+      agent: AGENT,
+    })
+
+    expect(await signIn(client, { email: "neema@example.test" }, "wrong", TOKEN, "portal")).toEqual({
+      ok: false,
+      error: "invalid-credentials",
+    })
+    expect(rpc).not.toHaveBeenCalled()
+    expect(signOut).not.toHaveBeenCalled()
+  })
+
+  it("allows staff on portal and agents on agents", async () => {
+    const staff = fakeSupabase({ staff: STAFF })
+    expect(await signIn(staff.client, { email: "manager@example.test" }, "fixture-password", TOKEN, "portal")).toEqual({ ok: true, data: "staff" })
+    expect(staff.signOut).not.toHaveBeenCalled()
+
+    const agent = fakeSupabase({ agent: AGENT })
+    expect(await signIn(agent.client, { phone: "+255712345123" }, "fixture-password", TOKEN, "agents")).toEqual({ ok: true, data: "agent" })
+    expect(agent.signOut).not.toHaveBeenCalled()
+  })
+})
+
+describe("where /auth sends a browser that is already signed in", () => {
+  it("shows the form to a signed-out browser", async () => {
+    expect(await signedInHome(fakeSupabase().client)).toEqual({ kind: "none" })
+  })
+
+  it("sends active staff to /staff and an active agent to /home on a matching host", async () => {
+    expect(await signedInHome(fakeSupabase({ signedIn: true, staff: STAFF }).client)).toEqual({ kind: "home", path: "/staff" })
+    expect(await signedInHome(fakeSupabase({ signedIn: true, staff: STAFF }).client, "portal")).toEqual({ kind: "home", path: "/staff" })
+    expect(await signedInHome(fakeSupabase({ signedIn: true, agent: AGENT }).client)).toEqual({ kind: "home", path: "/home" })
+    expect(await signedInHome(fakeSupabase({ signedIn: true, agent: AGENT }).client, "agents")).toEqual({ kind: "home", path: "/home" })
+  })
+
+  it("flags wrong-host sessions without redirecting", async () => {
+    expect(await signedInHome(fakeSupabase({ signedIn: true, agent: AGENT }).client, "portal")).toEqual({
+      kind: "wrong-host",
+      expected: "agents",
+      as: "agent",
+    })
+    expect(await signedInHome(fakeSupabase({ signedIn: true, staff: STAFF }).client, "agents")).toEqual({
+      kind: "wrong-host",
+      expected: "portal",
+      as: "staff",
+    })
   })
 
   it("keeps a deactivated staff member or a switched-off agent on the page, so nobody bounces between pages", async () => {
-    expect(await signedInHome(fakeSupabase({ signedIn: true, staff: { data: { ...STAFF_ROW, active: false }, error: null } }).client)).toBeNull()
+    expect(await signedInHome(fakeSupabase({ signedIn: true, staff: { data: { ...STAFF_ROW, active: false }, error: null } }).client)).toEqual({
+      kind: "none",
+    })
     expect(
       await signedInHome(fakeSupabase({ signedIn: true, agent: { data: { state: "switched_off", full_name: null, code: null }, error: null } }).client),
-    ).toBeNull()
+    ).toEqual({ kind: "none" })
   })
 })

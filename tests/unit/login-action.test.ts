@@ -1,10 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
-const stubs = vi.hoisted(() => ({ limit: vi.fn(), signIn: vi.fn(), redirect: vi.fn() }))
+const stubs = vi.hoisted(() => ({ limit: vi.fn(), signIn: vi.fn(), redirect: vi.fn(), headers: new Headers({ "x-real-ip": "203.0.113.7", host: "alrahmah.example" }) }))
 
 vi.mock("server-only", () => ({}))
 vi.mock("next/headers", () => ({
-  headers: async () => new Headers({ "x-real-ip": "203.0.113.7", host: "alrahmah.example" }),
+  headers: async () => stubs.headers,
 }))
 vi.mock("next/navigation", () => ({
   redirect: (path: string) => {
@@ -13,7 +13,7 @@ vi.mock("next/navigation", () => ({
   },
 }))
 vi.mock("@/lib/rate-limit", () => ({ checkPublicFormLimit: (input: unknown) => stubs.limit(input) }))
-vi.mock("@/lib/services/sign-in", () => ({ HOME: { staff: "/staff", agent: "/discount-code/students" }, signIn: (...args: unknown[]) => stubs.signIn(...args) }))
+vi.mock("@/lib/services/sign-in", () => ({ HOME: { staff: "/staff", agent: "/home" }, signIn: (...args: unknown[]) => stubs.signIn(...args) }))
 vi.mock("@/utils/supabase/server", () => ({ createClient: async () => ({ session: "client" }) }))
 
 import { signIn } from "@/app/auth/actions"
@@ -30,27 +30,34 @@ function posted(email: string, password = "fixture-password", token = TOKEN) {
 }
 
 beforeEach(() => {
+  stubs.headers = new Headers({ "x-real-ip": "203.0.113.7", host: "alrahmah.example" })
   stubs.limit.mockReset().mockResolvedValue("allowed")
   stubs.signIn.mockReset().mockResolvedValue({ ok: true, data: "agent" })
   stubs.redirect.mockReset()
 })
 
 describe("the one sign-in form", () => {
-  it("counts the try per IP and normalised email on sign-in, then lands an agent on their students", async () => {
+  it("counts the try per IP and normalised email on sign-in, then lands an agent on /home", async () => {
     await expect(signIn(null, posted("  Neema@Example.TEST "))).rejects.toThrow("NEXT_REDIRECT")
 
     expect(stubs.limit).toHaveBeenCalledWith(
       expect.objectContaining({ key: "sign-in", subject: "neema@example.test" }),
     )
-    expect(stubs.signIn).toHaveBeenCalledWith({ session: "client" }, { email: "neema@example.test" }, "fixture-password", TOKEN)
-    expect(stubs.redirect).toHaveBeenCalledWith("/discount-code/students")
+    expect(stubs.signIn).toHaveBeenCalledWith({ session: "client" }, { email: "neema@example.test" }, "fixture-password", TOKEN, "both")
+    expect(stubs.redirect).toHaveBeenCalledWith("/home")
   })
 
   it("takes a mobile in any typed form and counts it as the stored number", async () => {
     await expect(signIn(null, posted(" 0712 345 123 "))).rejects.toThrow("NEXT_REDIRECT")
 
     expect(stubs.limit).toHaveBeenCalledWith(expect.objectContaining({ key: "sign-in", subject: "+255712345123" }))
-    expect(stubs.signIn).toHaveBeenCalledWith({ session: "client" }, { phone: "+255712345123" }, "fixture-password", TOKEN)
+    expect(stubs.signIn).toHaveBeenCalledWith({ session: "client" }, { phone: "+255712345123" }, "fixture-password", TOKEN, "both")
+  })
+
+  it("passes the production host audience to signIn", async () => {
+    stubs.headers = new Headers({ "x-real-ip": "203.0.113.7", host: "agents.alrahmahcomplex.or.tz" })
+    await expect(signIn(null, posted("neema@example.test"))).rejects.toThrow("NEXT_REDIRECT")
+    expect(stubs.signIn).toHaveBeenCalledWith({ session: "client" }, { email: "neema@example.test" }, "fixture-password", TOKEN, "agents")
   })
 
   it("answers neither-an-email-nor-a-mobile at once, counting nothing and sending nothing", async () => {

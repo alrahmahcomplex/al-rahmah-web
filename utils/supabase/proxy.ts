@@ -7,7 +7,7 @@ import { supabaseEnv } from "./env"
 // Discount code students page, sign-in says why above its form (#497 state 5).
 function signInPage(pathname: string): { pathname: string; search: string } | null {
   if (pathname === "/staff" || pathname.startsWith("/staff/")) return { pathname: "/auth", search: "" }
-  if (pathname === "/discount-code/students" || pathname.startsWith("/discount-code/students/")) {
+  if (pathname === "/home" || pathname.startsWith("/home/")) {
     return { pathname: "/auth", search: "?from=students" }
   }
   return null

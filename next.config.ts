@@ -1,7 +1,14 @@
 import type { NextConfig } from "next";
 
 import { LANGUAGE_STATE_PREFIX, languageStateRewrites } from "./lib/language-state";
-import { crossHostRedirects, movedSignInRedirects, portalRootRedirect, rootEmailLinkRedirects } from "./lib/site-hosts";
+import {
+  agentsHostRewrites,
+  appRootRedirects,
+  crossHostRedirects,
+  movedAgentStudentsRedirect,
+  movedSignInRedirects,
+  rootEmailLinkRedirects,
+} from "./lib/site-hosts";
 
 const nextConfig: NextConfig = {
   experimental: {
@@ -25,9 +32,12 @@ const nextConfig: NextConfig = {
       // code sign-in pages before it (#264, #265). Old links keep working,
       // query and all.
       ...movedSignInRedirects(),
+      // The agent dashboard moved from /discount-code/students to /home (#539).
+      movedAgentStudentsRedirect(),
       // The per-language copies are reached only through the rewrites below
       // (#286). Opened directly, they send the visitor to the public address,
       // where the cookie picks the copy.
+      { source: `${LANGUAGE_STATE_PREFIX}/:state/agents-auth/:path*`, destination: "/auth/:path*", permanent: false },
       { source: `${LANGUAGE_STATE_PREFIX}/:state/:path*`, destination: "/:path*", permanent: false },
       // The staff list of applicants moved from /staff/leads. Bookmarks and
       // links in old messages keep working, query and all.
@@ -35,16 +45,16 @@ const nextConfig: NextConfig = {
       { source: "/staff/leads/:path*", destination: "/staff/applicants/:path*", permanent: true },
       // An invite or reset link on the site root goes on to its page.
       ...rootEmailLinkRedirects(),
-      // After those: the portal's root opens sign-in.
-      portalRootRedirect(),
+      // After those: both app hosts' roots open sign-in.
+      ...appRootRedirects(),
     ];
   },
   async rewrites() {
     return {
-      // Before the filesystem and dynamic routes: the public address of a
-      // cached page goes to its copy for the visitor's `lang` cookie, with no
-      // function run (lib/language-state.ts, ADR 0006).
-      beforeFiles: languageStateRewrites(),
+      // Before the filesystem and dynamic routes: per-host manifest, icons and
+      // cached /auth/forgot-password theme for agents. (#539), then the
+      // per-language cached copies (lib/language-state.ts, ADR 0006).
+      beforeFiles: [...agentsHostRewrites(), ...languageStateRewrites()],
       afterFiles: [],
       fallback: [],
     };

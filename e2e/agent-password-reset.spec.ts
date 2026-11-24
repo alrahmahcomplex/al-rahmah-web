@@ -131,12 +131,12 @@ test("Umesahau nenosiri? emails a reset link; the reset page sets the new passwo
   await page.goto(email.link)
   await expect(page.getByRole("heading", { name: "Weka nenosiri jipya" })).toBeVisible()
   await setPassword(page)
-  await expect(page).toHaveURL(/\/discount-code\/students$/)
+  await expect(page).toHaveURL(/\/home$/)
 
   // The new password signs in on /auth.
   await page.context().clearCookies()
   await logIn(page, agent.address, PASSWORD)
-  await expect(page).toHaveURL(/\/discount-code\/students$/)
+  await expect(page).toHaveURL(/\/home$/)
 
   // The link is spent: opening it again leads with "Tuma kiungo kipya".
   await page.context().clearCookies()
@@ -172,7 +172,7 @@ test("an expired invite link's Tuma kiungo kipya sends an invited agent a new in
   await page.goto(latest.link)
   await expect(page.getByRole("heading", { name: "Weka nenosiri lako" })).toBeVisible()
   await setPassword(page)
-  await expect(page).toHaveURL(/\/discount-code\/students$/)
+  await expect(page).toHaveURL(/\/home$/)
 })
 
 test("a reset link sent before #265, to the old reset page, still works", async ({ page }) => {
@@ -185,7 +185,7 @@ test("a reset link sent before #265, to the old reset page, still works", async 
   await page.goto(old)
   await expect(page).toHaveURL(email.link)
   await setPassword(page)
-  await expect(page).toHaveURL(/\/discount-code\/students$/)
+  await expect(page).toHaveURL(/\/home$/)
 })
 
 test("the reset page without a link offers a new one", async ({ page }) => {

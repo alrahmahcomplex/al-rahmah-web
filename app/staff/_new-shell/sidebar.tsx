@@ -17,24 +17,36 @@ type SidebarProps = {
   onChoose?: () => void
   /** The brand title, which the width code measures. */
   nameRef?: Ref<HTMLDivElement>
+  /** Subtitle under "Al-Rahmah Complex". Defaults to "Admissions Portal" for staff. */
+  brandSubtitle?: string
+  /** Accessible name of the navigation landmark. Defaults to "Staff". */
+  navLabel?: string
 }
 
 /**
  * The sidebar's contents (DESIGN.md, The sidebar): the logo with "Al-Rahmah
- * Complex" over "Admissions Portal", then every entry the staff member may
- * see, in its group. No counts: the bell is the only one (The One Pip Rule).
+ * Complex" over the app subtitle, then every entry the person may see, in its
+ * group. No counts: the bell is the only one (The One Pip Rule).
  */
-export function SidebarContent({ items, current, folded = false, onChoose, nameRef }: SidebarProps) {
+export function SidebarContent({
+  items,
+  current,
+  folded = false,
+  onChoose,
+  nameRef,
+  brandSubtitle = "Admissions Portal",
+  navLabel = "Staff",
+}: SidebarProps) {
   return (
     <>
       <div className="ns-head">
         <Image className="ns-logo" src="/brand/logo-round.png" alt="" width={36} height={36} priority />
         <div ref={nameRef} className="ns-name">
           <b>Al-Rahmah Complex</b>
-          <small>Admissions Portal</small>
+          <small>{brandSubtitle}</small>
         </div>
       </div>
-      <nav aria-label="Staff" className="ns-nav">
+      <nav aria-label={navLabel} className="ns-nav">
         {groupNav(items).map((group) => [
           group.name ? (
             <p key={group.name} className="ns-group">

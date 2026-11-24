@@ -4,11 +4,18 @@ import { NextResponse, type NextRequest } from "next/server"
 import { supabaseEnv } from "./env"
 
 // Where a visitor with no session goes from a page that needs one. From the
-// Discount code students page, sign-in says why above its form (#497 state 5).
+// agents app screens, sign-in says why above its form (#497 state 5, #539).
 function signInPage(pathname: string): { pathname: string; search: string } | null {
   if (pathname === "/staff" || pathname.startsWith("/staff/")) return { pathname: "/auth", search: "" }
-  if (pathname === "/home" || pathname.startsWith("/home/")) {
-    return { pathname: "/auth", search: "?from=students" }
+  if (
+    pathname === "/home" ||
+    pathname.startsWith("/home/") ||
+    pathname === "/students" ||
+    pathname.startsWith("/students/") ||
+    pathname === "/reminders" ||
+    pathname.startsWith("/reminders/")
+  ) {
+    return { pathname: "/auth", search: "?from=home" }
   }
   return null
 }

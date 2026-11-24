@@ -3,7 +3,7 @@ import { describe, expect, test, vi } from "vitest"
 
 vi.mock("server-only", () => ({}))
 
-import { getAgentStudents } from "@/lib/services/agent-students"
+import { getAgentStudent, getAgentStudents } from "@/lib/services/agent-students"
 import { setAgentDiscount } from "@/lib/services/discount-codes"
 import { changeAgentStatus } from "@/lib/services/marketing-agents"
 
@@ -39,10 +39,12 @@ describe("the students using an agent's Discount code", () => {
       data: {
         kind: "active",
         code: agent.code,
+        phone: expect.stringMatching(/^\+255/),
         total: 2,
         matched: 2,
         students: [
           {
+            id: expect.stringMatching(/^[0-9a-f-]{36}$/i),
             name: "Baraka Wangu",
             className: "STD 3",
             status: "Visited",
@@ -56,6 +58,7 @@ describe("the students using an agent's Discount code", () => {
         ],
         steps: { Applied: 1, Visited: 1, Interviewed: 0, Enrolled: 0, Declined: 0 },
         reminders: expect.any(Array),
+        recent: expect.any(Array),
         discount: 10000,
       },
     })
@@ -65,7 +68,7 @@ describe("the students using an agent's Discount code", () => {
     expect(probed).toMatchObject({ ok: true, data: { total: 2, matched: 0, students: [] } })
   })
 
-  test("the raw function returns no contact, note, amount or id", async () => {
+  test("the raw function returns only allowed fields (with opaque UUID id) and no contact, note, or amount", async () => {
     const agent = await agentWithLogin()
     const id = await studentLead({ name: "Declined Wangu", code: agent.code, status: "Declined", closure: "Archived" })
     await studentInterview(id, { result: "Failed", score: 31.5, paid: true, registeredAt: "2026-09-05 09:00+03" })
@@ -76,6 +79,7 @@ describe("the students using an agent's Discount code", () => {
     expect(Object.keys(student).sort()).toEqual([
       "class_name",
       "declined_reason",
+      "id",
       "interview_registered",
       "interview_result",
       "interview_score",
@@ -85,6 +89,7 @@ describe("the students using an agent's Discount code", () => {
       "student_name",
     ])
     expect(student).toMatchObject({
+      id,
       status: "Declined",
       not_active: true,
       declined_reason: "Did not pass interview",
@@ -205,11 +210,13 @@ describe("the students using an agent's Discount code", () => {
       data: {
         kind: "active",
         code: SEEDED_AGENT.code,
+        phone: "+255700000403",
         total: 0,
         matched: 0,
         students: [],
         steps: { Applied: 0, Visited: 0, Interviewed: 0, Enrolled: 0, Declined: 0 },
         reminders: [],
+        recent: [],
         discount: 10000,
       },
     })
@@ -249,9 +256,9 @@ describe("the agent dashboard's answer", () => {
     expect(result.data.students).toHaveLength(1)
     expect(result.data.steps).toEqual({ Applied: 3, Visited: 2, Interviewed: 4, Enrolled: 1, Declined: 1 })
     expect(result.data.reminders).toEqual([
-      { name: "Visited Twenty", className: "STD 3", step: "Visited", days: 20 },
-      { name: "Applied Fourteen", className: "STD 3", step: "Applied", days: 14 },
-      { name: "Passed Seven", className: "STD 3", step: "Interviewed", days: 7 },
+      { id: expect.stringMatching(/^[0-9a-f-]{36}$/i), name: "Visited Twenty", className: "STD 3", step: "Visited", days: 20 },
+      { id: expect.stringMatching(/^[0-9a-f-]{36}$/i), name: "Applied Fourteen", className: "STD 3", step: "Applied", days: 14 },
+      { id: expect.stringMatching(/^[0-9a-f-]{36}$/i), name: "Passed Seven", className: "STD 3", step: "Interviewed", days: 7 },
     ])
   })
 
@@ -269,16 +276,18 @@ describe("the agent dashboard's answer", () => {
 
     const result = await getAgentStudents(await signedIn(agent), { search: "", limit: 20, offset: 0 })
     if (!result.ok || result.data.kind !== "active") throw new Error(JSON.stringify(result))
-    expect(result.data.reminders).toEqual([{ name: "Applied Late Night", className: "STD 3", step: "Applied", days: 14 }])
+    expect(result.data.reminders).toEqual([
+      { id: expect.stringMatching(/^[0-9a-f-]{36}$/i), name: "Applied Late Night", className: "STD 3", step: "Applied", days: 14 },
+    ])
   })
 
-  test("the raw reminders carry only the name, the class, the step and the days", async () => {
+  test("the raw reminders carry only the opaque id, name, class, step and days", async () => {
     const agent = await agentWithLogin()
-    await studentLead({ name: "Raw Reminder", code: agent.code, createdAt: at(20) })
+    const id = await studentLead({ name: "Raw Reminder", code: agent.code, createdAt: at(20) })
     const { data, error } = await (await signedIn(agent)).rpc("agent_students", { search: null, page_limit: 20, page_offset: 0, step: null })
     expect(error).toBeNull()
     const answer = data as { reminders: Record<string, unknown>[] }
-    expect(answer.reminders).toEqual([{ student_name: "Raw Reminder", class_name: "STD 3", step: "Applied", days: 20 }])
+    expect(answer.reminders).toEqual([{ id, student_name: "Raw Reminder", class_name: "STD 3", step: "Applied", days: 20 }])
     expect(JSON.stringify(data)).not.toMatch(/Mzazi|\+2556/)
   })
 
@@ -319,5 +328,47 @@ describe("the agent dashboard's answer", () => {
     const off = await client.rpc("agent_students", { search: null, page_limit: 20, page_offset: 0, step: null })
     expect(off).toMatchObject({ error: null, data: { state: "switched_off" } })
     expect(Object.keys(off.data as object)).toEqual(["state"])
+  })
+
+  test("single-student lookup returns own student with reminder, and identical null for another agent's, missing, or malformed id", async () => {
+    const agent = await agentWithLogin()
+    const other = await agentWithLogin()
+    const ownId = await studentLead({ name: "Single Own", code: agent.code, createdAt: at(20) })
+    const otherId = await studentLead({ name: "Single Other", code: other.code, createdAt: at(20) })
+    const client = await signedIn(agent)
+
+    const own = await getAgentStudent(client, ownId)
+    expect(own).toEqual({
+      ok: true,
+      data: {
+        kind: "active",
+        student: {
+          id: ownId,
+          name: "Single Own",
+          className: "STD 3",
+          status: "Applied",
+          notActive: false,
+          lastChange: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
+          declinedReason: null,
+          interviewRegistered: false,
+          result: null,
+          reminder: { step: "Applied", days: 20 },
+        },
+      },
+    })
+    expect(JSON.stringify(own)).not.toMatch(/Staff-only explanation|Mzazi|\+2556|50000/)
+
+    // Another agent's student, a missing UUID, and a non-UUID all answer identically.
+    const missing = await getAgentStudent(client, "00000000-0000-4000-8000-000000000999")
+    const foreign = await getAgentStudent(client, otherId)
+    const malformed = await getAgentStudent(client, "not-a-uuid")
+    expect(foreign).toEqual({ ok: true, data: { kind: "active", student: null } })
+    expect(missing).toEqual(foreign)
+    expect(malformed).toEqual(foreign)
+
+    // Staff and visitors get nothing.
+    expect(await getAgentStudent(await signedIn(MANAGER), ownId)).toEqual({ ok: false, error: "not-agent" })
+    const visitor = await anonClient().rpc("agent_student", { lead_id: ownId })
+    expect(visitor.error?.code).toBe("42501")
   })
 })

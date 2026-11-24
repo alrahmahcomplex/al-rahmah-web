@@ -22,5 +22,7 @@ export const config = {
     "/auth/reset-password",
     "/discount-code/set-password",
     "/home/:path*",
+    "/students/:path*",
+    "/reminders/:path*",
   ],
 }

@@ -148,5 +148,5 @@ export async function saveSmsResetPassword(_previous: SmsPasswordState, formData
   const target = homeFor("agent", requestHostAudience(await headers()))
   if (target.kind === "home") redirect(target.path)
   await supabase.auth.signOut({ scope: "local" })
-  redirect(`${AGENTS_ORIGIN}/auth`)
+  redirect(`${AGENTS_ORIGIN}/auth?from=moved`)
 }

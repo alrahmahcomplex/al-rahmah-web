@@ -33,3 +33,8 @@ export { DateField, DateTimeField, type DateFieldProps, type DateTimeFieldProps 
 export { Disclosure } from "./disclosure"
 export { FilePicker } from "./file-picker"
 export { Timeline, type TimelineItem, type TimelineTone } from "./timeline"
+export { FilterMenu, type FilterMenuOption, type FilterMenuProps } from "./filter-menu"
+export { CodeChip, type CodeChipProps } from "./code-chip"
+export { StepTrack, type StepTrackItem, type StepTrackState } from "./step-track"
+export { MenuProfileRow, ProfileHeader, type MenuProfileRowProps } from "./menu-profile-row"
+export { TopBarHomeOrBack, type TopBarHomeOrBackProps } from "./top-bar-home-or-back"

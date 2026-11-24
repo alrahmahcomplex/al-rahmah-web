@@ -6,14 +6,17 @@ import {
   ButtonLink,
   Card,
   ChipButtons,
+  CodeChip,
   EmptyState,
   Field,
   FieldError,
+  FilterMenu,
   FilterPills,
   FinishedState,
   KeyValueList,
   ListRow,
   LoadingState,
+  MenuProfileRow,
   Note,
   PAGE_ACTIONS_ID,
   PageActions,
@@ -23,11 +26,17 @@ import {
   Section,
   SkeletonBlock,
   StatusChip,
+  StepTrack,
   Table,
   Tag,
   TaskCard,
   TextLink,
+  TopBarHomeOrBack,
 } from "@/components/kit"
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ back: vi.fn(), push: vi.fn() }),
+}))
 
 vi.mock("next/link", () => ({
   default: ({ href, children, ...props }: { href: string; children: React.ReactNode }) => (
@@ -564,5 +573,86 @@ describe("table scroll box and sheet body", () => {
       if (client) Object.defineProperty(HTMLElement.prototype, "clientHeight", client)
       vi.unstubAllGlobals()
     }
+  })
+})
+
+describe("agents app kit parts (#539)", () => {
+  it("opens FilterMenu with radio items, counts, disabled 0-count items, and calls onSelect", () => {
+    const onSelect = vi.fn()
+    render(
+      <FilterMenu
+        label="Filter"
+        currentLabel="Visited"
+        value="Visited"
+        active
+        options={[
+          { value: "all", label: "All", count: 5 },
+          { value: "Visited", label: "Visited", count: 2 },
+          { value: "Enrolled", label: "Enrolled", count: 0, disabled: true },
+        ]}
+        onSelect={onSelect}
+      />,
+    )
+    const trigger = screen.getByRole("button", { name: "Filter: Visited" })
+    expect(trigger).toHaveAttribute("data-on", "")
+    fireEvent.click(trigger)
+    expect(screen.getByRole("menu", { name: "Filter" })).toBeInTheDocument()
+    expect(screen.getByRole("menuitemradio", { name: /Visited/ })).toHaveAttribute("aria-checked", "true")
+    expect(screen.getByRole("menuitemradio", { name: /Enrolled/ })).toBeDisabled()
+    fireEvent.click(screen.getByRole("menuitemradio", { name: /All/ }))
+    expect(onSelect).toHaveBeenCalledWith("all")
+  })
+
+  it("renders CodeChip with code and copy button", () => {
+    render(
+      <CodeChip
+        code="ABC-123"
+        prefix="Your code"
+        copyValue="https://alrahmahcomplex.or.tz/apply?ref=ABC-123"
+        copyLabel="Copy link"
+        copiedMessage="Link copied"
+        copyFailedMessage="Could not copy"
+      />,
+    )
+    expect(screen.getByText("ABC-123")).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Copy link" })).toBeInTheDocument()
+  })
+
+  it("renders StepTrack marking the current step", () => {
+    render(
+      <StepTrack
+        label="Step now"
+        steps={[
+          { label: "Applied", state: "done" },
+          { label: "Visited", state: "current" },
+          { label: "Enrolled", state: "upcoming" },
+        ]}
+      />,
+    )
+    const items = screen.getAllByRole("listitem")
+    expect(items[0]).toHaveAttribute("data-state", "done")
+    expect(items[1]).toHaveAttribute("data-state", "current")
+    expect(items[1]).toHaveAttribute("aria-current", "step")
+    expect(items[2]).toHaveAttribute("data-state", "upcoming")
+  })
+
+  it("renders MenuProfileRow and fires onClick", () => {
+    const onClick = vi.fn()
+    render(
+      <div role="menu">
+        <MenuProfileRow initials="AK" name="Amina Kassim" subtitle="ABC-123" onClick={onClick} />
+      </div>,
+    )
+    fireEvent.click(screen.getByRole("menuitem", { name: /Amina Kassim/ }))
+    expect(onClick).toHaveBeenCalledOnce()
+  })
+
+  it("swaps between logo link on home and back button elsewhere in TopBarHomeOrBack", () => {
+    const onBack = vi.fn()
+    const { rerender } = render(<TopBarHomeOrBack onHome homeHref="/home" homeLabel="Home" backLabel="Back" onBack={onBack} />)
+    expect(screen.getByRole("link", { name: "Home" })).toHaveAttribute("href", "/home")
+    rerender(<TopBarHomeOrBack onHome={false} homeHref="/home" homeLabel="Home" backLabel="Back" onBack={onBack} />)
+    fireEvent.click(screen.getByRole("button", { name: "Back" }))
+    expect(onBack).toHaveBeenCalledOnce()
   })
 })

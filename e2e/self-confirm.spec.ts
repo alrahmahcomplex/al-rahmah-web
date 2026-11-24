@@ -101,7 +101,7 @@ async function setPassword(page: Page, password: string, { securityCheck = true 
   await page.getByLabel("Rudia nenosiri jipya").fill(password)
   if (securityCheck) await waitForSecurityCheck(page)
   await page.getByRole("button", { name: "Weka nenosiri" }).click()
-  await expect(page).toHaveURL(/\/discount-code\/students/, { timeout: 20_000 })
+  await expect(page).toHaveURL(/\/home/, { timeout: 20_000 })
   await expect(page.getByRole("heading", { name: "Akaunti yako iko tayari!" })).toBeVisible()
 }
 
@@ -225,7 +225,7 @@ test.describe("a new agent", () => {
     await page.getByRole("button", { name: "Weka nenosiri" }).click()
 
     // The waiting code: its code and link, when the password works (O-N62), and no students.
-    await expect(page).toHaveURL(/\/discount-code\/students/, { timeout: 20_000 })
+    await expect(page).toHaveURL(/\/home/, { timeout: 20_000 })
     await expect(page.getByRole("heading", { name: "Code yako ya Punguzo" })).toBeVisible()
     await expect(page.getByText("Ofisi ya Masoko ikithibitisha code yako, ingia kwa namba yako ya simu na nenosiri hili kuona wanafunzi uliowaleta.")).toBeVisible()
     await expect(page.getByText("Familia zako ziko wapi")).toHaveCount(0)

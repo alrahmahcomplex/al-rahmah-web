@@ -22,8 +22,8 @@ export const AGENTS_ORIGIN = `https://${AGENTS_HOST}`
 // The staff portal's pages: staff screens and sign-in (/auth is shared with
 // agents., except /auth/confirm which belongs to staff).
 export const STAFF_PATHS = ["/staff", "/auth"] as const
-// The agents app's pages: sign-up, set password, and the dashboard at /home.
-export const AGENT_PATHS = ["/discount-code", "/home"] as const
+// The agents app's pages: sign-up, set password, and the app screens.
+export const AGENT_PATHS = ["/discount-code", "/home", "/students", "/reminders"] as const
 
 // Old addresses of sign-in and its reset pages: /login until #497 slice C
 // (staff), and the Discount code pages before one sign-in page for everyone

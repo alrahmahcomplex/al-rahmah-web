@@ -19,6 +19,9 @@ describe("proxy matcher", () => {
     "/auth/reset-password",
     "/discount-code/set-password",
     "/home",
+    "/students",
+    "/students/1ead0000-0000-4000-8000-000000000001",
+    "/reminders",
   ])(
     "runs on the auth-bound route %s",
     (url) => {

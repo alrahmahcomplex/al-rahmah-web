@@ -9,7 +9,10 @@ import { HOME, signIn as signInAnyone, type SignInError } from "@/lib/services/s
 import { requestHostAudience } from "@/lib/site-hosts"
 import { createClient } from "@/utils/supabase/server"
 
-export type SignInState = { error: SignInError } | null
+export type SignInState =
+  | { error: SignInError }
+  | { error: "wrong-host"; expected: "portal" | "agents" }
+  | null
 
 // The one sign-in form (#264). The rate limit comes first, on its own key per
 // IP and email (only a hash of the email goes into the key), so people
@@ -43,7 +46,7 @@ export async function signIn(_previous: SignInState, formData: FormData): Promis
   const audience = requestHostAudience(requestHeaders)
   const result = await signInAnyone(await createClient(), login, password, captchaToken, audience)
   if (!result.ok) {
-    if (result.error === "wrong-host") return { error: "no-account" }
+    if (result.error === "wrong-host") return { error: "wrong-host", expected: result.expected }
     return { error: result.error }
   }
 

@@ -9,13 +9,16 @@ import { LINK_REQUEST_COPY } from "@/app/discount-code/link-request-copy"
 import { ExpiredLink } from "@/app/discount-code/link-request-form"
 import { AuthHeading } from "@/components/auth-card"
 import { AUTH_SUBMIT, PasswordField } from "@/components/auth-fields"
+import { Icon } from "@/components/icons"
+import { FinishMark, Note } from "@/components/kit"
 import type { Language } from "@/lib/language"
 import { MINIMUM_PASSWORD_LENGTH } from "@/lib/password"
+import { AGENTS_ORIGIN, PORTAL_ORIGIN } from "@/lib/site-hosts"
 
 import { LOGIN_COPY } from "../copy"
 import { resetPassword, type ResetPasswordState } from "./actions"
 
-type ErrorKey = NonNullable<ResetPasswordState>["error"]
+type ErrorKey = Extract<NonNullable<ResetPasswordState>, { error: string }>["error"]
 
 // After these the link is spent or the account can't sign in, so the form goes away.
 const FINAL = new Set<ErrorKey>(["invalid-link", "deactivated", "switched-off", "retired", "access-off", "no-account"])
@@ -48,6 +51,32 @@ export function ResetPasswordForm({
   const reset = LINK_REQUEST_COPY[language]
   const [state, formAction, pending] = useActionState(resetPassword, null)
   const [shown, setShown] = useState(false)
+
+  if (state && "savedMoved" in state) {
+    const login = LOGIN_COPY[language]
+    const target = state.savedMoved
+    const words = target === "agents" ? login.savedMovedAgents : login.savedMovedPortal
+    const href = target === "agents" ? `${AGENTS_ORIGIN}/auth?from=moved` : `${PORTAL_ORIGIN}/auth`
+    const cta = target === "agents" ? login.openAgents : login.openPortal
+    return (
+      <div className="flex flex-col items-center gap-4 text-center">
+        <FinishMark />
+        <AuthHeading>{reset.resetHeading}</AuthHeading>
+        <Note tone="good">
+          <span>
+            {words.before}
+            <b>{words.host}</b>
+            {words.after}
+          </span>
+        </Note>
+        <a href={href} className="kit-btn kit-go kit-wide !min-h-[52px] !text-[16px]">
+          <span>{cta}</span>
+          <Icon name="right" size={18} />
+        </a>
+      </div>
+    )
+  }
+
   const error: ErrorKey | null = !tokenHash ? "invalid-link" : (state?.error ?? null)
 
   if (error === "invalid-link") return <ExpiredLink language={language} officePhone={officePhone} />

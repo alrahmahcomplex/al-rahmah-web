@@ -35,6 +35,7 @@ import {
 } from "@/components/kit"
 import type { LeadStatus } from "@/lib/services/leads"
 
+import { AgentAppPartsCards } from "./agent-parts"
 import { APPLICANTS, CAMPUS, DISCOUNT_REQUESTS, FEE_SCHEDULE, FILTERS, PAYMENT_KINDS, type Applicant } from "./fixtures"
 import { FormPartsCard, ListInPopoverCard } from "./form-parts"
 import { GuidedDemo } from "./guided-demo"
@@ -626,6 +627,7 @@ function MorePieces({ linkFilter }: { linkFilter: string }) {
         <ChipUpBarCard />
         <OverlayCards />
         <ListInPopoverCard />
+        <AgentAppPartsCards />
       </Bento>
     </div>
   )

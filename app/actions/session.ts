@@ -25,3 +25,13 @@ export async function signOutAndReturn(formData: FormData): Promise<void> {
   await signOutSession(supabase)
   redirect(returnPath(back))
 }
+
+// Local-only sign-out (#539): ends only this browser's session on this host,
+// never the person's sessions on another host or device (used on "Your pages
+// have moved" and the agents app's Sign out).
+export async function signOutLocalAndReturn(formData: FormData): Promise<void> {
+  const back = safeNextPath(String(formData.get("back") ?? ""))
+  const supabase = await createClient()
+  await signOutSession(supabase, { scope: "local" })
+  redirect(returnPath(back))
+}

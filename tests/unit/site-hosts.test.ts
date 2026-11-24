@@ -52,6 +52,9 @@ describe("the public site", () => {
     "/discount-code/set-password?token_hash=abc123&type=invite",
     "/home",
     "/home?step=Enrolled",
+    "/students",
+    "/students/1ead0000-0000-4000-8000-000000000001",
+    "/reminders",
   ])("sends agent %s to the agents host, query and all", async (path) => {
     const response = await open(`${PUBLIC}${path}`)
 
@@ -180,6 +183,9 @@ describe("the staff portal", () => {
     "/discount-code/set-password?token_hash=abc123&type=invite",
     "/home",
     "/home?step=Enrolled",
+    "/students",
+    "/students/1ead0000-0000-4000-8000-000000000001",
+    "/reminders",
   ])("sends agent %s to agents in one hop", async (path) => {
     const response = await open(`${PORTAL}${path}`)
 

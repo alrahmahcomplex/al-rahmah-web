@@ -262,6 +262,23 @@ export const upload = icon({
   ),
 })
 
+// The agents app's glyphs (#539, prototype v5): copy, chat (WhatsApp share),
+// and signout (moving out / leaving). Two lines each, 24px grid, 2px stroke.
+export const copy = icon({
+  outline: <rect x="8" y="8" width="12" height="12" rx="2.5" />,
+  detail: <path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2" />,
+})
+
+export const chat = icon({
+  outline: <path d="M4 6.5A2.5 2.5 0 0 1 6.5 4h11A2.5 2.5 0 0 1 20 6.5v8a2.5 2.5 0 0 1-2.5 2.5H10l-4.5 3.5V17A2.5 2.5 0 0 1 4 14.5z" />,
+  detail: <path d="M8.5 9h7M8.5 12.5h4.4" />,
+})
+
+export const signout = icon({
+  outline: <path d="M20 4v16" />,
+  detail: <path d="M4 12h12M12 7l5 5-5 5" />,
+})
+
 export const ICONS = {
   today,
   checkin,
@@ -307,6 +324,9 @@ export const ICONS = {
   up,
   pen,
   pin,
+  copy,
+  chat,
+  signout,
 } satisfies Record<string, IconDef>
 
 export type IconName = keyof typeof ICONS

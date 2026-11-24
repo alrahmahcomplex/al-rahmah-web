@@ -165,8 +165,11 @@ export async function spendLinkAndSetPassword(
   return { ok: true, data: { userId } }
 }
 
-export async function signOutSession(supabase: SupabaseClient): Promise<Result<null, "unavailable">> {
-  const { error } = await supabase.auth.signOut()
+export async function signOutSession(
+  supabase: SupabaseClient,
+  options?: { scope?: "local" | "global" },
+): Promise<Result<null, "unavailable">> {
+  const { error } = await supabase.auth.signOut(options?.scope ? { scope: options.scope } : undefined)
   if (error) return { ok: false, error: "unavailable" }
   return { ok: true, data: null }
 }

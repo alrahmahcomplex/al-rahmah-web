@@ -9,7 +9,10 @@ import { HOME } from "@/lib/services/sign-in"
 import { requestHostAudience } from "@/lib/site-hosts"
 import { createClient } from "@/utils/supabase/server"
 
-export type ResetPasswordState = { error: ResetPasswordError | "password-mismatch" } | null
+export type ResetPasswordState =
+  | { error: ResetPasswordError | "password-mismatch" }
+  | { savedMoved: "portal" | "agents" }
+  | null
 
 // The shared reset page's form (#265). Like the invite pages, the cookie
 // names the link this browser already used and the account it signed in,
@@ -45,7 +48,7 @@ export async function resetPassword(_previous: ResetPasswordState, formData: For
     }
     if (result.error === "wrong-host") {
       if (retrying) jar.delete({ name: VERIFIED_COOKIE, path: RESET_PATH })
-      return { error: "no-account" }
+      return { savedMoved: result.expected }
     }
     return { error: result.error }
   }

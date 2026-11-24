@@ -74,7 +74,8 @@ export function AgentsBell({ language, recent }: { language: Language; recent: r
   const unread = lastOpenedAt === SSR_BELL_SNAPSHOT ? 0 : countUnreadRecent(recent, lastOpenedAt)
 
   function markAllSeen() {
-    writeLastOpenedAt(openedAtFor(recent))
+    const next = openedAtFor(recent, lastOpenedAt === SSR_BELL_SNAPSHOT ? null : lastOpenedAt)
+    if (next) writeLastOpenedAt(next)
   }
 
   function closeOnLink(event: MouseEvent<HTMLDivElement>) {

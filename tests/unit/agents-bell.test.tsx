@@ -104,7 +104,23 @@ describe("agents bell timestamp unread state (#539)", () => {
     const futureFromDb = item("c", "Interviewed", "2026-11-24T12:00:05.123456+00:00")
     expect(countUnreadRecent([futureFromDb], readLastOpenedAt())).toBe(1)
 
-    const openedAt = openedAtFor([futureFromDb], new Date("2026-11-24T12:00:00.000Z"))
+    const openedAt = openedAtFor([futureFromDb], null)
     expect(countUnreadRecent([futureFromDb], openedAt)).toBe(0)
+  })
+
+  it("saves the newest shown change time, so a change made after the page loaded stays unread", () => {
+    const shown = [item("a", "Applied", "2026-11-24T09:00:00.000Z")]
+    const openedAt = openedAtFor(shown, null)
+    expect(openedAt).toBe("2026-11-24T09:00:00.000Z")
+
+    const afterReload = [item("b", "Interviewed", "2026-11-24T09:05:00.000Z"), ...shown]
+    expect(countUnreadRecent(afterReload, openedAt)).toBe(1)
+  })
+
+  it("keeps the saved time when it is newer, and saves nothing for an empty list", () => {
+    const saved = "2026-11-24T10:00:00.000Z"
+    expect(openedAtFor([item("a", "Applied", "2026-11-24T09:00:00.000Z")], saved)).toBe(saved)
+    expect(openedAtFor([], saved)).toBe(saved)
+    expect(openedAtFor([], null)).toBeNull()
   })
 })

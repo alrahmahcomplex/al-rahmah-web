@@ -26,16 +26,18 @@ export function countUnreadRecent(recent: readonly Pick<AgentRecentChange, "chan
   return unread
 }
 
-// Timestamp written when the bell opens: `now`, or the newest visible entry's
-// timestamp if the device clock slightly trails the database clock, so opening
-// the bell always clears what was just shown.
-export function openedAtFor(recent: readonly Pick<AgentRecentChange, "changedAt">[], now: Date = new Date()): string {
-  let latest = now.getTime()
+// Timestamp written when the bell opens: the newest change time among the
+// entries just shown, never the device clock. A change made after the page
+// loaded is not in `recent`, so it stays unread after a reload; a phone clock
+// running ahead cannot hide later changes. Keeps `previous` when it is newer,
+// and returns null when there is nothing to save.
+export function openedAtFor(recent: readonly Pick<AgentRecentChange, "changedAt">[], previous: string | null): string | null {
+  let latest = parseTimestamp(previous)
   for (const item of recent) {
     const changedMs = parseTimestamp(item.changedAt)
-    if (changedMs !== null && changedMs > latest) latest = changedMs
+    if (changedMs !== null && (latest === null || changedMs > latest)) latest = changedMs
   }
-  return new Date(latest).toISOString()
+  return latest === null ? null : new Date(latest).toISOString()
 }
 
 export function readLastOpenedAt(): string | null {

@@ -16,6 +16,7 @@ import {
 import { cn } from "@/lib/utils"
 
 import { Icon } from "./icons"
+import { focusedTextBoxIn, keepShowingAfter } from "./keep-in-view"
 import { foldMs, prefersReducedMotion } from "./motion"
 import "./guided-form.css"
 
@@ -212,22 +213,29 @@ export function GuidedNote({ children, leaving, instant, className }: ItemProps 
  * Scrolls so a newly opened step sits in the top third of the screen, once
  * now and again when the fold has finished (the prototype's `scrollToItem`).
  * Inside a staff stage it scrolls the stage's scroll area, the nearest
- * element marked `data-stage-scroll`; elsewhere it scrolls the window.
+ * element marked `data-stage-scroll`; elsewhere it scrolls the window. The
+ * screen is the part a phone keyboard leaves free, and a focused text box in
+ * the step stays above the keyboard: the later scroll used to push it back
+ * under the keyboard after `useKeepFocusInView` had brought it up.
  */
 export function revealStep(li: HTMLElement) {
   const area = li.closest<HTMLElement>("[data-stage-scroll]")
   const go = () => {
     const behavior = prefersReducedMotion() ? "auto" : "smooth"
+    const box = focusedTextBoxIn(li)
+    // How far down to scroll so the step's head sits at 18% of `height`, when it is outside 6% to 36%.
+    const plan = (top: number, height: number) => {
+      const by = top > height * 0.06 && top < height * 0.36 ? 0 : top - height * 0.18
+      return box ? keepShowingAfter(box, by) : by
+    }
     if (area) {
-      const top = li.getBoundingClientRect().top - area.getBoundingClientRect().top
-      const height = area.clientHeight
-      if (top > height * 0.06 && top < height * 0.36) return
-      area.scrollTo({ top: Math.max(0, top + area.scrollTop - height * 0.18), behavior })
+      const by = plan(li.getBoundingClientRect().top - area.getBoundingClientRect().top, area.clientHeight)
+      if (Math.abs(by) >= 1) area.scrollTo({ top: Math.max(0, area.scrollTop + by), behavior })
       return
     }
-    const top = li.getBoundingClientRect().top
-    if (top > window.innerHeight * 0.06 && top < window.innerHeight * 0.36) return
-    window.scrollTo({ top: Math.max(0, top + window.scrollY - window.innerHeight * 0.18), behavior })
+    const vv = window.visualViewport
+    const by = plan(li.getBoundingClientRect().top - (vv?.offsetTop ?? 0), vv?.height ?? window.innerHeight)
+    if (Math.abs(by) >= 1) window.scrollTo({ top: Math.max(0, window.scrollY + by), behavior })
   }
   go()
   window.setTimeout(go, foldMs() + 40)

@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next"
 import localFont from "next/font/local"
 
+import { KeepFocusInView } from "@/components/guided-form/keep-in-view"
 import { PageLanguageProvider } from "@/components/page-language"
 import { Toaster } from "@/components/ui/sonner"
 import { VercelInsights } from "@/components/vercel-insights"
@@ -42,6 +43,10 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = {
   themeColor: "#0900bb",
+  // Android Chrome shrinks the page above the keyboard instead of laying the
+  // keyboard over it, so a box near the foot of a form, or of the staff
+  // shell's full-height stage, can always scroll above it. iOS ignores this.
+  interactiveWidget: "resizes-content",
 }
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
@@ -49,6 +54,8 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
     <html lang="en" className={cn("font-sans", geist.variable, exo.variable)}>
       <body className="bg-slate-100 text-slate-800 min-h-screen antialiased">
         <PageLanguageProvider>{children}</PageLanguageProvider>
+        {/* On a phone, the focused text box is kept above the keyboard on every page. */}
+        <KeepFocusInView />
         <Toaster />
         <VercelInsights />
       </body>

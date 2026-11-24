@@ -1,7 +1,8 @@
 import { render, screen } from "@testing-library/react"
-import { afterEach, describe, expect, it, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import { ProgressBar, type ProgressBarProps } from "@/components/guided-form/progress-bar"
+import { foldMs } from "@/components/guided-form/motion"
 import { revealStep } from "@/components/guided-form/stack"
 import { GuidedReveal, GuidedTask } from "@/components/kit"
 
@@ -131,5 +132,68 @@ describe("revealStep", () => {
     revealStep(li)
     expect(win).toHaveBeenCalledTimes(1)
     li.remove()
+  })
+
+  describe("with a phone keyboard leaving the top 400px free", () => {
+    const step = (liTop: number, boxTop: number) => {
+      const li = document.createElement("li")
+      const box = document.createElement("input")
+      li.appendChild(box)
+      document.body.appendChild(li)
+      at(li, liTop)
+      vi.spyOn(box, "getBoundingClientRect").mockReturnValue({ top: boxTop, bottom: boxTop + 52 } as DOMRect)
+      box.focus()
+      return li
+    }
+    beforeEach(() => vi.stubGlobal("visualViewport", { offsetTop: 0, height: 400 }))
+    afterEach(() => {
+      vi.unstubAllGlobals()
+      document.body.replaceChildren()
+    })
+
+    it("scrolls on until the focused box is above the keyboard, not just the step's head", () => {
+      const win = vi.spyOn(window, "scrollTo").mockImplementation(() => {})
+      revealStep(step(300, 700))
+      // The head alone would need 300 - 72 = 228px; the box's foot (752) must reach 400 - 16.
+      expect(win).toHaveBeenCalledWith({ top: 752 - 384, behavior: "smooth" })
+    })
+
+    it("doesn't push the box back under the keyboard with the later scroll, once the fold has finished", () => {
+      vi.useFakeTimers()
+      try {
+        const win = vi.spyOn(window, "scrollTo").mockImplementation(() => {})
+        const li = step(300, 700)
+        revealStep(li)
+        expect(win).toHaveBeenCalledTimes(1)
+        // The first scroll ran: 368px up. The step's head now sits above the screen and the box at 332 to 384px.
+        at(li, 300 - 368)
+        vi.spyOn(li.querySelector("input")!, "getBoundingClientRect").mockReturnValue({ top: 332, bottom: 384 } as DOMRect)
+        vi.advanceTimersByTime(foldMs() + 40)
+        // Bringing the head back to 18% would scroll 140px up and put the box under the keyboard: it stays put.
+        expect(win).toHaveBeenCalledTimes(1)
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it("still scrolls when the head is in place but the keyboard covers the box", () => {
+      const win = vi.spyOn(window, "scrollTo").mockImplementation(() => {})
+      revealStep(step(100, 500))
+      expect(win).toHaveBeenCalledWith({ top: 552 - 384, behavior: "smooth" })
+    })
+
+    it("leaves the head's scroll alone when the box ends up in the free space", () => {
+      const win = vi.spyOn(window, "scrollTo").mockImplementation(() => {})
+      revealStep(step(300, 330))
+      // 330 - 228 = 102: below the 84px bar and above the keyboard.
+      expect(win).toHaveBeenCalledWith({ top: 228, behavior: "smooth" })
+    })
+
+    it("never scrolls the box up under the sticky bar", () => {
+      const win = vi.spyOn(window, "scrollTo").mockImplementation(() => {})
+      revealStep(step(300, 250))
+      // 250 - 228 = 22 would hide it under the 84px bar: stop at 250 - 84.
+      expect(win).toHaveBeenCalledWith({ top: 250 - 84, behavior: "smooth" })
+    })
   })
 })

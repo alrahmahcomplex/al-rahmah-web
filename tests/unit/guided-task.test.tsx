@@ -2,6 +2,7 @@ import { render, screen } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import { ProgressBar, type ProgressBarProps } from "@/components/guided-form/progress-bar"
+import { foldMs } from "@/components/guided-form/motion"
 import { revealStep } from "@/components/guided-form/stack"
 import { GuidedReveal, GuidedTask } from "@/components/kit"
 
@@ -155,6 +156,24 @@ describe("revealStep", () => {
       revealStep(step(300, 700))
       // The head alone would need 300 - 72 = 228px; the box's foot (752) must reach 400 - 16.
       expect(win).toHaveBeenCalledWith({ top: 752 - 384, behavior: "smooth" })
+    })
+
+    it("doesn't push the box back under the keyboard with the later scroll, once the fold has finished", () => {
+      vi.useFakeTimers()
+      try {
+        const win = vi.spyOn(window, "scrollTo").mockImplementation(() => {})
+        const li = step(300, 700)
+        revealStep(li)
+        expect(win).toHaveBeenCalledTimes(1)
+        // The first scroll ran: 368px up. The step's head now sits above the screen and the box at 332 to 384px.
+        at(li, 300 - 368)
+        vi.spyOn(li.querySelector("input")!, "getBoundingClientRect").mockReturnValue({ top: 332, bottom: 384 } as DOMRect)
+        vi.advanceTimersByTime(foldMs() + 40)
+        // Bringing the head back to 18% would scroll 140px up and put the box under the keyboard: it stays put.
+        expect(win).toHaveBeenCalledTimes(1)
+      } finally {
+        vi.useRealTimers()
+      }
     })
 
     it("still scrolls when the head is in place but the keyboard covers the box", () => {

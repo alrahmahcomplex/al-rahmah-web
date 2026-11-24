@@ -105,18 +105,18 @@ describe("SMS reset password save on each host (#539)", () => {
     }
   })
 
-  it("signs out locally and sends the agent to agents /auth when completed on portal", async () => {
+  it("signs out locally and sends the agent to agents /auth?from=moved when completed on portal", async () => {
     stubs.headers = new Headers({ host: "portal.alrahmahcomplex.or.tz" })
     stubs.cookies.get.mockReturnValue({ value: "user-1" })
     await expect(saveSmsResetPassword(null, form())).rejects.toThrow("NEXT_REDIRECT")
     expect(stubs.cookies.delete).toHaveBeenCalledWith({ name: "sms-reset-proven", path: "/auth" })
     expect(stubs.signOut).toHaveBeenCalledWith({ scope: "local" })
-    expect(stubs.redirect).toHaveBeenCalledWith("https://agents.alrahmahcomplex.or.tz/auth")
+    expect(stubs.redirect).toHaveBeenCalledWith("https://agents.alrahmahcomplex.or.tz/auth?from=moved")
   })
 })
 
 describe("reset-password action host audience (#539)", () => {
-  it("passes host audience and clears retry cookie on wrong-host", async () => {
+  it("passes host audience, clears retry cookie, and returns savedMoved on wrong-host", async () => {
     stubs.headers = new Headers({ host: "portal.alrahmahcomplex.or.tz" })
     stubs.cookies.get.mockReturnValue({ value: "tok-1 user-1" })
     stubs.resetPasswordFromLink.mockResolvedValue({ ok: false, error: "wrong-host", expected: "agents" })
@@ -125,7 +125,7 @@ describe("reset-password action host audience (#539)", () => {
     data.set("password", "new-strong-password")
     data.set("confirm", "new-strong-password")
 
-    expect(await resetPassword(null, data)).toEqual({ error: "no-account" })
+    expect(await resetPassword(null, data)).toEqual({ savedMoved: "agents" })
     expect(stubs.resetPasswordFromLink).toHaveBeenCalledWith(
       expect.anything(),
       "tok-1",

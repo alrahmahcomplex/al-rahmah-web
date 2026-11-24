@@ -6,8 +6,11 @@ import { useActionState, useEffect, useRef, useState } from "react"
 
 import { AUTH_SUBMIT, IconField, PasswordField } from "@/components/auth-fields"
 import { NoticeBox } from "@/components/guided-form"
+import { Icon } from "@/components/icons"
+import { Note } from "@/components/kit"
 import { TurnstileWidget, type TurnstileWidgetHandle } from "@/components/turnstile-widget"
 import type { Language } from "@/lib/language"
+import { AGENTS_ORIGIN, PORTAL_ORIGIN } from "@/lib/site-hosts"
 import { cn } from "@/lib/utils"
 
 import { signIn, type SignInState } from "./actions"
@@ -29,7 +32,17 @@ export const FORGOT_PASSWORD_PATH = "/auth/forgot-password"
 // copies a held value into the box's `value` attribute, where injected CSS
 // or a browser extension could read it (#278).
 // `studentsNote` shows the Discount code holder's note above the fields.
-export function LoginForm({ language, notice, studentsNote = false }: { language: Language; notice: LoginNotice | null; studentsNote?: boolean }) {
+export function LoginForm({
+  language,
+  notice,
+  noteKind = null,
+  showSignUp = false,
+}: {
+  language: Language
+  notice: LoginNotice | null
+  noteKind?: "students" | "moved" | null
+  showSignUp?: boolean
+}) {
   const copy = LOGIN_COPY[language]
   const turnstile = useRef<TurnstileWidgetHandle>(null)
   const form = useRef<HTMLFormElement>(null)
@@ -57,8 +70,9 @@ export function LoginForm({ language, notice, studentsNote = false }: { language
     return answer
   }, null)
   const [shown, setShown] = useState(false)
-  const error = state?.error ?? notice
-  const message = error ? copy.messages[error] : null
+  const wrongHost = state?.error === "wrong-host" ? state.expected : null
+  const error = state?.error && state.error !== "wrong-host" ? state.error : notice
+  const message = !wrongHost && error ? copy.messages[error] : null
 
   return (
     <>
@@ -66,7 +80,8 @@ export function LoginForm({ language, notice, studentsNote = false }: { language
 
       <form ref={form} action={formAction} className="flex w-full flex-col">
         <div className="flex flex-col gap-3">
-          {studentsNote && <NoticeBox tone="info">{copy.studentsNote}</NoticeBox>}
+          {noteKind === "moved" && <NoticeBox tone="info">{copy.movedNote}</NoticeBox>}
+          {noteKind === "students" && <NoticeBox tone="info">{copy.studentsNote}</NoticeBox>}
           {/* An email or a mobile number (#503), so a plain text box: the
               browser fills in whichever the person signs in with. */}
           <IconField
@@ -90,6 +105,21 @@ export function LoginForm({ language, notice, studentsNote = false }: { language
             toggleLabels={{ show: copy.showPassword, hide: copy.hidePassword }}
           />
 
+          {wrongHost && (
+            <div className="flex flex-col gap-3">
+              <Note tone="wait" role="alert">
+                {wrongHost === "portal" ? copy.staffHere : copy.agentHere}
+              </Note>
+              <a
+                href={wrongHost === "portal" ? `${PORTAL_ORIGIN}/auth` : `${AGENTS_ORIGIN}/auth?from=moved`}
+                className="kit-btn kit-ghost kit-wide !min-h-[52px] !rounded-full !px-5 !text-[15px] !whitespace-normal text-center"
+              >
+                <span>{wrongHost === "portal" ? copy.openPortal : copy.openAgents}</span>
+                <Icon name="right" size={18} />
+              </a>
+            </div>
+          )}
+
           {message && <LoginMessageView language={language} message={message} />}
         </div>
 
@@ -110,6 +140,19 @@ export function LoginForm({ language, notice, studentsNote = false }: { language
         >
           {copy.forgot}
         </Link>
+      )}
+
+      {showSignUp && (
+        <div className="mt-4 flex w-full flex-col gap-2.5 border-t border-blue-100 pt-4 text-center">
+          <p className="text-[13.5px] text-slate-600">{copy.noCode}</p>
+          <Link
+            href="/discount-code"
+            className="kit-btn kit-ghost kit-wide !min-h-[48px] !rounded-full !text-[15px]"
+          >
+            <Icon name="plus" size={18} />
+            <span>{copy.signUp}</span>
+          </Link>
+        </div>
       )}
     </>
   )

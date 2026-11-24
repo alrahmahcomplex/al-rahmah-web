@@ -37,7 +37,7 @@ describe.each(TEMPLATES)("the $name template", ({ name, path, signIn }) => {
   const html = read(path)
 
   it("carries a version marker on its second line", () => {
-    expect(html.split("\n")[1]).toMatch(new RegExp(`^<!-- al-rahmah-template: ${name} v\\d+ \\(\\d{4}-\\d{2}-\\d{2}, #\\d+\\)`))
+    expect(html.split("\n")[1]).toMatch(new RegExp(`^<!-- al-rahmah-template: ${name} v7 \\(\\d{4}-\\d{2}-\\d{2}, #539\\)`))
   })
 
   it("is configured locally from this file", () => {
@@ -54,10 +54,15 @@ describe.each(TEMPLATES)("the $name template", ({ name, path, signIn }) => {
     expect(words(agentBranches(html))).not.toMatch(/\b(agent|agents|referral|referrals|wakala)\b/i)
   })
 
-  it("is Swahili first, with English, and states the sign-in address", () => {
+  it("is Swahili first, with English, and states the sign-in address from .RedirectTo's host", () => {
     const agent = agentBranches(html)
     expect(agent.indexOf("nenosiri")).toBeLessThan(agent.indexOf("password"))
-    expect(agent).toContain(`{{ .SiteURL }}${signIn}"`)
+    expect(html).toContain(`{{ $signInOrigin := .SiteURL }}`)
+    expect(html).toContain(`{{ if ge (len .RedirectTo) 37 }}`)
+    expect(html).toContain(`"https://agents.alrahmahcomplex.or.tz/"`)
+    expect(html).toContain(`"https://portal.alrahmahcomplex.or.tz/"`)
+    expect(agent).toContain(`{{ $signInOrigin }}${signIn}"`)
+    expect(html).not.toContain(`{{ .SiteURL }}${signIn}`)
   })
 
   it("states the link lifetime the project uses, in both languages", () => {

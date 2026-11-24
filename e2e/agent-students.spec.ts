@@ -8,76 +8,17 @@ import { MANAGER } from "../tests/support/fixtures"
 import { chooseLanguage } from "./discount-code"
 import { logIn } from "./log-in"
 
-// The students using an agent's Discount code (#195) on a phone. Each test
-// makes its own agent and leads, with invented names.
+// The agents app (#195, #497, #539) on a phone: /home, /students,
+// /students/[id] and /reminders. Each test makes its own agent and leads with
+// invented names.
 
 test.use({ viewport: { width: 390, height: 844 }, hasTouch: true })
 
 async function signInAgent(page: Page, agent: StudentsAgent) {
   await chooseLanguage(page.context(), "sw")
   await logIn(page, agent.email, agent.password)
-  await expect(page).toHaveURL(/\/discount-code\/students$/)
+  await expect(page).toHaveURL(/\/home$/)
 }
-
-// The student cards, apart from the reminders above them (#497), which are list items too.
-const cards = (page: Page) => page.getByRole("listitem").filter({ hasNot: page.getByRole("button", { name: /^(Andaa ujumbe|Prepare a message)$/ }) })
-const card = (page: Page, name: string) => cards(page).filter({ hasText: name })
-
-test("the agent sees a card per student, with the result only once it is out", async ({ page }) => {
-  const agent = await agentWithLogin()
-  const declined = await studentLead({ name: "Neema Kadi", code: agent.code, status: "Declined", createdAt: "2026-09-01 09:00+03" })
-  await studentInterview(declined, { result: "Failed", score: 31.5, paid: true, registeredAt: "2026-09-04 09:00+03" })
-  const waiting = await studentLead({ name: "Juma Kadi", code: agent.code, status: "Interviewed", createdAt: "2026-09-02 09:00+03" })
-  await studentInterview(waiting, { result: "Passed", score: 88, paid: false, registeredAt: "2026-09-05 09:00+03" })
-  const passed = await studentLead({ name: "Asha Kadi", code: agent.code, status: "Interviewed", createdAt: "2026-09-03 09:00+03" })
-  await studentInterview(passed, { result: "Passed", score: 72.5, paid: true, registeredAt: "2026-09-06 09:00+03" })
-  await studentLead({ name: "Tatu Kadi", code: agent.code, status: "Visited", closure: "Inactive", createdAt: "2026-09-04 09:00+03" })
-
-  await signInAgent(page, agent)
-  await expect(page.getByRole("heading", { name: "Habari, Rehema!" })).toBeVisible()
-  await expect(page.getByText(`Code yako ${agent.code}`)).toBeVisible()
-  // Newest first.
-  await expect(cards(page)).toHaveText([/Tatu Kadi/, /Asha Kadi/, /Juma Kadi/, /Neema Kadi/])
-
-  await expect(card(page, "Asha Kadi")).toContainText("Amefanya usaili")
-  await expect(card(page, "Asha Kadi")).toContainText("Usaili: Amefaulu, alama 72.5%")
-  await expect(card(page, "Juma Kadi")).toContainText("Matokeo bado hayajatoka")
-  await expect(card(page, "Juma Kadi")).not.toContainText("88")
-  await expect(card(page, "Neema Kadi")).toContainText("Hakuendelea")
-  await expect(card(page, "Neema Kadi")).toContainText("Hakufaulu usaili")
-  await expect(card(page, "Tatu Kadi")).toContainText("Ametembelea shule · haendelei kwa sasa")
-  await expect(card(page, "Tatu Kadi")).toContainText("STD 3")
-  await expect(page.getByRole("main")).not.toContainText(/Staff-only explanation|Mzazi|\+2556|50,000|50000/)
-  await expect(page.getByText("Huoni familia? Waombe wahakikishe walitumia code yako, au piga simu ofisini.")).toBeVisible()
-  // One page: no search, no Onyesha zaidi.
-  await expect(page.getByRole("search")).toHaveCount(0)
-  await expect(page.getByRole("link", { name: "Onyesha zaidi" })).toHaveCount(0)
-
-  // The language lives in the top bar's menu, under the COMPLEX badge.
-  await expect(page.getByText("AL-RAHMAH COMPLEX", { exact: true })).toBeVisible()
-  await page.getByRole("button", { name: "Menyu" }).click()
-  await page.getByRole("button", { name: "English" }).click()
-  await expect(page.getByRole("heading", { name: "Hello, Rehema!" })).toBeVisible()
-  await expect(card(page, "Juma Kadi")).toContainText("Results aren't out yet")
-  await expect(card(page, "Tatu Kadi")).toContainText("Visited · not active")
-})
-
-test("past one page, Onyesha zaidi shows more and the name search finds one student", async ({ page }) => {
-  const agent = await agentWithLogin()
-  for (let n = 1; n <= 21; n++) {
-    await studentLead({ name: `Mtoto ${String(n).padStart(2, "0")} Orodha`, code: agent.code, createdAt: `2026-08-01 ${String(n).padStart(2, "0")}:00+03` })
-  }
-  await signInAgent(page, agent)
-  await expect(cards(page)).toHaveCount(20)
-  await page.getByRole("link", { name: "Onyesha zaidi" }).click()
-  await expect(cards(page)).toHaveCount(21)
-  await expect(page.getByRole("link", { name: "Onyesha zaidi" })).toHaveCount(0)
-
-  await page.getByLabel("Tafuta kwa jina la mwanafunzi").fill("mtoto 07")
-  await page.getByRole("button", { name: "Tafuta" }).click()
-  await expect(cards(page)).toHaveText([/Mtoto 07 Orodha/])
-  await expect(page.getByRole("link", { name: "Wote (21)" })).toBeVisible()
-})
 
 // The text a WhatsApp link carries, from its address.
 async function whatsAppText(link: ReturnType<Page["getByRole"]>) {
@@ -86,14 +27,99 @@ async function whatsAppText(link: ReturnType<Page["getByRole"]>) {
   return decodeURIComponent(href!.slice("https://wa.me/?text=".length))
 }
 
-test("with no students yet, the page says what will show and offers the three ready-made messages, with the code's amount", async ({ page }) => {
+test("the agent lands on /home, sees stats, opens /students and /students/[id] with results only once paid", async ({ page }) => {
+  const agent = await agentWithLogin()
+  const other = await agentWithLogin()
+  const declined = await studentLead({ name: "Neema Kadi", code: agent.code, status: "Declined", createdAt: "2026-09-01 09:00+03" })
+  await studentInterview(declined, { result: "Failed", score: 31.5, paid: true, registeredAt: "2026-09-04 09:00+03" })
+  const waiting = await studentLead({ name: "Juma Kadi", code: agent.code, status: "Interviewed", createdAt: "2026-09-02 09:00+03" })
+  await studentInterview(waiting, { result: "Passed", score: 88, paid: false, registeredAt: "2026-09-05 09:00+03" })
+  const passed = await studentLead({ name: "Asha Kadi", code: agent.code, status: "Interviewed", createdAt: "2026-09-03 09:00+03" })
+  await studentInterview(passed, { result: "Passed", score: 72.5, paid: true, registeredAt: "2026-09-06 09:00+03" })
+  const closed = await studentLead({ name: "Tatu Kadi", code: agent.code, status: "Visited", closure: "Inactive", createdAt: "2026-09-04 09:00+03" })
+  const foreignId = await studentLead({ name: "Siri Nje", code: other.code, status: "Applied" })
+
+  await signInAgent(page, agent)
+  await expect(page.getByRole("heading", { name: "Habari, Rehema!" })).toBeVisible()
+  await expect(page.getByText(agent.code, { exact: true })).toBeVisible()
+  await expect(page.getByRole("link", { name: "Shiriki code kwenye WhatsApp" })).toBeVisible()
+
+  // Stat tiles link to /students.
+  await page.getByRole("link", { name: /Waliojisajili wote/ }).click()
+  await expect(page).toHaveURL(/\/students$/)
+  const studentRows = page.locator("main a.kit-row")
+  await expect(studentRows).toHaveText([/Tatu Kadi.*haendelei kwa sasa/, /Asha Kadi/, /Juma Kadi/, /Neema Kadi/])
+  await expect(page.getByRole("main")).not.toContainText(/Staff-only explanation|Mzazi|\+2556|50,000|50000|Inactive|Family requested closure/)
+
+  // Open Tatu Kadi -> shows "haendelei kwa sasa" without exposing closure reason.
+  await page.goto(`/students/${closed}`)
+  await expect(page.getByText("haendelei kwa sasa")).toBeVisible()
+  await expect(page.getByRole("main")).not.toContainText(/Inactive|Family requested closure/)
+
+  // Open Asha Kadi -> paid result shows.
+  await page.goto(`/students/${passed}`)
+  await expect(page).toHaveURL(new RegExp(`/students/${passed}$`))
+  await expect(page.getByRole("heading", { name: "Asha Kadi" })).toBeVisible()
+  await expect(page.getByText("Amefaulu · alama 72.5%")).toBeVisible()
+
+  // Open Juma Kadi -> unpaid result stays hidden.
+  await page.goto(`/students/${waiting}`)
+  await expect(page.getByText("Matokeo bado hayajatoka")).toBeVisible()
+  await expect(page.getByRole("main")).not.toContainText("88")
+
+  // Open Neema Kadi -> Declined with translated reason.
+  await page.goto(`/students/${declined}`)
+  await expect(page.getByText("Hakuendelea")).toBeVisible()
+  await expect(page.getByText("Hakufaulu usaili")).toBeVisible()
+
+  // Another agent's student and a missing id show the same not-found page.
+  await page.goto(`/students/${foreignId}`)
+  await expect(page.getByText("Mwanafunzi huyu hajapatikana")).toBeVisible()
+  await page.goto("/students/00000000-0000-4000-8000-000000000999")
+  await expect(page.getByText("Mwanafunzi huyu hajapatikana")).toBeVisible()
+
+  // Switch language from the top bar menu.
+  await page.goto("/home")
+  await page.getByRole("button", { name: "Menyu" }).click()
+  await page.getByRole("button", { name: "English" }).click()
+  await expect(page.getByRole("heading", { name: "Hello, Rehema!" })).toBeVisible()
+})
+
+test("past one page on /students, Onyesha zaidi shows more, FilterMenu filters by step, and top bar search finds one student", async ({ page }) => {
+  const agent = await agentWithLogin()
+  for (let n = 1; n <= 21; n++) {
+    await studentLead({ name: `Mtoto ${String(n).padStart(2, "0")} Orodha`, code: agent.code, createdAt: `2026-08-01 ${String(n).padStart(2, "0")}:00+03` })
+  }
+  await studentLead({ name: "Rehema Visited", code: agent.code, status: "Visited" })
+  await signInAgent(page, agent)
+  await page.goto("/students")
+
+  await expect(page.locator("main a.kit-row")).toHaveCount(20)
+  await page.getByRole("link", { name: "Onyesha zaidi" }).click()
+  await expect(page.locator("main a.kit-row")).toHaveCount(22)
+  await expect(page.getByRole("link", { name: "Onyesha zaidi" })).toHaveCount(0)
+
+  // Filter via FilterMenu radio dropdown.
+  await page.getByRole("button", { name: /^Chuja:/ }).click()
+  await page.getByRole("menuitemradio", { name: /Ametembelea shule/ }).click()
+  await expect(page).toHaveURL(/\/students\?step=Visited$/)
+  await expect(page.locator("main a.kit-row")).toHaveText([/Rehema Visited/])
+
+  // Search from top bar.
+  const search = page.getByRole("searchbox", { name: "Tafuta mwanafunzi" }).or(page.getByPlaceholder("Tafuta mwanafunzi"))
+  await search.fill("mtoto 07")
+  await search.press("Enter")
+  await expect(page).toHaveURL(/\/students\?q=mtoto\+07/)
+  await expect(page.locator("main a.kit-row")).toHaveText([/Mtoto 07 Orodha/])
+  await expect(page.getByRole("link", { name: "Onyesha wote" })).toBeVisible()
+})
+
+test("with no students yet, /home shows the empty note and the ready-made share messages with the code's amount", async ({ page }) => {
   const agent = await agentWithLogin()
   await signInAgent(page, agent)
   await expect(page.getByRole("heading", { name: "Habari, Rehema!" })).toBeVisible()
-  await expect(page.getByText(`Code yako ${agent.code}`)).toBeVisible()
+  await expect(page.getByText(agent.code, { exact: true })).toBeVisible()
   await expect(page.getByText("Familia ikitumia code yako, utaona hapa kila hatua yake")).toBeVisible()
-  // The picker is on the page, so there is no Share button to open it.
-  await expect(page.getByRole("button", { name: "Shiriki code yako" })).toHaveCount(0)
 
   const share = page.getByRole("link", { name: "Shiriki kwenye WhatsApp" })
   const link = `/apply?ref=${agent.code}`
@@ -105,11 +131,10 @@ test("with no students yet, the page says what will show and offers the three re
   await page.getByRole("button", { name: "Fupi" }).click()
   expect(await whatsAppText(share)).toMatch(new RegExp(`^Al-Rahmah Complex: jaza fomu hapa, code ${agent.code} \\(punguzo TZS 10,000\\): `))
   await expect(page.getByRole("button", { name: "Nakili ujumbe" })).toBeVisible()
-  await expect(page.getByRole("button", { name: "Nakili kiungo" })).toBeVisible()
-  await expect(cards(page)).toHaveCount(0)
+  await expect(page.getByRole("button", { name: "Nakili kiungo" }).first()).toBeVisible()
 })
 
-test("the dashboard counts each step, lists who could use a reminder, and sends it from the agent's own WhatsApp", async ({ page, context }) => {
+test("reminders open /students/[id] where the agent sends via WhatsApp or copies the SMS message", async ({ page, context }) => {
   await context.grantPermissions(["clipboard-read", "clipboard-write"])
   const agent = await agentWithLogin()
   const ago = (days: number) => {
@@ -117,54 +142,32 @@ test("the dashboard counts each step, lists who could use a reminder, and sends 
     const [y, m, d] = today.split("-").map(Number)
     return new Date(Date.UTC(y, m - 1, d - days)).toISOString().slice(0, 10)
   }
-  await studentLead({ name: "FARAJI OMARI SALUM", code: agent.code, createdAt: `${ago(23)} 09:00+03` })
+  const farajiId = await studentLead({ name: "FARAJI OMARI SALUM", code: agent.code, createdAt: `${ago(23)} 09:00+03` })
   await studentLead({ name: "Daudi Mpya", code: agent.code, createdAt: `${ago(1)} 09:00+03` })
   await studentLead({ name: "Rehema Visited", code: agent.code, status: "Visited", createdAt: `${ago(30)} 09:00+03`, visitDate: ago(3) })
   await signInAgent(page, agent)
 
   await expect(page.getByRole("heading", { name: "Familia zako ziko wapi" })).toBeVisible()
-  await expect(page.getByRole("link", { name: "Amejisajili (2)" })).toBeVisible()
-  await expect(page.getByRole("link", { name: "Ametembelea shule (1)" })).toBeVisible()
   await expect(page.getByRole("heading", { name: "Wanaweza kukumbushwa (1)" })).toBeVisible()
-  const waiting = page.getByRole("listitem").filter({ has: page.getByRole("button", { name: "Andaa ujumbe" }) })
-  await expect(waiting).toHaveCount(1)
-  await expect(waiting).toContainText("FARAJI OMARI SALUM")
-  await expect(waiting).toContainText("Alijisajili siku 23 zilizopita, bado hajatembelea shule.")
+  const remRow = page.getByRole("link", { name: /FARAJI OMARI SALUM/ })
+  await expect(remRow).toContainText("Mkumbushe mzazi kuhusu usaili.")
+  await remRow.click()
+  await expect(page).toHaveURL(new RegExp(`/students/${farajiId}$`))
 
-  await waiting.getByRole("button", { name: "Andaa ujumbe" }).click()
-  const sheet = page.getByRole("dialog", { name: "Ujumbe wa kukumbusha" })
-  await expect(sheet).toBeVisible()
   const message =
     "Habari! Hongera kwa kumsajili Faraji Al-Rahmah Complex. Karibuni mtembelee shule muone mazingira. Kwa maswali, piga ofisi ya udahili: +255 673 526 644."
-  await expect(sheet.getByText(message)).toBeVisible()
-  // The text and no number: the agent picks the chat.
-  expect(await whatsAppText(sheet.getByRole("link", { name: "Fungua WhatsApp" }))).toBe(message)
-  await sheet.getByRole("button", { name: "Nakili ujumbe" }).click()
-  await expect(page.getByText("Ujumbe umenakiliwa")).toBeVisible()
+  await expect(page.getByText(message)).toBeVisible()
+  expect(await whatsAppText(page.getByRole("link", { name: "Fungua WhatsApp" }))).toBe(message)
+  await page.getByRole("button", { name: "Nakili ujumbe wa SMS" }).click()
+  await expect(page.getByText("Ujumbe umenakiliwa. Utume kwa SMS kutoka simu yako.")).toBeVisible()
   expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(message)
-  await page.keyboard.press("Escape")
-  await expect(sheet).toHaveCount(0)
-
-  // One step at a time; the counts stay whole.
-  await page.getByRole("link", { name: "Ametembelea shule (1)" }).click()
-  await expect(page).toHaveURL(/\?step=Visited$/)
-  await expect(cards(page)).toHaveText([/Rehema Visited/])
-  await expect(page.getByRole("link", { name: "Amejisajili (2)" })).toBeVisible()
-  await page.getByRole("link", { name: "Wote (3)" }).click()
-  await expect(cards(page)).toHaveCount(3)
-
-  // Share opens the same three messages in a sheet.
-  await page.getByRole("button", { name: "Shiriki code yako" }).click()
-  const shareSheet = page.getByRole("dialog", { name: "Shiriki code yako" })
-  await expect(shareSheet.getByRole("button", { name: "Kwa mzazi" })).toHaveAttribute("aria-pressed", "true")
-  expect(await whatsAppText(shareSheet.getByRole("link", { name: "Shiriki kwenye WhatsApp" }))).toContain("TZS 10,000")
 })
 
-test("a switched-off agent still signed in sees only the paused card, with no reason code, and can sign out", async ({ page }) => {
+test("a switched-off agent sees only the paused card and signs out via the menu confirmation sheet", async ({ page }) => {
   const agent = await agentWithLogin()
   await studentLead({ name: "Siri Kadi", code: agent.code })
   await signInAgent(page, agent)
-  await expect(card(page, "Siri Kadi")).toBeVisible()
+  await expect(page.getByText(agent.code, { exact: true })).toBeVisible()
 
   const { error } = await (await signedIn(MANAGER)).rpc("change_marketing_agent_status", {
     agent_id: agent.id,
@@ -180,29 +183,30 @@ test("a switched-off agent still signed in sees only the paused card, with no re
   await expect(alert).not.toContainText("switched_off")
   await expect(page.getByRole("main")).not.toContainText("Siri Kadi")
   await expect(page.getByRole("main")).not.toContainText(agent.code)
-  await expect(page.getByRole("link", { name: "Shiriki kwenye WhatsApp" })).toHaveCount(0)
 
-  await alert.getByRole("button", { name: "Toka" }).click()
+  await page.getByRole("button", { name: "Menyu" }).click()
+  await page.getByRole("menuitem", { name: "Toka" }).click()
+  const sheet = page.getByRole("dialog", { name: "Utoke kwenye akaunti?" })
+  await expect(sheet).toBeVisible()
+  await sheet.getByRole("button", { name: "Toka" }).click()
   await expect(page).toHaveURL(/\/auth$/)
-  // Signed out for real: the students page now asks to sign in.
-  await page.goto("/discount-code/students")
-  await expect(page).toHaveURL(/\/auth\?from=students$/)
+
+  // Signed out for real: /home now asks to sign in.
+  await page.goto("/home")
+  await expect(page).toHaveURL(/\/auth\?from=home$/)
 })
 
-// The one-time greeting after set-password follows the login it was left
-// for, never a code or a cookie alone (#497 review).
 test("the welcome greets only the login whose password was just set", async ({ page, context }) => {
   const agent = await agentWithLogin()
   await signInAgent(page, agent)
   const userId = await asSystem(async (sql) => (await sql.query<{ id: string }>("select id from auth.users where email = $1", [agent.email])).rows[0]?.id)
   if (!userId) throw new Error("no login for the fixture agent")
-  // As set-password sets it: this host, this path.
-  const welcome = (value: string) => ({ name: "agent-welcome", value, domain: new URL(page.url()).hostname, path: "/discount-code/students", httpOnly: true })
+  const welcome = (value: string) => ({ name: "agent-welcome", value, domain: new URL(page.url()).hostname, path: "/home", httpOnly: true })
 
   // A greeting left for another login doesn't greet this one.
   await context.addCookies([welcome(randomUUID())])
   await page.reload()
-  await expect(page.getByText(`Code yako ${agent.code}`)).toBeVisible()
+  await expect(page.getByText(agent.code, { exact: true })).toBeVisible()
   await expect(page.getByRole("heading", { name: "Umeidhinishwa!" })).toHaveCount(0)
 
   // Its own greets once; the button spends it.
@@ -210,14 +214,14 @@ test("the welcome greets only the login whose password was just set", async ({ p
   await page.reload()
   await expect(page.getByRole("heading", { name: "Umeidhinishwa!" })).toBeVisible()
   await page.getByRole("button", { name: "Ona Wanafunzi Niliowaleta" }).click()
-  await expect(page.getByText(`Code yako ${agent.code}`)).toBeVisible()
+  await expect(page.getByText(agent.code, { exact: true })).toBeVisible()
   await page.reload()
   await expect(page.getByRole("heading", { name: "Umeidhinishwa!" })).toHaveCount(0)
 })
 
-test("without a session, the students page sends the agent to sign in under a note saying why", async ({ page }) => {
+test("without a session, /home and /discount-code/students send the agent to sign in under a note saying why", async ({ page }) => {
   await chooseLanguage(page.context(), "sw")
   await page.goto("/discount-code/students")
-  await expect(page).toHaveURL(/\/auth\?from=students$/)
+  await expect(page).toHaveURL(/\/auth\?from=home$/)
   await expect(page.getByText("Ingia uone wanafunzi uliowaleta.")).toBeVisible()
 })

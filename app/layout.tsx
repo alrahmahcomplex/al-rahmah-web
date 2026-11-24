@@ -5,6 +5,7 @@ import { KeepFocusInView } from "@/components/guided-form/keep-in-view"
 import { PageLanguageProvider } from "@/components/page-language"
 import { Toaster } from "@/components/ui/sonner"
 import { VercelInsights } from "@/components/vercel-insights"
+import { PUBLIC_THEME_COLOR } from "@/lib/portal-app"
 import { cn } from "@/lib/utils"
 
 // The design tokens (DESIGN.md): every page, globals.css and each component
@@ -42,7 +43,7 @@ export const metadata: Metadata = {
 }
 
 export const viewport: Viewport = {
-  themeColor: "#0900bb",
+  themeColor: PUBLIC_THEME_COLOR,
   // Android Chrome shrinks the page above the keyboard instead of laying the
   // keyboard over it, so a box near the foot of a form, or of the staff
   // shell's full-height stage, can always scroll above it. iOS ignores this.

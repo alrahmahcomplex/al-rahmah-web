@@ -18,7 +18,10 @@ describe("proxy matcher", () => {
     "/auth/callback",
     "/auth/reset-password",
     "/discount-code/set-password",
-    "/discount-code/students",
+    "/home",
+    "/students",
+    "/students/1ead0000-0000-4000-8000-000000000001",
+    "/reminders",
   ])(
     "runs on the auth-bound route %s",
     (url) => {
@@ -27,8 +30,8 @@ describe("proxy matcher", () => {
   )
 
   // The cached forgot-password page needs no session (ADR 0006). The old
-  // /login addresses are redirected to /auth before the proxy would run.
-  it.each(["/", "/apply", "/discount-code", "/auth/forgot-password", "/login", "/login/reset-password", "/admissions", "/about", "/Al-Rahmah_Official_Logo.svg", "/_next/static/chunk.js"])(
+  // /login and /discount-code/students addresses redirect before the proxy runs.
+  it.each(["/", "/apply", "/discount-code", "/discount-code/students", "/auth/forgot-password", "/login", "/login/reset-password", "/admissions", "/about", "/Al-Rahmah_Official_Logo.svg", "/_next/static/chunk.js"])(
     "skips the public route %s",
     (url) => {
       expect(runsOn(url)).toBe(false)
@@ -39,5 +42,6 @@ describe("proxy matcher", () => {
     expect(runsOn("/staffroom-news")).toBe(false)
     expect(runsOn("/login-help")).toBe(false)
     expect(runsOn("/authors")).toBe(false)
+    expect(runsOn("/homes")).toBe(false)
   })
 })

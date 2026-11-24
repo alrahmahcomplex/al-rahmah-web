@@ -7,5 +7,5 @@
 // the same login forward keeps it, as that person's own.
 // httpOnly and short-lived, so no address can bring the greeting back.
 export const WELCOME_COOKIE = "agent-welcome"
-export const WELCOME_PATH = "/discount-code/students"
+export const WELCOME_PATH = "/home"
 export const WELCOME_MAX_AGE = 10 * 60

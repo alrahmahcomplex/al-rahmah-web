@@ -45,8 +45,8 @@ export function statePath(state: LanguageState, path: CachedPublicPath): string 
   return `${LANGUAGE_STATE_PREFIX}/${state}${path === "/" ? "" : path}`
 }
 
-type Condition = { type: "cookie" | "header"; key: string; value?: string }
-type Rewrite = { source: string; destination: string; has?: Condition[]; missing?: Condition[] }
+type Condition = { type: "cookie" | "header"; key: string; value?: string } | { type: "host"; value: string }
+export type LanguageRewrite = { source: string; destination: string; has?: Condition[]; missing?: Condition[] }
 
 // A Cookie header holding `lang` with an empty value: `lang=` or `lang=""`,
 // first or after a `;`, and last or before one. Spaces around the name and
@@ -61,11 +61,19 @@ const EMPTY_LANGUAGE_COOKIE = String.raw`(?:.*;)?\s*${LANGUAGE_COOKIE}\s*=\s*(?:
 // A cookie condition treats an empty value as no cookie, but getLanguage()
 // counted `lang=` as a cookie, so no card showed (#292). The raw Cookie
 // header still holds `lang=`, so a header condition catches it.
-export function languageStateRewrites(): Rewrite[] {
-  return CACHED_PUBLIC_PATHS.flatMap((path) => [
-    { source: path, has: [{ type: "cookie", key: LANGUAGE_COOKIE, value: "en" }], destination: statePath("en", path) },
-    { source: path, has: [{ type: "cookie", key: LANGUAGE_COOKIE }], destination: statePath("sw", path) },
-    { source: path, has: [{ type: "header", key: "cookie", value: EMPTY_LANGUAGE_COOKIE }], destination: statePath("sw", path) },
-    { source: path, missing: [{ type: "cookie", key: LANGUAGE_COOKIE }], destination: statePath("first", path) },
-  ])
+export function languageRewritesFor(
+  source: string,
+  destinationFor: (state: LanguageState) => string,
+  extraHas: Condition[] = [],
+): LanguageRewrite[] {
+  return [
+    { source, has: [...extraHas, { type: "cookie", key: LANGUAGE_COOKIE, value: "en" }], destination: destinationFor("en") },
+    { source, has: [...extraHas, { type: "cookie", key: LANGUAGE_COOKIE }], destination: destinationFor("sw") },
+    { source, has: [...extraHas, { type: "header", key: "cookie", value: EMPTY_LANGUAGE_COOKIE }], destination: destinationFor("sw") },
+    { source, ...(extraHas.length ? { has: extraHas } : {}), missing: [{ type: "cookie", key: LANGUAGE_COOKIE }], destination: destinationFor("first") },
+  ]
+}
+
+export function languageStateRewrites(): LanguageRewrite[] {
+  return CACHED_PUBLIC_PATHS.flatMap((path) => languageRewritesFor(path, (state) => statePath(state, path)))
 }

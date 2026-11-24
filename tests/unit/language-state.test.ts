@@ -13,6 +13,7 @@ import {
   promptNeededInState,
   statePath,
 } from "@/lib/language-state"
+import { agentsHostRewrites } from "@/lib/site-hosts"
 
 type Rewrite = ReturnType<typeof languageStateRewrites>[number]
 
@@ -85,13 +86,14 @@ describe("picking a page's copy from the lang cookie", () => {
 })
 
 describe("next.config.ts", () => {
-  it("rewrites before the filesystem, so the public address reaches the copy", async () => {
+  it("rewrites before the filesystem, so agents host rules and public language copies run first", async () => {
     const rewrites = await nextConfig.rewrites!()
-    expect(Array.isArray(rewrites) ? null : rewrites.beforeFiles).toEqual(languageStateRewrites())
+    expect(Array.isArray(rewrites) ? null : rewrites.beforeFiles).toEqual([...agentsHostRewrites(), ...languageStateRewrites()])
   })
 
   it("sends a direct visit to a copy back to the public address", async () => {
     const redirects = await nextConfig.redirects!()
+    expect(redirects).toContainEqual({ source: "/by-language/:state/agents-auth/:path*", destination: "/auth/:path*", permanent: false })
     expect(redirects).toContainEqual({ source: "/by-language/:state/:path*", destination: "/:path*", permanent: false })
   })
 })

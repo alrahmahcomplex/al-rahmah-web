@@ -40,7 +40,6 @@ export const UPRIGHT_EXO_ALLOWED = {
   "app/auth/confirm/confirm-form.tsx": { count: 4, reason: "Set your password page: hint, errors and the Log in link" },
   "app/discount-code/account-message.tsx": { count: 1, reason: "Discount code sign-in error" },
   "app/discount-code/link-request-form.tsx": { count: 4, reason: "Discount code link request: status, link, fallback and expired intro" },
-  "app/discount-code/students/page.tsx": { count: 1, reason: "Discount code students page: a text link" },
   "app/auth/login-form.tsx": { count: 2, reason: "Sign-in page: the Forgot password link and the error" },
   "app/auth/other-session-notice.tsx": { count: 1, reason: "Sign-in page: the other-session notice" },
   "app/auth/reset-password/reset-password-form.tsx": { count: 2, reason: "Reset password page: the password rule and the Log in link" },

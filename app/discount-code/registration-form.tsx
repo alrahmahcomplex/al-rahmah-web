@@ -882,7 +882,7 @@ function Confirmation({
       )}
 
       <Link
-        href="/discount-code/students"
+        href="/home"
         className={cn(buttonVariants({ variant: "orange" }), "h-auto min-h-13 w-full justify-between gap-3 rounded-full py-2.5 pr-4 pl-6 text-left font-exo text-lg whitespace-normal italic shadow-md shadow-orange-500/20")}
       >
         {copy.seeStudents}

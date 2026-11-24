@@ -133,17 +133,18 @@ test("the Manager sends the invite; the agent sets a password from the email and
   await expect(agentPage.getByLabel("Nenosiri jipya", { exact: true })).toHaveAttribute("type", "text")
   await setPassword(agentPage)
 
-  // Once, right after the password: approved, signed in, and the button on (#497 state 4).
-  await expect(agentPage).toHaveURL(/\/discount-code\/students$/)
+  // Once, right after the password: approved, signed in, and the button on (#497 state 4, #539).
+  await expect(agentPage).toHaveURL(/\/home$/)
   await expect(agentPage.getByRole("heading", { name: "Umeidhinishwa!" })).toBeVisible()
   await agentPage.getByRole("button", { name: "Ona Wanafunzi Niliowaleta" }).click()
-  await expect(agentPage.getByText(`Code yako ${agent.code}`)).toBeVisible()
+  await expect(agentPage.getByText(agent.code, { exact: true })).toBeVisible()
   await expect(agentPage.getByRole("heading", { name: "Umeidhinishwa!" })).toHaveCount(0)
   // Spent: neither the page nor the old address with a flag brings it back.
   await agentPage.reload()
-  await expect(agentPage.getByText(`Code yako ${agent.code}`)).toBeVisible()
+  await expect(agentPage.getByText(agent.code, { exact: true })).toBeVisible()
   await agentPage.goto("/discount-code/students?welcome=1")
-  await expect(agentPage.getByText(`Code yako ${agent.code}`)).toBeVisible()
+  await expect(agentPage).toHaveURL(/\/home(\?welcome=1)?$/)
+  await expect(agentPage.getByText(agent.code, { exact: true })).toBeVisible()
   await expect(agentPage.getByRole("heading", { name: "Umeidhinishwa!" })).toHaveCount(0)
 
   await openAgentsScreen(page, agent.fullName)
@@ -156,8 +157,8 @@ test("an agent signs in on the one sign-in page; wrong credentials point to the 
   await expect(notice(page).getByRole("link", { name: "Umesahau nenosiri?" })).toHaveAttribute("href", "/auth/forgot-password")
 
   await signInAgent(page, SEEDED_AGENT.email, SEEDED_AGENT.password)
-  await expect(page).toHaveURL(/\/discount-code\/students$/)
-  await expect(page.getByText(`Code yako ${SEEDED_AGENT.code}`)).toBeVisible()
+  await expect(page).toHaveURL(/\/home$/)
+  await expect(page.getByText(SEEDED_AGENT.code, { exact: true })).toBeVisible()
 })
 
 test("the old Discount code sign-in address opens the one sign-in page, which sends nobody elsewhere", async ({ page }) => {
@@ -182,7 +183,7 @@ test("a browser signed in as staff refuses the agent's link until staff sign out
   await page.getByRole("button", { name: "Toka" }).click()
   await expect(page.getByRole("heading", { name: "Weka nenosiri lako" })).toBeVisible()
   await setPassword(page)
-  await expect(page).toHaveURL(/\/discount-code\/students$/)
+  await expect(page).toHaveURL(/\/home$/)
 })
 
 test("a signed-in browser opening sign-in goes to its own side, and an agent never reaches the staff side", async ({
@@ -192,17 +193,17 @@ test("a signed-in browser opening sign-in goes to its own side, and an agent nev
   await signInStaff(page, MANAGER)
   await page.goto("/auth")
   await expect(page).toHaveURL(/\/staff$/)
-  // The students page sends staff to sign-in, which sends them home.
+  // The agents home sends staff to sign-in, which sends them home.
   await page.goto("/discount-code/students")
   await expect(page).toHaveURL(/\/staff$/)
 
   const agentPage = await newContextPage(browser)
   await signInAgent(agentPage, SEEDED_AGENT.email, SEEDED_AGENT.password)
-  await expect(agentPage).toHaveURL(/\/discount-code\/students$/)
+  await expect(agentPage).toHaveURL(/\/home$/)
   await agentPage.goto("/auth")
-  await expect(agentPage).toHaveURL(/\/discount-code\/students$/)
+  await expect(agentPage).toHaveURL(/\/home$/)
   await agentPage.goto("/staff")
-  await expect(agentPage).toHaveURL(/\/discount-code\/students$/)
+  await expect(agentPage).toHaveURL(/\/home$/)
 })
 
 test("a switched-off agent is told in the students page’s words to call the office, with no reason code", async ({ page }) => {

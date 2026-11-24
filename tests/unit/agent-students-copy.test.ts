@@ -4,6 +4,7 @@ import { cardLines, firstName, MAX_SHOWN, PAGE_SIZE, shownFrom, stepFrom, STUDEN
 import type { AgentStudent } from "@/lib/services/agent-students"
 
 const base: AgentStudent = {
+  id: "1ead0000-0000-4000-8000-000000000001",
   name: "Amina Wangu",
   className: "STD 3",
   status: "Applied",

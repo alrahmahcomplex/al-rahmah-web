@@ -87,14 +87,14 @@ test("an agent resets their password by SMS and signs in with their mobile", asy
   await page.getByLabel("Nenosiri jipya", { exact: true }).fill(NEW_PASSWORD)
   await page.getByLabel("Rudia nenosiri jipya").fill(NEW_PASSWORD)
   await page.getByRole("button", { name: "Weka nenosiri" }).click()
-  await expect(page).toHaveURL(/\/discount-code\/students$/)
-  await expect(page.getByText(`Code yako ${agent.code}`)).toBeVisible()
+  await expect(page).toHaveURL(/\/home$/)
+  await expect(page.getByText(agent.code, { exact: true })).toBeVisible()
 
   const later = await browser.newContext()
   await chooseLanguage(later, "sw")
   const again = await later.newPage()
   await logIn(again, "+255 799 000 503", NEW_PASSWORD)
-  await expect(again).toHaveURL(/\/discount-code\/students$/)
+  await expect(again).toHaveURL(/\/home$/)
   await later.close()
 })
 
@@ -114,7 +114,7 @@ test("something that is neither an email nor a mobile is refused before anything
 
 test("a browser already signed in is asked to sign out first, so a right number never replaces that session", async ({ page }) => {
   await logIn(page, SEEDED_AGENT.email, SEEDED_AGENT.password)
-  await expect(page).toHaveURL(/\/discount-code\/students$/)
+  await expect(page).toHaveURL(/\/home$/)
   await page.goto("/auth/forgot-password")
   await page.getByLabel("Barua pepe au namba ya simu").fill("0799 000 503")
   await expect(page.locator('input[name="cf-turnstile-response"]').first()).toHaveValue(/.+/, { timeout: 20_000 })

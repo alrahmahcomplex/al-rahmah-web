@@ -80,13 +80,32 @@ describe("the one sign-in form", () => {
     expect(alert.querySelector("a")).toBeNull()
   })
 
-  it("says why to sign in above the fields only when sent from the students page", () => {
-    const { unmount } = render(<LoginForm language="sw" notice={null} studentsNote />)
+  it("says why to sign in above the fields when sent from the students page or moved host", () => {
+    const { unmount } = render(<LoginForm language="sw" notice={null} noteKind="students" />)
     expect(screen.getByText("Ingia uone wanafunzi uliowaleta.")).toBeInTheDocument()
     unmount()
 
+    const moved = render(<LoginForm language="en" notice={null} noteKind="moved" showSignUp />)
+    expect(screen.getByText("Welcome to the new address! Sign in once to carry on.")).toBeInTheDocument()
+    expect(screen.getByRole("link", { name: "Sign up for a code" })).toHaveAttribute("href", "/discount-code")
+    moved.unmount()
+
     render(<LoginForm language="en" notice={null} />)
     expect(screen.queryByText("Sign in to see the students you referred.")).not.toBeInTheDocument()
+    expect(screen.queryByRole("link", { name: "Sign up for a code" })).not.toBeInTheDocument()
+  })
+
+  it("shows an outlined link to the other host when signed in on the wrong host (#539)", async () => {
+    stubs.signIn.mockResolvedValue({ error: "wrong-host", expected: "agents" })
+    render(<LoginForm language="en" notice={null} />)
+
+    await submit("amina@example.test", "right-password", "Log In")
+
+    const alert = await screen.findByRole("alert")
+    expect(alert).toHaveTextContent("This account holds a Discount code. Your pages are now at agents.alrahmahcomplex.or.tz.")
+    const link = screen.getByRole("link", { name: "Go to your pages" })
+    expect(link).toHaveAttribute("href", "https://agents.alrahmahcomplex.or.tz/auth?from=moved")
+    expect(link).toHaveClass("kit-ghost")
   })
 
   it("carries the sign-in security check inside the form", () => {

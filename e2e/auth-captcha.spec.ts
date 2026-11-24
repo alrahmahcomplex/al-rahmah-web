@@ -37,7 +37,7 @@ test.describe("with Supabase's CAPTCHA protection on", () => {
 
   test("a Discount code holder gets in", async ({ page }) => {
     await logIn(page, SEEDED_AGENT.email, SEEDED_AGENT.password)
-    await expect(page).toHaveURL(/\/discount-code\/students$/)
+    await expect(page).toHaveURL(/\/home$/)
   })
 
   test("a wrong password still says wrong password, and a fresh check lets the right one in", async ({ page }) => {

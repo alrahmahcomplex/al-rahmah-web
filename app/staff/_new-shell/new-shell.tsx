@@ -2,7 +2,7 @@
 
 import { Dialog } from "@base-ui/react/dialog"
 import { usePathname } from "next/navigation"
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type CSSProperties, type KeyboardEvent, type PointerEvent, type RefObject } from "react"
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type CSSProperties, type KeyboardEvent, type PointerEvent, type ReactNode, type RefObject } from "react"
 
 import { RoundButton, Toaster } from "@/components/kit"
 
@@ -161,15 +161,46 @@ function OutsideScrollbar({ scrollRef, pageRef }: { scrollRef: RefObject<HTMLDiv
   )
 }
 
+export type NewShellProps = Omit<ShellProps, "person"> & {
+  person?: ShellProps["person"]
+  /** Subtitle under "Al-Rahmah Complex" in the sidebar. Defaults to "Admissions Portal". */
+  brandSubtitle?: string
+  /** Accessible name of the sidebar navigation landmark. Defaults to "Staff". */
+  navLabel?: string
+  /** Custom top-bar controls (used by the agents app; staff keeps the default bar unchanged). */
+  topBar?: ReactNode
+  /** Overrides which sidebar href is marked current (e.g. /reminders -> /home). */
+  currentHref?: string
+  /** Distinguishes the staff and agents shells without affecting staff attributes or behaviour. */
+  shellApp?: "staff" | "agents"
+  /** Document language attribute for the shell container (used by bilingual agents pages). */
+  lang?: string
+}
+
 /**
  * The new staff shell (DESIGN.md, The staff shell): the sidebar, the top bar
  * in the white frame, and the rounded stage holding the page. From 861px the
  * sidebar folds to its icons and can be dragged wider; up to 860px it is a
- * drawer opened from the Menu button.
+ * drawer opened from the Menu button. Also reused by the agents app (#539)
+ * with its own top bar and sidebar entries; staff behaviour is unchanged.
  */
-export function NewShell({ items, person, bell, folded: foldedAtLoad, sidebarWidth: widthAtLoad, canSearch, children }: ShellProps) {
+export function NewShell({
+  items,
+  person,
+  bell,
+  folded: foldedAtLoad,
+  sidebarWidth: widthAtLoad,
+  canSearch,
+  brandSubtitle,
+  navLabel,
+  topBar,
+  currentHref,
+  shellApp = "staff",
+  lang,
+  children,
+}: NewShellProps) {
   const pathname = usePathname()
-  const current = currentNavHref(pathname, items.map((item) => item.href))
+  const current = currentHref ?? currentNavHref(pathname, items.map((item) => item.href))
 
   // The layout keeps the shell mounted across staff pages, so the sidebar
   // preferences live here, and so does whether the person has moved from
@@ -341,8 +372,10 @@ export function NewShell({ items, person, bell, folded: foldedAtLoad, sidebarWid
     <>
       <div
         ref={rootRef}
+        lang={lang}
         data-shell="new"
-        data-staff-shell=""
+        data-staff-shell={shellApp === "staff" ? "" : undefined}
+        data-agents-shell={shellApp === "agents" ? "" : undefined}
         data-folded={folded ? "" : undefined}
         data-resizing={resizing ? "" : undefined}
         data-live={live ? "" : undefined}
@@ -352,7 +385,14 @@ export function NewShell({ items, person, bell, folded: foldedAtLoad, sidebarWid
         <aside ref={asideRef} id="staff-sidebar" aria-label="Sidebar" className="ns-sb">
           <div className="ns-sb-in">
             <SidebarBoundary items={items}>
-              <SidebarContent items={items} current={current} folded={folded} nameRef={nameRef} />
+              <SidebarContent
+                items={items}
+                current={current}
+                folded={folded}
+                nameRef={nameRef}
+                brandSubtitle={brandSubtitle}
+                navLabel={navLabel}
+              />
             </SidebarBoundary>
           </div>
           {!folded && (
@@ -377,30 +417,53 @@ export function NewShell({ items, person, bell, folded: foldedAtLoad, sidebarWid
 
         <div className="ns-main">
           <header className="ns-tb">
-            <Dialog.Root open={drawer} onOpenChange={(next) => setDrawer(next)}>
-              <Dialog.Trigger render={<RoundButton icon="menu" label="Open the menu" size={40} className="ns-menu" />} />
-              <Dialog.Portal>
-                <Dialog.Backdrop className="ns-drawer-back" />
-                <Dialog.Popup aria-label="Menu" data-shell="new" className="ns-drawer">
-                  <SidebarBoundary items={items} onChoose={() => setDrawer(false)}>
-                    <SidebarContent items={items} current={current} onChoose={() => setDrawer(false)} />
-                  </SidebarBoundary>
-                </Dialog.Popup>
-              </Dialog.Portal>
-            </Dialog.Root>
-            <RoundButton
-              icon="panel"
-              label="Fold or open the sidebar"
-              size={40}
-              className="ns-tog"
-              aria-pressed={!folded}
-              aria-controls="staff-sidebar"
-              onClick={toggle}
-            />
-            {canSearch && <TopBarSearch />}
-            <span className="ns-spacer" />
-            {bell && <Bell pending={bell.pending} />}
-            <PersonMenu person={person} />
+            {topBar ? (
+              <>
+                <RoundButton
+                  icon="panel"
+                  label="Fold or open the sidebar"
+                  size={40}
+                  className="ns-tog"
+                  aria-pressed={!folded}
+                  aria-controls="staff-sidebar"
+                  onClick={toggle}
+                />
+                {topBar}
+              </>
+            ) : (
+              <>
+                <Dialog.Root open={drawer} onOpenChange={(next) => setDrawer(next)}>
+                  <Dialog.Trigger render={<RoundButton icon="menu" label="Open the menu" size={40} className="ns-menu" />} />
+                  <Dialog.Portal>
+                    <Dialog.Backdrop className="ns-drawer-back" />
+                    <Dialog.Popup aria-label="Menu" data-shell="new" className="ns-drawer">
+                      <SidebarBoundary items={items} onChoose={() => setDrawer(false)}>
+                        <SidebarContent
+                          items={items}
+                          current={current}
+                          onChoose={() => setDrawer(false)}
+                          brandSubtitle={brandSubtitle}
+                          navLabel={navLabel}
+                        />
+                      </SidebarBoundary>
+                    </Dialog.Popup>
+                  </Dialog.Portal>
+                </Dialog.Root>
+                <RoundButton
+                  icon="panel"
+                  label="Fold or open the sidebar"
+                  size={40}
+                  className="ns-tog"
+                  aria-pressed={!folded}
+                  aria-controls="staff-sidebar"
+                  onClick={toggle}
+                />
+                {canSearch && <TopBarSearch />}
+                <span className="ns-spacer" />
+                {bell && <Bell pending={bell.pending} />}
+                {person && <PersonMenu person={person} />}
+              </>
+            )}
           </header>
 
           <div ref={stageRef} className="ns-stage">

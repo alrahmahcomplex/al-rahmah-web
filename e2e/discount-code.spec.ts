@@ -105,9 +105,9 @@ for (const lang of ["sw", "en"] as const satisfies Lang[]) {
       email: who.email,
     })
 
-    // The way on is the students page, which asks a person with no session to sign in, saying why (#497).
+    // The way on is the agents home, which asks a person with no session to sign in, saying why (#497, #539).
     await page.getByRole("link", { name: lang === "sw" ? "Ona Wanafunzi Niliowaleta" : "See my Referred Students" }).click()
-    await expect(page).toHaveURL(/\/auth\?from=students$/)
+    await expect(page).toHaveURL(/\/auth\?from=home$/)
     await expect(page.getByText(lang === "sw" ? "Ingia uone wanafunzi uliowaleta." : "Sign in to see the students you referred.")).toBeVisible()
   })
 }

@@ -23,11 +23,13 @@ export type ListRowProps = {
   onClick?: () => void
   /** Marks the row picked in a list beside a detail. */
   current?: boolean
+  /** Pads the row 8px inside and bleeds its hover tint out to the card edge (for link-row lists). */
+  inset?: boolean
   className?: string
 }
 
 /** A row in a card (DESIGN.md, Lists): disc, title over caption, something at the end; a Lavender Mist line between rows. */
-export function ListRow({ icon, leading, title, caption, trailing, href, onClick, current, className }: ListRowProps) {
+export function ListRow({ icon, leading, title, caption, trailing, href, onClick, current, inset, className }: ListRowProps) {
   const inside = (
     <>
       {leading}
@@ -44,17 +46,22 @@ export function ListRow({ icon, leading, title, caption, trailing, href, onClick
     </>
   )
   const rowClass = cn("kit-row", className)
+  const insetAttr = inset ? "" : undefined
   if (href)
     return (
-      <Link href={href} className={rowClass} aria-current={current ? "page" : undefined}>
+      <Link href={href} className={rowClass} data-inset={insetAttr} aria-current={current ? "page" : undefined}>
         {inside}
       </Link>
     )
   if (onClick)
     return (
-      <button type="button" className={rowClass} onClick={onClick} aria-current={current || undefined}>
+      <button type="button" className={rowClass} data-inset={insetAttr} onClick={onClick} aria-current={current || undefined}>
         {inside}
       </button>
     )
-  return <div className={rowClass}>{inside}</div>
+  return (
+    <div className={rowClass} data-inset={insetAttr}>
+      {inside}
+    </div>
+  )
 }

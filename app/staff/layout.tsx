@@ -1,8 +1,8 @@
-import type { Metadata } from "next"
+import type { Metadata, Viewport } from "next"
 import { cookies } from "next/headers"
 
 import { MotionProvider } from "@/components/motion-provider"
-import { PORTAL_APP_METADATA } from "@/lib/portal-app"
+import { PORTAL_APP_METADATA, PORTAL_THEME_COLOR } from "@/lib/portal-app"
 import { managesStaff } from "@/lib/services/staff-auth"
 
 import { BELL_SCREENS } from "./bell-screens"
@@ -17,6 +17,8 @@ import type { ShellBell, ShellItem } from "./shell-types"
 // the pages themselves, so Next.js no longer marks them (#437, #441). Part of
 // the portal, which installs as an app (#497).
 export const metadata: Metadata = { ...PORTAL_APP_METADATA, robots: { index: false } }
+
+export const viewport: Viewport = { themeColor: PORTAL_THEME_COLOR }
 
 // Signs the staff member in, reads what the shell needs (the entries they
 // may see, the bell's count, the sidebar cookies) and hands it to the shell.

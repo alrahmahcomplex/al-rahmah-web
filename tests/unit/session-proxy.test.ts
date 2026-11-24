@@ -57,11 +57,14 @@ describe("the session proxy", () => {
     expect(response.headers.get("location")).toBe("https://school.example/auth")
   })
 
-  it("sends a visitor with no session from the Discount code students page to sign-in, marked for its note", async () => {
+  it("sends a visitor with no session from the agents app routes to sign-in, marked for its note", async () => {
     sdk.getClaims.mockResolvedValue({ data: null, error: null })
 
-    expect((await visit("/discount-code/students")).headers.get("location")).toBe("https://school.example/auth?from=students")
-    expect((await visit("/discount-code/students?q=neema")).headers.get("location")).toBe("https://school.example/auth?from=students")
+    expect((await visit("/home")).headers.get("location")).toBe("https://school.example/auth?from=home")
+    expect((await visit("/home?q=neema")).headers.get("location")).toBe("https://school.example/auth?from=home")
+    expect((await visit("/students")).headers.get("location")).toBe("https://school.example/auth?from=home")
+    expect((await visit("/students/1ead0000-0000-4000-8000-000000000001")).headers.get("location")).toBe("https://school.example/auth?from=home")
+    expect((await visit("/reminders")).headers.get("location")).toBe("https://school.example/auth?from=home")
   })
 
   // A forged or expired token, a refresh the Auth server refused, an outage

@@ -6,7 +6,7 @@ import { after } from "next/server"
 
 import { normalizeTanzanianMobile } from "@/lib/phone"
 import { checkPublicFormLimit } from "@/lib/rate-limit"
-import { currentSessionKind } from "@/lib/services/auth-session"
+import { currentSessionKind, signOutSession } from "@/lib/services/auth-session"
 import { homeFor } from "@/lib/services/sign-in"
 import { AGENTS_ORIGIN, requestHostAudience } from "@/lib/site-hosts"
 import {
@@ -147,6 +147,6 @@ export async function saveSmsResetPassword(_previous: SmsPasswordState, formData
   jar.delete({ name: PROVEN_COOKIE, path: "/auth" })
   const target = homeFor("agent", requestHostAudience(await headers()))
   if (target.kind === "home") redirect(target.path)
-  await supabase.auth.signOut({ scope: "local" })
+  await signOutSession(supabase, { scope: "local" })
   redirect(`${AGENTS_ORIGIN}/auth?from=moved`)
 }

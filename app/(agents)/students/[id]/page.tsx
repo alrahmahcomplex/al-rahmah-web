@@ -76,6 +76,7 @@ export default async function AgentStudentDetailPage({ params }: Props) {
               <StepTrack label={copy.stepNow} steps={stepItems} />
             </div>
           )}
+          {student.notActive && <p className="ag-not-active">{studentsCopy.notActive}</p>}
 
           <div className="ag-kv-sep">
             <KeyValueList

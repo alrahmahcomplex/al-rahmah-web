@@ -206,7 +206,13 @@ begin
         coalesce(
             (
                 select jsonb_agg(
-                    jsonb_build_object('id', r.id, 'student_name', r.student_name, 'status', r.status, 'days', r.days)
+                    jsonb_build_object(
+                        'id', r.id,
+                        'student_name', r.student_name,
+                        'status', r.status,
+                        'days', r.days,
+                        'changed_at', r.changed_at
+                    )
                     order by r.changed_at desc, r.id desc
                 )
                 from recent_rows r

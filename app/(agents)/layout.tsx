@@ -11,7 +11,7 @@ import { formatTanzanianMobile } from "@/lib/mask-login"
 import { AGENTS_THEME_COLOR, PORTAL_APP_METADATA } from "@/lib/portal-app"
 import { getAgentUser } from "@/lib/services/agent-auth"
 import { pendingAgentCode } from "@/lib/services/agent-self-confirm"
-import { verifiedUserId } from "@/lib/services/auth-session"
+import { currentAuthUser, verifiedUserId } from "@/lib/services/auth-session"
 import { getAgentStudents, type AgentRecentChange } from "@/lib/services/agent-students"
 import { createClient } from "@/utils/supabase/server"
 
@@ -69,11 +69,11 @@ export default async function AgentsAppLayout({ children }: { children: ReactNod
       }
     }
   } else if (agent.error === "pending") {
-    const [pendingCode, userResult] = await Promise.all([pendingAgentCode(supabase), supabase.auth.getUser()])
+    const [pendingCode, userResult] = await Promise.all([pendingAgentCode(supabase), currentAuthUser(supabase)])
     if (pendingCode.ok && pendingCode.data) {
-      const user = userResult.data.user
+      const user = userResult.ok ? userResult.data : null
       profile = {
-        fullName: (typeof user?.user_metadata?.full_name === "string" && user.user_metadata.full_name) || pendingCode.data,
+        fullName: user?.fullName || pendingCode.data,
         code: pendingCode.data,
         phone: formatTanzanianMobile(user?.phone),
         referralUrl: origin ? referralLink(origin, pendingCode.data) : null,

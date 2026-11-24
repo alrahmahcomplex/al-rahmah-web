@@ -29,52 +29,10 @@ import type { Language } from "@/lib/language"
 import type { AgentRecentChange } from "@/lib/services/agent-students"
 
 import "./agents.css"
+import { countUnreadRecent, openedAtFor, readLastOpenedAt, subscribeLastOpenedAt, writeLastOpenedAt } from "./bell-state"
 import { ACCOUNT_COPY, AGENTS_COPY, DISCOUNT_COPY, STUDENTS_COPY } from "./copy"
 
-const BELL_SEEN_KEY = "ar-agents-bell-seen-v1"
-const bellListeners = new Set<() => void>()
-
-function readSeenRaw(): string {
-  try {
-    return window.localStorage.getItem(BELL_SEEN_KEY) ?? "[]"
-  } catch {
-    return "[]"
-  }
-}
-
-function parseSeenKeys(raw: string | null): Set<string> | null {
-  if (raw === null) return null
-  try {
-    const parsed = JSON.parse(raw)
-    if (!Array.isArray(parsed)) return new Set()
-    return new Set(parsed.filter((item): item is string => typeof item === "string"))
-  } catch {
-    return new Set()
-  }
-}
-
-function subscribeSeen(listener: () => void) {
-  bellListeners.add(listener)
-  const onStorage = (event: StorageEvent) => {
-    if (event.key === BELL_SEEN_KEY) listener()
-  }
-  window.addEventListener("storage", onStorage)
-  return () => {
-    bellListeners.delete(listener)
-    window.removeEventListener("storage", onStorage)
-  }
-}
-
-function writeSeenKeys(keys: readonly string[]) {
-  try {
-    window.localStorage.setItem(BELL_SEEN_KEY, JSON.stringify(keys.slice(0, 50)))
-  } catch {
-    // Device storage may be blocked in private mode; ignore silently.
-  }
-  bellListeners.forEach((listener) => listener())
-}
-
-const changeKey = (item: AgentRecentChange) => `${item.id}:${item.status}`
+const SSR_BELL_SNAPSHOT = "__ssr__"
 
 function AgentsSearchForm({ placeholder, query }: { placeholder: string; query: string }) {
   const [typed, setTyped] = useState(query)
@@ -107,19 +65,16 @@ function StudentsAwareSearch({ placeholder }: { placeholder: string }) {
   return <AgentsSearchForm placeholder={placeholder} query={query} />
 }
 
-function AgentsBell({ language, recent }: { language: Language; recent: readonly AgentRecentChange[] }) {
+export function AgentsBell({ language, recent }: { language: Language; recent: readonly AgentRecentChange[] }) {
   const copy = AGENTS_COPY[language]
   const studentsCopy = STUDENTS_COPY[language]
   const [open, setOpen] = useState(false)
-  const seenRaw = useSyncExternalStore(subscribeSeen, readSeenRaw, () => null)
-  const seen = parseSeenKeys(seenRaw)
+  const lastOpenedAt = useSyncExternalStore(subscribeLastOpenedAt, readLastOpenedAt, () => SSR_BELL_SNAPSHOT)
 
-  const unread = seen === null ? 0 : recent.filter((item) => !seen.has(changeKey(item))).length
+  const unread = lastOpenedAt === SSR_BELL_SNAPSHOT ? 0 : countUnreadRecent(recent, lastOpenedAt)
 
   function markAllSeen() {
-    const next = new Set(seen ?? [])
-    for (const item of recent) next.add(changeKey(item))
-    writeSeenKeys([...next])
+    writeLastOpenedAt(openedAtFor(recent))
   }
 
   function closeOnLink(event: MouseEvent<HTMLDivElement>) {

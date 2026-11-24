@@ -119,6 +119,7 @@ export default async function AgentsStudentsPage({ searchParams }: { searchParam
                   >
                     {studentsCopy.statuses[student.status]}
                   </span>
+                  {student.notActive && ` · ${studentsCopy.notActive}`}
                 </>
               }
               href={`/students/${student.id}`}

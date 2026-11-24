@@ -33,7 +33,7 @@ export type ReminderStep = "Applied" | "Visited" | "Interviewed"
 export type AgentReminder = { id: string; name: string; className: string; step: ReminderStep; days: number }
 
 // A student whose record changed in the last 7 Tanzanian days (for the bell).
-export type AgentRecentChange = { id: string; name: string; status: AgentStudentStatus; days: number }
+export type AgentRecentChange = { id: string; name: string; status: AgentStudentStatus; days: number; changedAt: string }
 
 export type AgentStudentDetail = AgentStudent & {
   reminder: { step: ReminderStep; days: number } | null
@@ -86,7 +86,7 @@ type DetailRow = Row & {
 }
 
 type ReminderRow = { id: string; student_name: string; class_name: string; step: ReminderStep; days: number }
-type RecentRow = { id: string; student_name: string; status: AgentStudentStatus; days: number }
+type RecentRow = { id: string; student_name: string; status: AgentStudentStatus; days: number; changed_at: string }
 
 type Answer = {
   state: string
@@ -187,6 +187,7 @@ export async function getAgentStudents(
         name: row.student_name,
         status: row.status,
         days: Number(row.days),
+        changedAt: row.changed_at,
       })),
     },
   }

@@ -36,7 +36,7 @@ test("the agent lands on /home, sees stats, opens /students and /students/[id] w
   await studentInterview(waiting, { result: "Passed", score: 88, paid: false, registeredAt: "2026-09-05 09:00+03" })
   const passed = await studentLead({ name: "Asha Kadi", code: agent.code, status: "Interviewed", createdAt: "2026-09-03 09:00+03" })
   await studentInterview(passed, { result: "Passed", score: 72.5, paid: true, registeredAt: "2026-09-06 09:00+03" })
-  await studentLead({ name: "Tatu Kadi", code: agent.code, status: "Visited", closure: "Inactive", createdAt: "2026-09-04 09:00+03" })
+  const closed = await studentLead({ name: "Tatu Kadi", code: agent.code, status: "Visited", closure: "Inactive", createdAt: "2026-09-04 09:00+03" })
   const foreignId = await studentLead({ name: "Siri Nje", code: other.code, status: "Applied" })
 
   await signInAgent(page, agent)
@@ -48,11 +48,16 @@ test("the agent lands on /home, sees stats, opens /students and /students/[id] w
   await page.getByRole("link", { name: /Waliojisajili wote/ }).click()
   await expect(page).toHaveURL(/\/students$/)
   const studentRows = page.locator("main a.kit-row")
-  await expect(studentRows).toHaveText([/Tatu Kadi/, /Asha Kadi/, /Juma Kadi/, /Neema Kadi/])
-  await expect(page.getByRole("main")).not.toContainText(/Staff-only explanation|Mzazi|\+2556|50,000|50000/)
+  await expect(studentRows).toHaveText([/Tatu Kadi.*haendelei kwa sasa/, /Asha Kadi/, /Juma Kadi/, /Neema Kadi/])
+  await expect(page.getByRole("main")).not.toContainText(/Staff-only explanation|Mzazi|\+2556|50,000|50000|Inactive|Family requested closure/)
+
+  // Open Tatu Kadi -> shows "haendelei kwa sasa" without exposing closure reason.
+  await page.goto(`/students/${closed}`)
+  await expect(page.getByText("haendelei kwa sasa")).toBeVisible()
+  await expect(page.getByRole("main")).not.toContainText(/Inactive|Family requested closure/)
 
   // Open Asha Kadi -> paid result shows.
-  await page.getByRole("link", { name: /Asha Kadi/ }).click()
+  await page.goto(`/students/${passed}`)
   await expect(page).toHaveURL(new RegExp(`/students/${passed}$`))
   await expect(page.getByRole("heading", { name: "Asha Kadi" })).toBeVisible()
   await expect(page.getByText("Amefaulu · alama 72.5%")).toBeVisible()

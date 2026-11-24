@@ -165,6 +165,39 @@ export async function spendLinkAndSetPassword(
   return { ok: true, data: { userId } }
 }
 
+export type AuthUserSummary = {
+  email: string | null
+  phone: string | null
+  fullName: string | null
+}
+
+// Basic identity fields from the current verified auth user, for screens that
+// render a masked login or pending profile without calling Supabase Auth
+// directly from pages or layouts.
+export async function currentAuthUser(supabase: SupabaseClient): Promise<Result<AuthUserSummary | null, "unavailable">> {
+  const {
+    data: { user },
+    error,
+  } = await supabase.auth.getUser()
+  if (!user) {
+    const status = (error as { status?: number } | null)?.status ?? 400
+    if (error && !(status >= 400 && status < 500)) return { ok: false, error: "unavailable" }
+    return { ok: true, data: null }
+  }
+  const metaName =
+    typeof user.user_metadata?.full_name === "string" && user.user_metadata.full_name.trim()
+      ? user.user_metadata.full_name.trim()
+      : null
+  return {
+    ok: true,
+    data: {
+      email: user.email ?? null,
+      phone: user.phone ?? null,
+      fullName: metaName,
+    },
+  }
+}
+
 export async function signOutSession(
   supabase: SupabaseClient,
   options?: { scope?: "local" | "global" },

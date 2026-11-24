@@ -5,6 +5,7 @@ import { redirect } from "next/navigation"
 import { AuthCard } from "@/components/auth-card"
 import { getLanguage } from "@/lib/language"
 import { maskLogin } from "@/lib/mask-login"
+import { currentAuthUser } from "@/lib/services/auth-session"
 import { signedInHome } from "@/lib/services/sign-in"
 import { requestHostAudience } from "@/lib/site-hosts"
 import { createClient } from "@/utils/supabase/server"
@@ -36,7 +37,8 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
   if (home.kind === "home") redirect(home.path)
 
   if (home.kind === "wrong-host" && home.as === "agent") {
-    const user = (await supabase.auth.getUser()).data.user
+    const userResult = await currentAuthUser(supabase)
+    const user = userResult.ok ? userResult.data : null
     const masked = maskLogin({ email: user?.email, phone: user?.phone })
     return (
       <AuthCard language={language}>

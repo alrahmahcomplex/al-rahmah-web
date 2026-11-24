@@ -75,6 +75,7 @@
   margin: 6px 0 2px; font: italic 800 22px/1.2 var(--font-exo), "Exo", system-ui, sans-serif; color: var(--gf-red);
 }
 .ag-declined-why { margin: 0 0 16px; color: var(--gf-ink-soft); font-size: 14.5px; }
+.ag-not-active { margin: 0 0 14px; color: var(--gf-ink-soft); font-size: 14px; }
 .ag-kv-sep { padding-top: 14px; border-top: 1px solid var(--gf-mist); }
 .ag-mono { font: 600 15px ui-monospace, "Cascadia Code", Consolas, monospace; letter-spacing: 0.04em; color: var(--gf-indigo); }
 

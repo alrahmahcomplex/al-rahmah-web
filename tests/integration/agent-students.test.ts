@@ -371,4 +371,25 @@ describe("the agent dashboard's answer", () => {
     const visitor = await anonClient().rpc("agent_student", { lead_id: ownId })
     expect(visitor.error?.code).toBe("42501")
   })
+
+  test("recent entries carry their latest change timestamp and advance on same-step updates", async () => {
+    const agent = await agentWithLogin()
+    const leadId = await studentLead({ name: "Bell Same Step", code: agent.code, status: "Interviewed", createdAt: at(1) })
+    const client = await signedIn(agent)
+
+    const before = await getAgentStudents(client, { search: "", limit: 20, offset: 0 })
+    if (!before.ok || before.data.kind !== "active") throw new Error(JSON.stringify(before))
+    const first = before.data.recent.find((r) => r.id === leadId)
+    expect(first).toBeDefined()
+    expect(Number.isFinite(Date.parse(first!.changedAt))).toBe(true)
+
+    // Recording a paid interview result while the lead stays at Interviewed
+    // writes a newer audit_log row, advancing changedAt for the same step.
+    await studentInterview(leadId, { result: "Passed", score: 85, paid: true, registeredAt: at(0) })
+    const after = await getAgentStudents(client, { search: "", limit: 20, offset: 0 })
+    if (!after.ok || after.data.kind !== "active") throw new Error(JSON.stringify(after))
+    const second = after.data.recent.find((r) => r.id === leadId)
+    expect(second?.status).toBe("Interviewed")
+    expect(Date.parse(second!.changedAt)).toBeGreaterThan(Date.parse(first!.changedAt))
+  })
 })

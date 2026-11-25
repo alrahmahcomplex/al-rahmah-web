@@ -35,4 +35,56 @@ describe("SummaryRow", () => {
     expect(screen.getByText("AMINA · STD 3")).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Badilisha" }).parentElement).toHaveClass("self-end")
   })
+
+  describe("stacked layout", () => {
+    it("puts the label and Change link on the top line, with the bold answer and sub line underneath", () => {
+      const { container } = render(
+        <SummaryRow
+          stacked
+          label="Full name"
+          value="AMINA JUMA SALIM"
+          sub="Father: JUMA SALIM MRISHO"
+          action={<ChangeLink small onClick={() => {}}>Change</ChangeLink>}
+        />,
+      )
+      const row = container.querySelector("[data-summary-row]")!
+      expect(row).toHaveAttribute("data-summary-stacked")
+      const label = container.querySelector("[data-summary-label]")!
+      const value = container.querySelector("[data-summary-value]")!
+      const sub = container.querySelector("[data-summary-sub]")!
+      const link = screen.getByRole("button", { name: "Change" })
+      expect(label).toHaveTextContent("Full name")
+      expect(value).toHaveTextContent("AMINA JUMA SALIM")
+      expect(value).toHaveClass("text-slate-800")
+      expect(sub).toHaveTextContent("Father: JUMA SALIM MRISHO")
+      expect(link).toHaveClass("font-normal", "text-[13px]")
+      // Top line shares a parent between label and link; answer comes after both.
+      expect(label.parentElement).toBe(link.parentElement)
+      expect(link.compareDocumentPosition(value) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+      expect(value.compareDocumentPosition(sub) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    })
+
+    it("renders a none answer in plain grey", () => {
+      const { container } = render(<SummaryRow stacked label="Discount code" value="No code" none action={<ChangeLink small>Change</ChangeLink>} />)
+      expect(container.querySelector("[data-summary-value]")).toHaveClass("text-slate-600")
+    })
+
+    it("renders a fixed row with no action", () => {
+      const { container } = render(<SummaryRow stacked label="Class · from the Admission form" value="FORM 1 · 2027" />)
+      expect(container.querySelector("[data-summary-label]")).toHaveTextContent("Class · from the Admission form")
+      expect(container.querySelector("[data-summary-value]")).toHaveTextContent("FORM 1 · 2027")
+      expect(screen.queryByRole("button")).toBeNull()
+    })
+
+    it("without a label, puts the answer on the top line beside the action", () => {
+      const { container } = render(
+        <SummaryRow stacked value="AMINA · FORM 1" sub="No-label variant" action={<ChangeLink small>Change</ChangeLink>} />,
+      )
+      expect(container.querySelector("[data-summary-label]")).toBeNull()
+      const value = container.querySelector("[data-summary-value]")!
+      const link = screen.getByRole("button", { name: "Change" })
+      expect(value.compareDocumentPosition(link) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+      expect(container.querySelector("[data-summary-sub]")).toHaveTextContent("No-label variant")
+    })
+  })
 })

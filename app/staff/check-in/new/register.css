@@ -8,8 +8,6 @@
 .rs-centre { margin: 0; text-align: center; }
 .rs-nk { align-self: center; min-height: 44px; padding: 0 14px; }
 
-/* The folded name: the father's full name under the student's. */
-.rs-fa { display: block; font-weight: 400; font-size: 13px; line-height: 1.3; color: var(--kit-quiet, var(--gf-quiet)); }
 .rs-live { min-height: 21px; overflow-wrap: anywhere; }
 .rs-live:empty { display: none; }
 .rs-live b { color: var(--gf-ink); font-weight: 600; letter-spacing: 0.02em; }

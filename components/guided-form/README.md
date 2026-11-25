@@ -84,8 +84,8 @@ Prototype CSS: `.stack`, `.item`, `.step`, `.sum-w`, `.fold`, `.settled`, `.head
 
 | Component | Use | Prototype |
 |---|---|---|
-| `SummaryRow` | Folded answer, one group per question: tick dot and label on the left, the answer right-aligned with its action right under it; stacks when too narrow | `.sum` |
-| `ChangeLink` | Two-word "Badilisha …" button; give it an `aria-label` naming the student when there are several | `.btn-text` |
+| `SummaryRow` | Folded answer. Default: tick dot and label on the left, right-aligned answer and action on the right, stacking when narrow. `stacked`: 13px grey label with right-aligned action (`ChangeLink small`) on the top line, full-width 16px bold answer underneath (`none` renders plain grey), and optional 13.5px `sub` line below | `.sum` / `.rowx` |
+| `ChangeLink` | Change button on a folded row; give it an `aria-label` naming the student when there are several. `small` draws the 13px regular-weight link for `SummaryRow stacked` | `.btn-text` / `.chg` |
 | `QuestionTitle` | Centred Exo italic question; `htmlFor` makes it the field label | `h2.q` |
 | `Hint` | Grey help line | `.hint` |
 | `FieldInput` | Pill input, 52px, centred text; `invalid`, `icon`, `alignStart` | `.input` |

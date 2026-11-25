@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react"
 
-import { GuidedHead, GuidedStack, GuidedStep, Hint, QuestionTitle, revealStep, SummaryRow, ContinuePill, useKeepFocusInView, type ProgressGroup } from "@/components/guided-form"
+import { ChangeLink, GuidedHead, GuidedStack, GuidedStep, Hint, QuestionTitle, revealStep, SummaryRow, ContinuePill, useKeepFocusInView, type ProgressGroup } from "@/components/guided-form"
 import { Button, ButtonLink, GuidedTask, Note, PageHeader, Sheet, TextLink, toast } from "@/components/kit"
 import { OUTSIDE_TANZANIA, sameSchoolName } from "@/lib/places"
 import type { LeadClass, RegistrationQuestion } from "@/lib/services/leads"
@@ -100,7 +100,7 @@ const KEPT = "Your answers are kept on this computer, so you don’t need to typ
 
 type Head = { key: string; title: string; remove?: number }
 // `fixed`: an answer the family gave that check-in keeps, shown with no Change.
-type Step = { id: string; group: number; head: Head; label: string; done: boolean; silent?: boolean; fixed?: boolean; summary: () => ReactNode; body: () => ReactNode }
+type Step = { id: string; group: number; head: Head; label: string; done: boolean; silent?: boolean; fixed?: boolean; none?: boolean; summary: () => ReactNode; sub?: () => ReactNode; body: () => ReactNode }
 
 type FinishedStudent = { student: number; leadId: string; admissionNumber: string; name: string; className: LeadClass }
 type Finished = { students: FinishedStudent[]; ten: number; requests: number; codeMissed: number; unknownSchools: number }
@@ -472,12 +472,8 @@ function RegisterForm({ staffId, today, years, defaultYear, fees, canLink, canEn
         head,
         label: `Full name${form?.given.name ? FROM_FORM : ""}`,
         done: !!s.name,
-        summary: () => (
-          <>
-            {full}
-            <small className="rs-fa">Father: {father(s.key)}</small>
-          </>
-        ),
+        summary: () => full,
+        sub: () => `Father: ${father(s.key)}`,
         // At check-in a name the form did not give in full opens with what it did give.
         body: () => <NameQuestion id={`rs-${sid}`} next={i > 0} saved={s.name ?? form?.prefill} onDone={(name) => setName(s.key, name)} />,
       })
@@ -538,6 +534,7 @@ function RegisterForm({ staffId, today, years, defaultYear, fees, canLink, canEn
           head,
           label: "Previous school",
           done,
+          none: !!s.school && "notKnown" in s.school,
           summary: () =>
             !s.school
               ? ""
@@ -577,6 +574,7 @@ function RegisterForm({ staffId, today, years, defaultYear, fees, canLink, canEn
           head,
           label: "Sibling",
           done: !!sib,
+          none: sib?.kind === "none",
           summary: () => {
             if (!sib) return ""
             if (sib.kind === "none") return "Not a sibling"
@@ -707,6 +705,7 @@ function RegisterForm({ staffId, today, years, defaultYear, fees, canLink, canEn
         head: finish,
         label: "Discount code",
         done: a.code !== undefined,
+        none: a.code === "none",
         summary: () => (a.code === "none" ? "No code" : `${a.code} · family told who sees the progress`),
         body: () => <CodeQuestion id="rs-code" saved={a.code} onDone={(code) => answer("code", (x) => ({ ...x, code }))} />,
       })
@@ -765,6 +764,7 @@ function RegisterForm({ staffId, today, years, defaultYear, fees, canLink, canEn
       head,
       label: `Sibling on file of ${firstOf(studentName(s?.name))}`,
       done: saved !== undefined && !(saved && open === ask.student),
+      none: saved === false,
       summary: () => (saved ? `Sibling of ${ask.name} · ${why}` : "Not a sibling"),
       body: () => (
         <OnFileQuestion
@@ -1013,13 +1013,16 @@ function RegisterForm({ staffId, today, years, defaultYear, fees, canLink, canEn
         summary={
           s.done && (
             <SummaryRow
+              stacked
               label={s.label}
               value={s.summary()}
+              sub={s.sub?.()}
+              none={s.none}
               action={
                 !s.fixed && (
-                  <TextLink onClick={() => !locked && setEdit(s.id)} aria-label={`Change ${s.label}${s.group === 0 && s.id !== "more" ? `, ${s.head.title}` : ""}`}>
+                  <ChangeLink small onClick={() => !locked && setEdit(s.id)} aria-label={`Change ${s.label}${s.group === 0 && s.id !== "more" ? `, ${s.head.title}` : ""}`}>
                     Change
-                  </TextLink>
+                  </ChangeLink>
                 )
               }
             />

@@ -249,10 +249,68 @@ export function revealStep(li: HTMLElement) {
  * never under the label. Where the row is too narrow for two columns, the
  * three stack: label, answer, action. Without a label, the answer sits beside
  * the dot and the action under it on the right.
+ *
+ * `stacked` (owner, 25 Nov 2026, agent sign-up prototype v5 / Register Students
+ * Rows): the question small and grey on top, its action on the same line at the
+ * right (pass a `ChangeLink small`), and the answer under them, the only bold
+ * text, left-aligned across the whole row. `sub` is a quiet line under the
+ * answer; `none` greys an answer that says there is nothing ("None", "No code").
+ * Without a label, the answer takes the top line beside its action.
  */
-export function SummaryRow({ label, value, action, icon }: { label?: ReactNode; value: ReactNode; action?: ReactNode; icon?: ReactNode }) {
+export function SummaryRow({
+  label,
+  value,
+  action,
+  icon,
+  stacked = false,
+  sub,
+  none = false,
+}: {
+  label?: ReactNode
+  value: ReactNode
+  action?: ReactNode
+  icon?: ReactNode
+  stacked?: boolean
+  sub?: ReactNode
+  none?: boolean
+}) {
   const dot = <span className="grid size-7 flex-none place-items-center rounded-full bg-blue-50 text-blue-600">{icon ?? <Icon name="check" small />}</span>
-  const answer = <span className="text-base leading-[1.35] font-semibold [overflow-wrap:anywhere] text-slate-800">{value}</span>
+  const answer = (
+    <span className={cn("text-base leading-[1.35] font-semibold [overflow-wrap:anywhere]", none ? "text-slate-600" : "text-slate-800")} data-summary-value>
+      {value}
+    </span>
+  )
+  const subLine = sub ? (
+    <span className="text-[13.5px] leading-[1.35] text-slate-600 [overflow-wrap:anywhere]" data-summary-sub>
+      {sub}
+    </span>
+  ) : null
+  if (stacked) {
+    return (
+      <div className="flex items-start gap-3 py-3 text-left" data-summary-row data-summary-stacked>
+        {dot}
+        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+          {label ? (
+            <>
+              <div className="flex min-w-0 items-baseline gap-2.5">
+                <span className="min-w-0 flex-1 text-[13px] leading-[1.35] text-slate-500 [overflow-wrap:anywhere]" data-summary-label>
+                  {label}
+                </span>
+                {action}
+              </div>
+              {answer}
+            </>
+          ) : (
+            <div className="flex min-w-0 items-baseline gap-2.5">
+              <span className="min-w-0 flex-1">{answer}</span>
+              {action}
+            </div>
+          )}
+          {subLine}
+        </div>
+      </div>
+    )
+  }
   if (!label) {
     return (
       <div className="flex min-h-16 flex-col gap-1 py-3 text-left" data-summary-row>
@@ -275,6 +333,7 @@ export function SummaryRow({ label, value, action, icon }: { label?: ReactNode; 
         </div>
         <div className="flex min-w-0 flex-col items-end gap-0.5 pt-0.5 text-right @max-[19rem]:items-start @max-[19rem]:pl-10 @max-[19rem]:text-left" data-summary-answer>
           {answer}
+          {subLine}
           {action}
         </div>
       </div>

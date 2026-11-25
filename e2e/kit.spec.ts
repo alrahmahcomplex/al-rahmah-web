@@ -28,7 +28,7 @@ test("shows both parts on the stage of the new shell, and is not indexed", async
   await expect(page.locator('[data-shell="new"]').getByRole("navigation", { name: "Staff" })).toBeVisible()
 
   const top = page.locator('[data-part="design-system"]')
-  for (const title of ["Icons: one colour at rest, two in use", "Illustrations", "Colour", "Type", "Buttons", "Fields", "Selectors", "Stepper: chip bar", "Cards and chips"])
+  for (const title of ["Icons: one colour at rest, two in use", "Illustrations", "Colour", "Type", "Buttons", "Fields", "Selectors", "Stepper: chip bar", "Cards and chips", "Summary rows"])
     await expect(top.getByRole("heading", { level: 2, name: title, exact: true })).toBeVisible()
   // The swatches read their values from app/tokens.css.
   await expect(top.getByText("#0900bb")).toBeVisible()
@@ -388,7 +388,7 @@ test("the guided form folds each answer, finishes its groups and ends on the fin
   await page.keyboard.press("Enter")
   await expect(question("Which class is Neema joining?")).toBeFocused()
   await expect(card.getByRole("heading", { level: 3, name: "Neema Juma Salim" })).toBeVisible()
-  await expect(card.locator(".kp-fa")).toHaveText("Father: Juma Salim")
+  await expect(card.locator("[data-summary-sub]")).toHaveText("Father: Juma Salim")
   await page.keyboard.press("Tab")
   await page.keyboard.press("Space")
   await expect(question("Will Neema be a day or a boarding student?")).toBeFocused()

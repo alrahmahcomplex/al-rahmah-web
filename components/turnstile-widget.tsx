@@ -80,6 +80,16 @@ const COPY: Record<Language, Record<Exclude<CheckState, "hidden">, string>> = {
 }
 
 let loading: Promise<Turnstile> | null = null
+let loadingScript: HTMLScriptElement | null = null
+
+// A script request that never answered (neither load nor error) would hold
+// every later mount on the same promise: drop it so the next mount asks again.
+function abandonStalledLoad() {
+  if (window.turnstile || !loading) return
+  loadingScript?.remove()
+  loadingScript = null
+  loading = null
+}
 
 function loadTurnstile(): Promise<Turnstile> {
   if (window.turnstile) return Promise.resolve(window.turnstile)
@@ -87,15 +97,21 @@ function loadTurnstile(): Promise<Turnstile> {
     const script = document.createElement("script")
     script.src = SCRIPT_SRC
     script.async = true
-    // On failure, let a later mount try again.
+    loadingScript = script
+    // On failure, let a later mount try again, unless a retry already
+    // replaced this request.
     const fail = (message: string) => {
-      loading = null
+      if (loadingScript === script) {
+        loading = null
+        loadingScript = null
+      }
       script.remove()
       reject(new Error(message))
     }
     script.addEventListener("load", () => {
-      if (window.turnstile) resolve(window.turnstile)
-      else fail("Turnstile's script loaded without defining window.turnstile")
+      if (!window.turnstile) return fail("Turnstile's script loaded without defining window.turnstile")
+      if (loadingScript === script) loadingScript = null
+      resolve(window.turnstile)
     })
     script.addEventListener("error", () => fail("Turnstile's script failed to load"))
     document.head.appendChild(script)
@@ -194,6 +210,7 @@ export function TurnstileWidget({
       report.current?.("checking", null)
     },
     redraw() {
+      abandonStalledLoad()
       setGeneration((n) => n + 1)
     },
     reveal() {

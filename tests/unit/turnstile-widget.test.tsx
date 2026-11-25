@@ -489,6 +489,33 @@ describe("TurnstileWidget", () => {
     await waitFor(() => expect(turnstile.render).toHaveBeenCalledTimes(1))
   })
 
+  it("asks for the script again when Run the check again follows a request that never answered", async () => {
+    delete (window as { turnstile?: unknown }).turnstile
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    const TurnstileWidget = await loadWidget()
+    const widget = createRef<TurnstileWidgetHandle>()
+    render(<TurnstileWidget ref={widget} action="agent" language="en" quiet />)
+    const stalled = document.querySelector(`script[src="${SCRIPT_SRC}"]`)!
+    expect(stalled).not.toBeNull()
+
+    // Neither load nor error ever fires for the first request.
+    act(() => widget.current!.redraw())
+
+    const scripts = document.querySelectorAll(`script[src="${SCRIPT_SRC}"]`)
+    expect(scripts).toHaveLength(1)
+    expect(scripts[0]).not.toBe(stalled)
+
+    // A late error from the dropped request leaves the new one in place.
+    act(() => {
+      stalled.dispatchEvent(new Event("error"))
+    })
+    Object.assign(window, { turnstile })
+    act(() => {
+      scripts[0].dispatchEvent(new Event("load"))
+    })
+    await waitFor(() => expect(turnstile.render).toHaveBeenCalledTimes(1))
+  })
+
   it("renders nothing, and says why, without a site key", async () => {
     vi.stubEnv("NEXT_PUBLIC_TURNSTILE_SITE_KEY", "")
     const error = vi.spyOn(console, "error").mockImplementation(() => {})

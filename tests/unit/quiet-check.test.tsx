@@ -99,6 +99,19 @@ describe("useQuietCheck", () => {
     expect(screen.queryByRole("alert")).toBeNull()
   })
 
+  it("starts the 20 seconds again when a click challenge times out and the check runs again", () => {
+    render(<Harness send={vi.fn()} />)
+    fireEvent.click(screen.getByRole("button", { name: "Send" }))
+    act(() => fake.status?.("needsClick", null))
+    act(() => vi.advanceTimersByTime(SLOW_CHECK_MS))
+    expect(screen.queryByRole("alert")).toBeNull()
+
+    act(() => fake.status?.("checking", null))
+    act(() => vi.advanceTimersByTime(SLOW_CHECK_MS))
+    expect(screen.getByRole("alert")).toHaveTextContent(/taking longer than usual/)
+    expect(screen.getByRole("button", { name: "Run the check again" })).toBeInTheDocument()
+  })
+
   it("says nothing about a check that failed before anyone sent", () => {
     render(<Harness send={vi.fn()} />)
     act(() => fake.status?.("failed", null))

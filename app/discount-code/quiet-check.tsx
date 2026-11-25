@@ -86,8 +86,12 @@ export function useQuietCheck() {
       window.clearTimeout(slowTimer.current)
       setProblem(null)
       widget.current?.reveal()
+    } else {
+      // Checking again (a click challenge that timed out, an expired token):
+      // the 20 seconds start over, so a stalled recheck still says so.
+      startSlowTimer()
     }
-  }, [])
+  }, [startSlowTimer])
 
   const begin = useCallback(
     (send: () => void) => {

@@ -39,7 +39,8 @@ test("a failed security check is refused, keeps the entries and resets the widge
   await expect(page.getByText(/Ukaguzi mfupi wa usalama/)).toHaveCount(0)
   await expectQuestion(page, WORDS.sw.review)
   await expect(page.getByText(who.parent, { exact: true })).toBeVisible()
-  await expect(page.getByText(`${who.child} · STD 3`)).toBeVisible()
+  await expect(page.locator("[data-summary-row]").getByText(who.child, { exact: true })).toBeVisible()
+  await expect(page.locator("[data-summary-row]").getByText(`STD 3 · ${admissionYears()[1]}`)).toBeVisible()
   expect(await page.evaluate(() => window.turnstileResets)).toBe(1)
   await expect(openQuestion(page).getByRole("button", { name: WORDS.sw.send })).toBeEnabled()
 

@@ -1319,4 +1319,34 @@ describe("the Discount code question", { timeout: 30_000 }, () => {
     expect(sentBody().discountCode).toBeUndefined()
     expect(sentBody().noticeVersion).toBeUndefined()
   })
+
+  it("uses stacked answer rows, removes the No other student row, and moves Add Student to the Students heading", async () => {
+    const user = userEvent.setup()
+    render(form("en"))
+    await fillToSend(user)
+
+    // No "No other student" folded row; "+ Add Student" sits in the Student heading.
+    expect(screen.queryByText("No other student")).not.toBeInTheDocument()
+    const studentHead = screen.getByRole("heading", { level: 3, name: "Student" }).closest("li")!
+    const addButton = within(studentHead).getByRole("button", { name: "Add Student" })
+    expect(addButton).toHaveClass("font-normal", "text-[13px]")
+
+    // Every folded SummaryRow uses the stacked layout; skipped discount code uses the plain-grey none state.
+    const rows = document.querySelectorAll("[data-summary-row]")
+    expect(rows.length).toBeGreaterThan(0)
+    rows.forEach((row) => expect(row).toHaveAttribute("data-summary-stacked"))
+    const noCode = screen.getByText("No code")
+    expect(noCode).toHaveClass("font-normal", "text-slate-600")
+
+    // Compact student row places class/year/residence on the label line and student name as full-width value.
+    const compactButton = screen.getByRole("button", { name: "Change Details, ZAWADI JUMA MFANO" })
+    const compactRow = compactButton.closest<HTMLElement>("[data-summary-stacked]")!
+    expect(compactRow.querySelector("[data-summary-label]")).toHaveTextContent(`STD 2 · ${DEFAULT_YEAR} · Day`)
+    expect(compactRow.querySelector("[data-summary-value]")).toHaveTextContent("ZAWADI JUMA MFANO")
+
+    // Clicking Add Student on the heading opens student two's name question and hides the heading link while answering.
+    await user.click(addButton)
+    await waitForQuestion("What is student two's name?")
+    expect(screen.queryByRole("button", { name: "Add Student" })).not.toBeInTheDocument()
+  })
 })

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useSyncExternalStore } from "react"
 
-import { ChangeLink, SummaryRow } from "@/components/guided-form"
+import { ChangeLink, GuidedHead, Icon as GuidedIcon, OfferPill, SummaryRow } from "@/components/guided-form"
 import { ProgressBar, type ProgressGroup } from "@/components/guided-form/progress-bar"
 import { Icon, ICONS, type IconName } from "@/components/icons"
 import { Illustration, type IllustrationName } from "@/components/illustrations"
@@ -361,14 +361,33 @@ function DesignSystem({ tab, today }: { tab: string; today: string }) {
             <code>SummaryRow stacked</code> with <code>ChangeLink small</code>: the question small and grey on top, light Change on its right, and the bold answer full width underneath.
           </p>
           <ol className="gf-stack">
+            <GuidedHead
+              aside={
+                <ChangeLink small>
+                  <GuidedIcon name="plus" small />
+                  Add Student
+                </ChangeLink>
+              }
+            >
+              Students
+            </GuidedHead>
             <li className="gf-item">
               <SummaryRow stacked label="Full name" value="AMINA JUMA SALIM" sub="Father: JUMA SALIM MRISHO" action={<ChangeLink small>Change</ChangeLink>} />
             </li>
             <li className="gf-item">
-              <SummaryRow stacked label="Class" value="FORM 1 · 2027" action={<ChangeLink small>Change</ChangeLink>} />
+              <SummaryRow
+                stacked
+                icon={<GuidedIcon name="user" className="size-[15px]" />}
+                label="STD 3 · 2027 · Boarding"
+                value="HASSAN JUMA SALIM"
+                action={<ChangeLink small>Change</ChangeLink>}
+              />
             </li>
             <li className="gf-item">
               <SummaryRow stacked label="Discount code" value="No code" none action={<ChangeLink small>Change</ChangeLink>} />
+            </li>
+            <li className="gf-item">
+              <SummaryRow stacked label="Fee" value="TZS 7,500 · with code" action={<OfferPill onClick={() => {}}>TZS 2,500 off</OfferPill>} />
             </li>
             <li className="gf-item">
               <SummaryRow

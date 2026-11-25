@@ -94,6 +94,8 @@ Prototype CSS: `.stack`, `.item`, `.step`, `.sum-w`, `.fold`, `.settled`, `.head
 | `DefaultTile` | One-tap answer with tagline, e.g. FORM 1 with "Wazazi wengi huchagua" | `.pop` |
 | `ContinuePill` | Orange "Endelea ›" (`variant="go"`, chevron always added) or outlined (`variant="ghost"`, `icon="plus"` for "Ndiyo, ongeza mwanafunzi"); `pending` shows a spinner | `.btn-go`, `.btn-ghost` |
 | `NoticeBox` | `tone` good, wait, bad or info; optional `role` | `.notice` |
+| `StepIcon` | A 64px Lavender Whisper disc holding one icon, above a step's title on the agent sign-up's Choose, Check your SMS, email and Set password steps (prototype v5) | `.ico-disc` |
+| `CallOffice` | The office's number as a tel link with the phone icon, at a sign-up step's foot; `label` is the line above it | `.call` |
 | `OfferNote` | Clock, title, body on orange tint; `pulse` for the entrance, `centred` on the success screen | `.offer` |
 | `OfferPill` | "OFA YA MUDA MAALUM" pill (CSS uppercases it) that opens the sheet | `.offerpill` |
 | `InfoButton` | ⓘ beside a discounted fee; `label` is its aria-label | `.ibtn` |

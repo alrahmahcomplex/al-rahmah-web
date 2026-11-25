@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useSyncExternalStore } from "react"
 
+import { ChangeLink, SummaryRow } from "@/components/guided-form"
 import { ProgressBar, type ProgressGroup } from "@/components/guided-form/progress-bar"
 import { Icon, ICONS, type IconName } from "@/components/icons"
 import { Illustration, type IllustrationName } from "@/components/illustrations"
@@ -321,6 +322,37 @@ function DesignSystem({ tab, today }: { tab: string; today: string }) {
               { key: "Previous school", value: "Example Primary School · Public · Dar es Salaam", action: <TextLink>Change</TextLink> },
             ]}
           />
+        </Card>
+
+        <Card title="Summary rows">
+          <p className="kp-spec">
+            <code>SummaryRow stacked</code> with <code>ChangeLink small</code>: the question small and grey on top, light Change on its right, and the bold answer full width underneath.
+          </p>
+          <ol className="gf-stack">
+            <li className="gf-item">
+              <SummaryRow stacked label="Full name" value="AMINA JUMA SALIM" sub="Father: JUMA SALIM MRISHO" action={<ChangeLink small>Change</ChangeLink>} />
+            </li>
+            <li className="gf-item">
+              <SummaryRow stacked label="Class" value="FORM 1 · 2027" action={<ChangeLink small>Change</ChangeLink>} />
+            </li>
+            <li className="gf-item">
+              <SummaryRow stacked label="Discount code" value="No code" none action={<ChangeLink small>Change</ChangeLink>} />
+            </li>
+            <li className="gf-item">
+              <SummaryRow
+                stacked
+                label="Custodian of Amina and Hassan"
+                value="JUMA SALIM MRISHO · Father · 0712 345 678 · WhatsApp 0754 111 222 · already on file"
+                action={<ChangeLink small>Change</ChangeLink>}
+              />
+            </li>
+            <li className="gf-item">
+              <SummaryRow stacked label="Class · from the Admission form" value="STD 5 · 2027" />
+            </li>
+            <li className="gf-item">
+              <SummaryRow stacked value="AMINA JUMA SALIM · FORM 1" sub="Without a label, the answer sits on the top line beside Change." action={<ChangeLink small>Change</ChangeLink>} />
+            </li>
+          </ol>
         </Card>
       </Bento>
     </div>

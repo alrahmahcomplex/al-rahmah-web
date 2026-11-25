@@ -250,11 +250,12 @@ export function revealStep(li: HTMLElement) {
  * three stack: label, answer, action. Without a label, the answer sits beside
  * the dot and the action under it on the right.
  *
- * `stacked` (owner, 25 Nov 2026, agent sign-up prototype v5 screen 1a): the
- * question small and grey on top, its action on the same line at the right
- * (pass a `ChangeLink small`), and the answer under them, the only bold
+ * `stacked` (owner, 25 Nov 2026, agent sign-up prototype v5 / Register Students
+ * Rows): the question small and grey on top, its action on the same line at the
+ * right (pass a `ChangeLink small`), and the answer under them, the only bold
  * text, left-aligned across the whole row. `sub` is a quiet line under the
- * answer; `none` greys an answer that says there is nothing ("None").
+ * answer; `none` puts an answer that says there is nothing ("None", "No code")
+ * in plain grey, not bold.
  * Without a label, the answer takes the top line beside its action.
  */
 export function SummaryRow({
@@ -280,7 +281,11 @@ export function SummaryRow({
       {value}
     </span>
   )
-  const subLine = sub ? <span className="text-[13.5px] leading-[1.35] text-slate-600 [overflow-wrap:anywhere]">{sub}</span> : null
+  const subLine = sub ? (
+    <span className="text-[13.5px] leading-[1.35] text-slate-600 [overflow-wrap:anywhere]" data-summary-sub>
+      {sub}
+    </span>
+  ) : null
   if (stacked) {
     return (
       <div className="flex items-start gap-3 py-3 text-left" data-summary-row data-summary-stacked>

@@ -4,7 +4,6 @@ import { useId, useRef, useState, type FormEvent } from "react"
 
 import {
   CallOffice,
-  ChangeLink,
   CodeBox,
   ConfirmationNumber,
   FieldError,
@@ -14,7 +13,6 @@ import {
   PersonNameBoxes,
   StepIcon,
   StudentNameBoxes,
-  SummaryRow,
   type ConfirmationNumberHandle,
   type ConfirmationResult,
 } from "@/components/guided-form"
@@ -191,21 +189,16 @@ export function ConfirmationNumberCard() {
 }
 
 /**
- * The agent sign-up's parts (owner, prototype v5, 25 Nov 2026): the stacked
- * answer row, the icon disc above a step's title, and the office's number at
- * a step's foot.
+ * The agent sign-up's step parts (owner, prototype v5, 25 Nov 2026): the icon
+ * disc above a step's title and the office's number at a step's foot. The
+ * stacked answer row is on the Summary rows card.
  */
 export function SignUpPartsCard() {
   return (
     <Card title="Sign-up steps" data-bento="full">
       <p className="kp-spec">
-        The stacked answer row: the question small on top with its Change link beside it, the answer under them, the only bold text; an answer that says there is nothing is grey. Above a step&apos;s title, its icon in a Lavender Whisper disc; at its foot, the office&apos;s number.
+        Above a step&apos;s title, its icon in a Lavender Whisper disc; at its foot, the office&apos;s number.
       </p>
-      <div className="flex flex-col">
-        <SummaryRow stacked label="Your full name" value="AMINA SAIDI JUMA" action={<ChangeLink small>Change Name</ChangeLink>} />
-        <SummaryRow stacked label="Phone number" value="0712 345 123" sub="WhatsApp 0754 111 222" action={<ChangeLink small>Change Number</ChangeLink>} />
-        <SummaryRow stacked none label="Discount code" value="None" action={<ChangeLink small>Change Code</ChangeLink>} />
-      </div>
       <div className="flex flex-wrap items-center justify-center gap-6 py-2">
         <StepIcon name="lock" className="m-0" />
         <StepIcon name="smscode" className="m-0" />

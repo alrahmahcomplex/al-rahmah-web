@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, type FormEvent, type MouseEvent, type ReactNode } from "react"
 
-import { ContinuePill, GuidedHead, GuidedStack, GuidedStep, Hint, QuestionTitle, revealStep, SummaryRow, type ProgressGroup } from "@/components/guided-form"
+import { ChangeLink, ContinuePill, GuidedHead, GuidedStack, GuidedStep, Hint, QuestionTitle, revealStep, SummaryRow, type ProgressGroup } from "@/components/guided-form"
 import { ButtonLink, ChoiceTiles, DefaultTile, Field, FieldError, GuidedReveal, GuidedTask, Note, TextLink, toast } from "@/components/kit"
 
 // The guided form on a staff page (#321), played with the prototype's own
@@ -26,7 +26,7 @@ type Custodian = { dad: boolean; phone: string; name: string; rel: string }
 type Answers = { students: Student[]; more?: boolean; custodian?: Custodian; code?: string; submitted?: boolean }
 
 type Head = { key: string; title: string; remove?: number }
-type Step = { id: string; group: number; head: Head; label: string; done: boolean; silent?: boolean; summary: () => ReactNode; body: () => ReactNode }
+type Step = { id: string; group: number; head: Head; label: string; done: boolean; silent?: boolean; none?: boolean; summary: () => ReactNode; sub?: () => ReactNode; body: () => ReactNode }
 
 let nextKey = 0
 const newStudent = (): Student => ({ key: ++nextKey })
@@ -148,12 +148,15 @@ export function GuidedDemo() {
         summary={
           s.done && (
             <SummaryRow
+              stacked
               label={s.label}
               value={s.summary()}
+              sub={s.sub?.()}
+              none={s.none}
               action={
-                <TextLink onClick={() => !locked && setEdit(s.id)} aria-label={`Change ${s.label}${s.group === 0 && s.id !== "more" ? `, ${s.head.title}` : ""}`}>
+                <ChangeLink small onClick={() => !locked && setEdit(s.id)} aria-label={`Change ${s.label}${s.group === 0 && s.id !== "more" ? `, ${s.head.title}` : ""}`}>
                   Change
-                </TextLink>
+                </ChangeLink>
               }
             />
           )
@@ -230,12 +233,8 @@ function buildSteps(a: Answers, t: Tools): Step[] {
       head,
       label: "Full name",
       done: s.name !== undefined,
-      summary: () => (
-        <>
-          {s.name}
-          <small className="kp-fa">Father: {s.father}</small>
-        </>
-      ),
+      summary: () => s.name,
+      sub: () => `Father: ${s.father}`,
       body: () => <NameQuestion key={`name:${s.key}:${s.name ?? ""}`} index={i} student={s} onDone={(parts) => t.answer(`${sid}.name`, nameAnswer(i, parts, t))} />,
     })
     steps.push(pickStep(`${sid}.cls`, head, "Class", s.cls, `Which class is ${f} joining?`, CLASSES, "four", (v) => t.answer(`${sid}.cls`, t.setStudent(i, { cls: v })), t))
@@ -291,6 +290,7 @@ function buildSteps(a: Answers, t: Tools): Step[] {
     head: finish,
     label: "Discount code",
     done: a.code !== undefined,
+    none: a.code === "none",
     summary: () => (a.code === "none" ? "No code" : `${a.code} · family told who sees the progress`),
     body: () => <CodeQuestion key={`code:${a.code ?? ""}`} saved={a.code} onDone={(code) => t.answer("code", (x) => ({ ...x, code }))} later={t.later} />,
   })

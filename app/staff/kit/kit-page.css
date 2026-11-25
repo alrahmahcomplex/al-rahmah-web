@@ -80,7 +80,6 @@
 .kp-names { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 @media (max-width: 480px) { .kp-names { grid-template-columns: 1fr; } }
 .kp-fa-live:empty { display: none; }
-.kp-fa { display: block; font-weight: 400; font-size: 13px; line-height: 1.3; color: var(--gf-quiet); }
 
 /* The form parts card (#358): the prototype's .fpg, .fpc, .fld and .fl. */
 .kp-fpg { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 24px 28px; align-items: start; }

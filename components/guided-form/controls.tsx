@@ -8,8 +8,10 @@ import { Icon, type IconName } from "./icons"
 import "./guided-form.css"
 
 /**
- * The two-word "Badilisha …" link on a folded row (`.btn-text`): indigo,
- * underlined, 44px tall, never wraps above 380px.
+ * The change link on a folded row (`.btn-text`): indigo, underlined.
+ * Default: two-word "Badilisha …", 44px tall, never wraps above 380px.
+ * `small`: 13px regular weight on the top line of a `SummaryRow stacked`, with
+ * an invisible hit area keeping a ~44px touch target.
  */
 export function ChangeLink({ className, children, type = "button", small = false, ...props }: ButtonHTMLAttributes<HTMLButtonElement> & { small?: boolean }) {
   return (
@@ -17,10 +19,8 @@ export function ChangeLink({ className, children, type = "button", small = false
       type={type}
       className={cn(
         small
-          ? // The stacked answer row's link (agent sign-up prototype v5): the question's own 13px, not bold,
-            // underlined; an invisible margin keeps the tap target about 44px tall.
-            "relative inline-flex flex-none items-center gap-1 text-[13px] leading-[1.35] font-normal whitespace-nowrap text-blue-600 underline decoration-1 underline-offset-[3px] outline-none before:absolute before:-inset-x-1.5 before:-inset-y-3 before:content-[''] hover:decoration-2 focus-visible:rounded-sm focus-visible:ring-3 focus-visible:ring-(color:--gf-focus-ring)"
-          : "inline-flex min-h-11 items-center gap-1.5 rounded-full px-2.5 text-[15px] font-semibold whitespace-nowrap text-blue-600 underline decoration-blue-600/35 underline-offset-4 transition-colors outline-none hover:bg-blue-50 focus-visible:ring-3 focus-visible:ring-(color:--gf-focus-ring) active:scale-[0.97] max-[380px]:whitespace-normal",
+          ? "relative inline-flex flex-none cursor-pointer items-center gap-1 text-[13px] leading-[1.35] font-normal whitespace-nowrap text-blue-600 underline decoration-1 underline-offset-[3px] outline-none before:absolute before:-inset-x-1.5 before:-inset-y-3 before:content-[''] hover:decoration-2 focus-visible:rounded-sm focus-visible:ring-3 focus-visible:ring-(color:--gf-focus-ring)"
+          : "inline-flex min-h-11 cursor-pointer items-center gap-1.5 rounded-full px-2.5 text-[15px] font-semibold whitespace-nowrap text-blue-600 underline decoration-blue-600/35 underline-offset-4 transition-colors outline-none hover:bg-blue-50 focus-visible:ring-3 focus-visible:ring-(color:--gf-focus-ring) active:scale-[0.97] max-[380px]:whitespace-normal",
         className,
       )}
       {...props}

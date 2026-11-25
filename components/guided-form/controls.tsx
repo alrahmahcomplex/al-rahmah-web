@@ -19,7 +19,7 @@ export function ChangeLink({ className, children, type = "button", small = false
       type={type}
       className={cn(
         small
-          ? "relative flex-none cursor-pointer text-[13px] leading-[1.35] font-normal whitespace-nowrap text-blue-600 underline decoration-1 underline-offset-[3px] outline-none before:absolute before:-inset-x-1.5 before:-inset-y-3 before:content-[''] hover:decoration-2 focus-visible:rounded-sm focus-visible:ring-3 focus-visible:ring-(color:--gf-focus-ring)"
+          ? "relative inline-flex flex-none cursor-pointer items-center gap-1 text-[13px] leading-[1.35] font-normal whitespace-nowrap text-blue-600 underline decoration-1 underline-offset-[3px] outline-none before:absolute before:-inset-x-1.5 before:-inset-y-3 before:content-[''] hover:decoration-2 focus-visible:rounded-sm focus-visible:ring-3 focus-visible:ring-(color:--gf-focus-ring)"
           : "inline-flex min-h-11 cursor-pointer items-center gap-1.5 rounded-full px-2.5 text-[15px] font-semibold whitespace-nowrap text-blue-600 underline decoration-blue-600/35 underline-offset-4 transition-colors outline-none hover:bg-blue-50 focus-visible:ring-3 focus-visible:ring-(color:--gf-focus-ring) active:scale-[0.97] max-[380px]:whitespace-normal",
         className,
       )}

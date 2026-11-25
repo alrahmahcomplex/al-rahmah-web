@@ -28,7 +28,7 @@ import {
   SummaryRow,
 } from "@/components/guided-form"
 import { TurnstileWidget, type TurnstileWidgetHandle } from "@/components/turnstile-widget"
-import { MAX_NAME_PART, type FormField, type NamePart } from "@/lib/admission-form"
+import { MAX_CHILDREN, MAX_NAME_PART, type FormField, type NamePart } from "@/lib/admission-form"
 import type { Language } from "@/lib/language"
 import { STANDARD_INTERVIEW_FEE } from "@/lib/referral-link"
 import { FORM_NOTICE, FORM_NOTICE_VERSION } from "@/lib/referral-notice"
@@ -115,8 +115,25 @@ export function questionItems(p: QuestionsProps): ReactElement[] {
   const n = children.length
   const items: ReactElement[] = []
 
+  const allStudentsDone = n > 0 && children.every((child) => STUDENT_KINDS.every((kind) => done.has(studentKey(kind, child.card))))
+  const canAddOnHead = n < MAX_CHILDREN && open !== "more" && (done.has("more") || allStudentsDone)
+
   if ((children[0] && done.has(studentKey("name", children[0].card))) || n > 1) {
-    items.push(<GuidedHead key="h:students">{n === 1 ? copy.oneStudent : copy.sections[0]}</GuidedHead>)
+    items.push(
+      <GuidedHead
+        key="h:students"
+        aside={
+          canAddOnHead ? (
+            <ChangeLink small onClick={p.on.addStudent}>
+              <Plus className="size-3.5" aria-hidden />
+              {copy.addStudent}
+            </ChangeLink>
+          ) : undefined
+        }
+      >
+        {n === 1 ? copy.oneStudent : copy.sections[0]}
+      </GuidedHead>,
+    )
   }
   children.forEach((child, index) => {
     const keys = STUDENT_KINDS.map((kind) => studentKey(kind, child.card))
@@ -126,19 +143,14 @@ export function questionItems(p: QuestionsProps): ReactElement[] {
     const label = firstName(child) || copy.student(index + 1)
     if (compact) {
       items.push(
-        <GuidedNote key={`cs:${child.card}`}>
+        <GuidedNote key={`cs:${child.card}`} className="[&>.gf-item-in]:py-0">
           <SummaryRow
-            icon={<User className="size-4" aria-hidden />}
-            value={
-              <>
-                {studentName(child)}{" "}
-                <span className="font-normal text-slate-500">
-                  · {child.className} · {yearOf(children, index, p.defaultYear)} · {copy.dayOrBoarding[child.dayOrBoarding as DayOrBoarding]}
-                </span>
-              </>
-            }
+            stacked
+            icon={<User className="size-[15px]" aria-hidden />}
+            label={`${child.className} · ${yearOf(children, index, p.defaultYear)} · ${copy.dayOrBoarding[child.dayOrBoarding as DayOrBoarding]}`}
+            value={studentName(child)}
             action={
-              <ChangeLink aria-expanded={false} aria-label={`${copy.change.kid}, ${studentName(child)}`} onClick={() => p.on.expand(child.card)}>
+              <ChangeLink small aria-expanded={false} aria-label={`${copy.change.kid}, ${studentName(child)}`} onClick={() => p.on.expand(child.card)}>
                 {copy.change.kid}
               </ChangeLink>
             }
@@ -154,7 +166,7 @@ export function questionItems(p: QuestionsProps): ReactElement[] {
             <h3 id={`kh-${child.card}`} tabIndex={-1} className="m-0 min-w-0 text-[15px] font-semibold text-slate-800 [overflow-wrap:anywhere] outline-none">
               {label}
             </h3>
-            <ChangeLink className="ml-auto text-slate-600" aria-label={copy.removeNamed(studentName(child) || copy.student(index + 1))} onClick={() => p.on.removeStudent(child.card)}>
+            <ChangeLink small className="ml-auto text-slate-600" aria-label={copy.removeNamed(studentName(child) || copy.student(index + 1))} onClick={() => p.on.removeStudent(child.card)}>
               {copy.removeStudent}
             </ChangeLink>
           </div>
@@ -163,11 +175,13 @@ export function questionItems(p: QuestionsProps): ReactElement[] {
     }
     keys.filter(visible).forEach((key) => items.push(step(p, key)))
   })
-  if (visible("more")) items.push(step(p, "more"))
-  if (n >= 8 && done.has(studentKey("board", children[n - 1].card))) {
+  // Only render "more" while open: once answered No, "+ Add Student" moves to
+  // the Students heading instead of showing a "No other student" folded row.
+  if (open === "more") items.push(step(p, "more"))
+  if (n >= MAX_CHILDREN && done.has(studentKey("board", children[n - 1].card))) {
     items.push(
       <GuidedNote key="max">
-        <NoticeBox tone="info">{copy.maxChildren(8)}</NoticeBox>
+        <NoticeBox tone="info">{copy.maxChildren(MAX_CHILDREN)}</NoticeBox>
       </GuidedNote>,
     )
   }
@@ -198,7 +212,7 @@ function changeLink(p: QuestionsProps, key: StepKey, word: ChangeWord) {
   const index = p.children.findIndex((child) => child.card === card)
   const who = index >= 0 && p.children.length > 1 ? firstName(p.children[index]) || p.copy.student(index + 1) : null
   return (
-    <ChangeLink aria-label={who ? `${p.copy.change[word]}, ${who}` : undefined} onClick={() => p.on.change(key)}>
+    <ChangeLink small aria-label={who ? `${p.copy.change[word]}, ${who}` : undefined} onClick={() => p.on.change(key)}>
       {p.copy.change[word]}
     </ChangeLink>
   )
@@ -211,28 +225,17 @@ function summary(p: QuestionsProps, key: StepKey): ReactNode {
   const child = p.children[index]
   switch (kind) {
     case "name":
-      return <SummaryRow label={copy.studentName} value={studentName(child)} action={changeLink(p, key, "name")} />
+      return <SummaryRow stacked label={copy.studentName} value={studentName(child)} action={changeLink(p, key, "name")} />
     case "gender":
-      return <SummaryRow label={copy.genderName} value={copy.genders[child.gender as StudentGender]} action={changeLink(p, key, "gender")} />
+      return <SummaryRow stacked label={copy.genderName} value={copy.genders[child.gender as StudentGender]} action={changeLink(p, key, "gender")} />
     case "class":
-      return <SummaryRow label={copy.className} value={`${child.className} · ${yearOf(p.children, index, p.defaultYear)}`} action={changeLink(p, key, "class")} />
+      return <SummaryRow stacked label={copy.className} value={`${child.className} · ${yearOf(p.children, index, p.defaultYear)}`} action={changeLink(p, key, "class")} />
     case "board":
-      return <SummaryRow label={copy.boardingName} value={copy.dayOrBoarding[child.dayOrBoarding as DayOrBoarding]} action={changeLink(p, key, "board")} />
-    case "more":
-      return (
-        <SummaryRow
-          value={copy.noMore}
-          action={
-            <ChangeLink onClick={p.on.addStudent}>
-              <Plus className="size-4" aria-hidden />
-              {copy.addStudent}
-            </ChangeLink>
-          }
-        />
-      )
+      return <SummaryRow stacked label={copy.boardingName} value={copy.dayOrBoarding[child.dayOrBoarding as DayOrBoarding]} action={changeLink(p, key, "board")} />
     case "pname":
       return (
         <SummaryRow
+          stacked
           label={copy.parentName}
           value={
             fatherIsCustodian(parent) ? (
@@ -249,6 +252,7 @@ function summary(p: QuestionsProps, key: StepKey): ReactNode {
     case "rel":
       return (
         <SummaryRow
+          stacked
           label={copy.relName}
           value={parent.relationship === "Other" ? `${copy.relationships.Other}: ${parent.relationshipDescription.trim()}` : copy.relationships[parent.relationship as Relationship]}
           action={changeLink(p, key, "rel")}
@@ -257,15 +261,10 @@ function summary(p: QuestionsProps, key: StepKey): ReactNode {
     case "phone":
       return (
         <SummaryRow
+          stacked
           label={copy.phone}
-          value={
-            <>
-              {parent.phone.trim()}
-              {parent.whatsapp.trim() && (
-                <span className="block text-sm font-normal text-slate-500">WhatsApp {parent.whatsapp.trim()}</span>
-              )}
-            </>
-          }
+          value={parent.phone.trim()}
+          sub={parent.whatsapp.trim() ? `WhatsApp ${parent.whatsapp.trim()}` : undefined}
           action={changeLink(p, key, "phone")}
         />
       )
@@ -274,7 +273,9 @@ function summary(p: QuestionsProps, key: StepKey): ReactNode {
       const status = p.codeAnswer && "amount" in p.codeAnswer ? p.codeAnswer.status : null
       return (
         <SummaryRow
+          stacked
           label={copy.codeLabel}
+          none={!code}
           value={
             code ? (
               <>
@@ -292,6 +293,7 @@ function summary(p: QuestionsProps, key: StepKey): ReactNode {
     case "fee":
       return (
         <SummaryRow
+          stacked
           label={copy.feeQ}
           value={
             <>

@@ -21,6 +21,8 @@ const STREAMS = ["up", "pen"]
 const PLACES = ["pin"]
 // The agents app's glyphs (#539, prototype v5).
 const AGENTS_APP = ["copy", "chat", "signout"]
+// The agent sign-up's step discs (prototype v5, 25 Nov 2026).
+const SIGN_UP = ["lock", "mail", "smscode"]
 const ONE_LINE = ["back", "right", "check", "plus", "x", "phone", "down", "upload", "up"]
 const names = Object.keys(ICONS) as IconName[]
 
@@ -28,8 +30,8 @@ const names = Object.keys(ICONS) as IconName[]
 icon({ detail: <path d="M0 0" /> })
 
 describe("icon registry", () => {
-  it("holds set 1, the Admission form's glyphs, the streams' two, the region pin and the agents app glyphs, nothing else", () => {
-    expect(names).toEqual([...SET_1, ...FORM_ONLY, ...FORM_PARTS, ...STREAMS, ...PLACES, ...AGENTS_APP])
+  it("holds set 1, the Admission form's glyphs, the streams' two, the region pin, the agents app glyphs and the sign-up discs, nothing else", () => {
+    expect(names).toEqual([...SET_1, ...FORM_ONLY, ...FORM_PARTS, ...STREAMS, ...PLACES, ...AGENTS_APP, ...SIGN_UP])
   })
 
   it("gives every icon a second line except the one-line glyphs", () => {

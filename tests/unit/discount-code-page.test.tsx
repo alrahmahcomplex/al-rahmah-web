@@ -8,7 +8,10 @@ const stubs = vi.hoisted(() => ({
   submit: vi.fn(),
   reset: vi.fn(),
   reveal: vi.fn(() => false),
+  redraw: vi.fn(),
   token: "fake-token",
+  // What the form hears from the check (quiet mode, prototype v5).
+  status: null as null | ((status: string, token: string | null) => void),
   client: vi.fn(),
   discount: vi.fn(),
   toast: vi.fn(),
@@ -51,8 +54,9 @@ vi.mock("@/app/discount-code/self-confirm-actions", () => flow)
 vi.mock("@/app/actions/language", () => ({ setLanguage: vi.fn() }))
 vi.mock("sonner", () => ({ toast: stubs.toast }))
 vi.mock("@/components/turnstile-widget", () => ({
-  TurnstileWidget: forwardRef(function FakeTurnstile({ action }: { action: string }, ref) {
-    useImperativeHandle(ref, () => ({ reset: stubs.reset, reveal: stubs.reveal }))
+  TurnstileWidget: forwardRef(function FakeTurnstile({ action, onStatus }: { action: string; onStatus?: (status: string, token: string | null) => void }, ref) {
+    useImperativeHandle(ref, () => ({ reset: stubs.reset, reveal: stubs.reveal, redraw: stubs.redraw }))
+    stubs.status = onStatus ?? null
     return <input type="hidden" name="cf-turnstile-response" value={stubs.token} data-action={action} readOnly />
   }),
 }))
@@ -120,6 +124,8 @@ beforeEach(() => {
   stubs.submit.mockReset()
   stubs.reset.mockReset()
   stubs.reveal.mockReset().mockReturnValue(false)
+  stubs.redraw.mockReset()
+  stubs.status = null
   stubs.toast.mockReset()
   stubs.token = "fake-token"
   stubs.selfConfirm = false
@@ -340,7 +346,11 @@ describe("the Discount code page", { timeout: 30_000 }, () => {
     expect(note).toHaveTextContent(/Utaiona code yote kwenye ukurasa unaofuata/)
     // No code at all before the finish.
     expect(document.body.textContent).not.toMatch(/[A-Z]{1,3}-\d{3,}/)
-    expect(screen.getByRole("button", { name: "Badilisha Jibu" })).toBeInTheDocument()
+    // One Discount code row, not the question's Yes/No (owner, prototype v5): "Hakuna", in grey.
+    const codeRow = screen.getByRole("button", { name: "Badilisha Code" }).closest<HTMLElement>("[data-summary-row]")!
+    expect(codeRow).toHaveTextContent(/^Code ya Punguzo.*Hakuna$/)
+    expect(within(codeRow).getByText("Hakuna")).toHaveClass("text-slate-600")
+    expect(screen.queryByRole("button", { name: "Badilisha Jibu" })).toBeNull()
     expect(screen.getByRole("button", { name: "Badilisha Barua pepe" })).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Badilisha Namba" })).toBeInTheDocument()
     expect(document.querySelector('input[name="cf-turnstile-response"]')).toHaveAttribute("data-action", "agent")
@@ -375,37 +385,78 @@ describe("the Discount code page", { timeout: 30_000 }, () => {
     expect(screen.getByRole("button", { name: WORDS.en.sendClaim })).toBeInTheDocument()
     expect(screen.getByText("We match this code to your phone number or your names. The Marketing Office then confirms it.")).toBeInTheDocument()
 
+    // One row, "Discount code" and the code; Change Code opens the Yes/No question again.
+    const codeRow = screen.getByRole("button", { name: "Change Code" }).closest<HTMLElement>("[data-summary-row]")!
+    expect(codeRow).toHaveTextContent(/^Discount code.*AAN-132$/)
+    expect(screen.queryByRole("button", { name: "Change Code" })).toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: "Change Answer" })).toBeNull()
+    // Yes again opens the code box to fix the code (Greptile, #544).
+    await user.click(screen.getByRole("button", { name: "Change Code" }))
+    await user.click(screen.getByRole("radio", { name: WORDS.en.yes }))
+    await waitFor(() => expect(screen.getByLabelText(WORDS.en.code)).toHaveFocus())
+    expect(screen.getByLabelText(WORDS.en.code)).toHaveValue("AAN-132")
+    await next(user, "en")
+    expect(await screen.findByRole("button", { name: WORDS.en.sendClaim })).toBeInTheDocument()
     // Changing the answer to No drops the code box and its code.
-    await user.click(screen.getByRole("button", { name: "Change Answer" }))
+    await user.click(screen.getByRole("button", { name: "Change Code" }))
     await user.click(screen.getByRole("radio", { name: WORDS.en.no }))
     expect(await screen.findByRole("button", { name: WORDS.en.send })).toBeInTheDocument()
     // The code's folded row folds shut before it leaves the page.
     await waitFor(() => expect(screen.queryByText("AAN-132")).not.toBeInTheDocument())
   })
 
-  it("waits for the security check before sending", async () => {
+  // The check stays out of sight (owner, prototype v5): sent before it has
+  // passed, the button just says it is sending, and the form sends by itself.
+  it("waits quietly for the security check, then sends by itself", async () => {
     stubs.token = ""
+    stubs.submit.mockResolvedValue(REGISTERED)
     const user = userEvent.setup()
     render(await DiscountCodePage())
     await fill(user)
     await send(user)
 
-    expect(screen.getByRole("alert")).toHaveTextContent(/Subiri ukaguzi wa usalama/)
+    expect(screen.queryByRole("alert")).toBeNull()
+    expect(screen.getByRole("button", { name: "Inatuma…" })).toHaveAttribute("aria-busy", "true")
     expect(stubs.submit).not.toHaveBeenCalled()
+
+    act(() => stubs.status?.("ready", "late-token"))
+    await waitFor(() => expect(stubs.submit).toHaveBeenCalledTimes(1))
+    expect((stubs.submit.mock.calls[0][1] as FormData).get("cf-turnstile-response")).toBe("late-token")
   })
 
   it("lets a check that needs a click speak for itself, keeping the entries and sending nothing", async () => {
     stubs.token = ""
-    stubs.reveal.mockReturnValue(true)
     const user = userEvent.setup()
     render(await DiscountCodePage())
     await fill(user)
+    act(() => stubs.status?.("needsClick", null))
     await send(user)
 
     expect(stubs.reveal).toHaveBeenCalled()
-    expect(screen.queryByText(/Subiri ukaguzi wa usalama/)).toBeNull()
     expect(screen.queryByRole("alert")).toBeNull()
     expect(box("sw", "first")).toHaveValue("REHEMA")
+    expect(stubs.submit).not.toHaveBeenCalled()
+  })
+
+  it("says a check that didn't load can run again, keeping the entries, and draws it again in place", async () => {
+    stubs.token = ""
+    const user = userEvent.setup()
+    render(await DiscountCodePage())
+    await fill(user)
+    act(() => stubs.status?.("failed", null))
+    await send(user)
+
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Ukaguzi wa usalama haukufunguka. Bonyeza kitufe hapa chini kurudia ukaguzi. Ulichojaza kimehifadhiwa, hutahitaji kuandika taarifa zako upya.",
+    )
+    await user.click(screen.getByRole("button", { name: "Rudia ukaguzi" }))
+    expect(stubs.redraw).toHaveBeenCalledTimes(1)
+    expect(screen.queryByRole("alert")).toBeNull()
+    expect(box("sw", "first")).toHaveValue("REHEMA")
+
+    // Failing again says so, and points to the internet connection or the office.
+    act(() => stubs.status?.("failed", null))
+    expect(screen.getByRole("alert")).toHaveTextContent(/bado haufunguki.*piga simu ofisini/)
     expect(stubs.submit).not.toHaveBeenCalled()
   })
 

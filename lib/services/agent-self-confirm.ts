@@ -17,8 +17,10 @@ import { fitsOneSms, sendSms, type SmsSender } from "./sms"
 // only its HMAC (OTP_HMAC_SECRET, server-only), bound to its attempt.
 
 export type StartOutcome =
-  | { kind: "ready"; attempt: string; mobileOnRecord: boolean; typedMatches: boolean; canText: boolean; emailOnRecord: boolean; emailOpen: boolean }
-  | { kind: "off" | "access_off" | "no_match" | "name_mismatch" | "weak_names" | "pending" | "joined" | "locked" | "setups_limited" | "email_closed" }
+  // `pendingCode`: the code the office hasn't approved yet; its attempt goes on
+  // as a new agent's does (20270130120100). Null for an Approved code.
+  | { kind: "ready"; attempt: string; mobileOnRecord: boolean; typedMatches: boolean; canText: boolean; emailOnRecord: boolean; emailOpen: boolean; pendingCode: string | null }
+  | { kind: "off" | "access_off" | "no_match" | "name_mismatch" | "weak_names" | "joined" | "locked" | "setups_limited" | "email_closed" }
 
 export type SendOutcome =
   | { kind: "sent"; phone: string; onRecord: boolean; show: boolean }
@@ -82,10 +84,11 @@ export async function startSelfConfirm(
         emailOnRecord: row.email_on_record === true,
         // Closed after Remove this sign-in with its tick (#503).
         emailOpen: row.email_open !== false,
+        pendingCode: row.pending === true && typeof row.code === "string" ? row.code : null,
       },
     }
   }
-  const known = ["off", "access_off", "no_match", "name_mismatch", "weak_names", "pending", "joined", "locked", "setups_limited", "email_closed"] as const
+  const known = ["off", "access_off", "no_match", "name_mismatch", "weak_names", "joined", "locked", "setups_limited", "email_closed"] as const
   const kind = known.find((k) => k === outcome)
   if (!kind) {
     console.error("Self-confirm: unexpected start answer", row)
@@ -143,7 +146,7 @@ function invalidField(details: string | null | undefined): "full_name" | "phone"
   }
 }
 
-export type NewAgentEmailOutcome = { kind: "registered"; code: string; email: string } | { kind: "expired" | "off" | "no_email" | "email_unusable" }
+export type NewAgentEmailOutcome = { kind: "registered"; code: string; email: string } | { kind: "expired" | "off" | "no_email" | "email_unusable" | "email_closed" }
 
 /** A new agent's email path: the email goes on their Pending record; nothing is sent now. */
 export async function setNewAgentEmail(
@@ -156,7 +159,7 @@ export async function setNewAgentEmail(
   if (row.outcome === "registered" && typeof row.code === "string" && typeof row.email === "string") {
     return { ok: true, data: { kind: "registered", code: row.code, email: row.email } }
   }
-  const kind = (["expired", "off", "no_email", "email_unusable"] as const).find((k) => k === row.outcome)
+  const kind = (["expired", "off", "no_email", "email_unusable", "email_closed"] as const).find((k) => k === row.outcome)
   if (!kind) {
     console.error("Self-confirm: unexpected new-agent email answer", row)
     return { ok: false, error: "unavailable" }

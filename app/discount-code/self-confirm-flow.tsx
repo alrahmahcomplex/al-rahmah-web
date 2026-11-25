@@ -4,24 +4,27 @@ import { Lock } from "lucide-react"
 import { useActionState, useEffect, useRef, useState, useTransition } from "react"
 
 import {
+  CallOffice,
   ChoiceTiles,
   ConfirmationNumber,
   ContinuePill,
   FieldInput,
   NoticeBox,
   QuestionTitle,
+  StepIcon,
   type ConfirmationNumberHandle,
   type ConfirmationResult,
 } from "@/components/guided-form"
-import { TurnstileWidget, type TurnstileWidgetHandle } from "@/components/turnstile-widget"
 import type { Language } from "@/lib/language"
 import { MINIMUM_PASSWORD_LENGTH } from "@/lib/password"
 import { cn } from "@/lib/utils"
 
 import { ACCOUNT_COPY } from "./account-copy"
 import { COPY } from "./copy"
+import { clearFlow, writeFlow, type SavedStep } from "./flow-state"
 import { CARD } from "./frame"
 import type { DiscountCodeState } from "./outcome"
+import { QuietCheck, useQuietCheck } from "./quiet-check"
 import { SELF_CONFIRM_COPY } from "./self-confirm-copy"
 import {
   checkSelfConfirmNumber,
@@ -37,48 +40,70 @@ import {
 // after the code and names have matched: the agent chooses how to sign in.
 // By mobile, a confirmation number to the mobile on record (or the typed
 // one when none is on file), then a password; by email, today's invite.
+//
+// Each step looks as the approved prototype draws it (owner, prototype v5,
+// 25 Nov 2026): its icon in a disc on top, the title, and the office's number
+// at the foot. No progress bar: the answers are already sent, so there is
+// nothing to go back to. The step is kept in the tab (./flow-state.ts), so a
+// reload on Choose, Check your SMS or Set password comes back to it.
 
 type Started = Extract<DiscountCodeState, { status: "self-confirm" }>
-type Step =
-  | { at: "choose" }
-  | { at: "sms"; masked: string | null; onRecord: boolean; sentAt: number }
-  // Self-confirm's order (#503 slice 4d-b): the email, asked here on the email path.
-  | { at: "ask-email" }
-  | { at: "email"; email: string }
-  | { at: "password"; phone: string }
-  | { at: "mobile-used" }
+type Step = SavedStep | { at: "email"; email: string } | { at: "mobile-used" }
 type Registered = Extract<DiscountCodeState, { status: "registered" }>
 
 const RESEND_SECONDS = 60
 const TITLE = "font-exo text-[26px] leading-[1.18] font-extrabold tracking-[-0.01em] text-balance text-blue-600 italic outline-none"
+
+// "+255712345123" as the person types it: 0712345123.
+const localMobile = (phone: string) => (phone.startsWith("+255") ? `0${phone.slice(4)}` : phone)
 
 // `onFinished` runs once the email is on its way or the password form is sent:
 // the form's draft is no longer needed (#503 slice 4d). Without
 // `onChangeEmail` the email is asked here, on the email path, when there is
 // none yet (self-confirm's order, #503 slice 4d-b). `onRegistered`: a new
 // agent's email went on their waiting code; the form shows today's finish.
+// `startedAt`, `initialStep` and `initialSmsOff` bring a reloaded flow back.
 export function SelfConfirmFlow({
   language,
+  officePhone,
   started,
+  startedAt,
+  initialStep,
+  initialSmsOff = false,
   onChangeEmail,
   onFinished,
   onRegistered,
 }: {
   language: Language
+  officePhone: string
   started: Started
+  startedAt: number
+  initialStep?: SavedStep
+  initialSmsOff?: boolean
   onChangeEmail?: () => void
   onFinished?: () => void
   onRegistered?: (registered: Registered) => void
 }) {
   const copy = SELF_CONFIRM_COPY[language]
-  const [step, setStep] = useState<Step>({ at: "choose" })
+  const [step, setStep] = useState<Step>(initialStep ?? { at: "choose" })
   const [problem, setProblem] = useState<string | null>(null)
   // No SMS could go to the mobile: the choice offers email only.
-  const [smsOff, setSmsOff] = useState(false)
+  const [smsOff, setSmsOff] = useState(initialSmsOff)
   const [pending, startWork] = useTransition()
   const heading = useRef<HTMLHeadingElement>(null)
 
   useEffect(() => heading.current?.focus({ preventScroll: true }), [step.at])
+
+  // Keeps the step in the tab for a reload; a step that ends the flow here
+  // (the email on its way, or the mobile in use elsewhere) clears it.
+  useEffect(() => {
+    if (step.at === "email" || step.at === "mobile-used") clearFlow()
+    else writeFlow({ started, startedAt, step, smsOff })
+  }, [started, startedAt, step, smsOff])
+
+  const keepStep = () => {
+    if (step.at !== "email" && step.at !== "mobile-used") writeFlow({ started, startedAt, step, smsOff })
+  }
 
   const numberProblem = (status: NumberStatus["status"]): string =>
     status === "locked" ? copy.locked : status === "limited" ? copy.limited : status === "unavailable" ? copy.unavailable : copy.expired
@@ -127,6 +152,7 @@ export function SelfConfirmFlow({
           set = { status: "unavailable" as const }
         }
         if (set.status === "registered") {
+          clearFlow()
           onFinished?.()
           onRegistered?.(set)
           return
@@ -147,26 +173,34 @@ export function SelfConfirmFlow({
     })
   }
 
+  const call = <CallOffice label={COPY[language].call} phone={officePhone} className="mt-1" />
+
   return (
     <section className={cn(CARD, "flex flex-col gap-5 text-center")}>
       {step.at === "choose" && (
-        <Choose key={String(smsOff)} copy={copy} started={smsOff ? { ...started, canText: false } : started} pending={pending} headingRef={heading} onMobile={sendNumber} onEmail={emailInstead} />
+        <>
+          <StepIcon name="lock" />
+          <Choose key={String(smsOff)} copy={copy} started={smsOff ? { ...started, canText: false } : started} pending={pending} headingRef={heading} onMobile={sendNumber} onEmail={emailInstead} />
+        </>
       )}
       {step.at === "sms" && (
-        <Sms
-          // A new number starts the step afresh: empty boxes, no note.
-          key={step.sentAt}
-          copy={copy}
-          attempt={started.attempt}
-          step={step}
-          headingRef={heading}
-          pending={pending}
-          onResend={sendNumber}
-          // Email is closed on the code after Remove this sign-in with its tick.
-          onEmail={started.emailOpen ? emailInstead : null}
-          onRight={(phone) => setStep({ at: "password", phone })}
-          onMobileUsed={() => setStep({ at: "mobile-used" })}
-        />
+        <>
+          <StepIcon name="smscode" />
+          <Sms
+            // A new number starts the step afresh: empty boxes, no note.
+            key={step.sentAt}
+            copy={copy}
+            attempt={started.attempt}
+            step={step}
+            headingRef={heading}
+            pending={pending}
+            onResend={sendNumber}
+            // Email is closed on the code after Remove this sign-in with its tick.
+            onEmail={started.emailOpen ? emailInstead : null}
+            onRight={(phone) => setStep({ at: "password", phone })}
+            onMobileUsed={() => setStep({ at: "mobile-used" })}
+          />
+        </>
       )}
       {step.at === "ask-email" && (
         <form
@@ -177,6 +211,7 @@ export function SelfConfirmFlow({
             sendEmail(email)
           }}
         >
+          <StepIcon name="mail" />
           <h1 ref={heading} tabIndex={-1} className="sr-only">
             {COPY[language].emailQuestion}
           </h1>
@@ -204,10 +239,11 @@ export function SelfConfirmFlow({
       )}
       {step.at === "email" && (
         <>
+          <StepIcon name="mail" />
           <h1 ref={heading} tabIndex={-1} className={TITLE}>
             {copy.emailTitle}
           </h1>
-          <p className="text-[15px] text-slate-600">
+          <p className="-mt-2 text-[15px] text-slate-600">
             {copy.emailSentTo} <b className="wrap-anywhere text-slate-800">{step.email}</b>. {copy.spam}
           </p>
           {!started.emailOnRecord && (
@@ -232,12 +268,30 @@ export function SelfConfirmFlow({
           )}
         </>
       )}
-      {step.at === "password" && <Password copy={copy} language={language} attempt={started.attempt} phone={step.phone} headingRef={heading} onSubmit={onFinished} />}
+      {step.at === "password" && (
+        <>
+          <StepIcon name="lock" />
+          <Password
+            copy={copy}
+            language={language}
+            attempt={started.attempt}
+            phone={step.phone}
+            headingRef={heading}
+            // Sent: a finished flow must not come back on a reload. A refusal puts it back.
+            onSubmit={() => {
+              clearFlow()
+              onFinished?.()
+            }}
+            onRefused={keepStep}
+          />
+        </>
+      )}
       {problem && (
         <NoticeBox role="alert" tone="info">
           {problem}
         </NoticeBox>
       )}
+      {call}
     </section>
   )
 }
@@ -345,10 +399,10 @@ function Sms({
       <h1 ref={headingRef} tabIndex={-1} className={TITLE}>
         {copy.smsTitle}
       </h1>
-      <p className="text-[15px] text-slate-600">
+      <p className="-mt-2 text-[15px] text-slate-600">
         {step.masked ? (
           <>
-            {copy.smsSentTo} <span className="font-semibold text-slate-800 tabular-nums">{step.masked}</span>.
+            {copy.smsSentTo} <b className="font-semibold text-slate-800 tabular-nums">{step.masked}</b>.
           </>
         ) : (
           copy.smsToRecord
@@ -381,13 +435,9 @@ function Sms({
           )}
         </NoticeBox>
       )}
-      <div className="flex flex-col items-center gap-2">
-        <button
-          type="button"
-          onClick={onResend}
-          disabled={pending || left > 0}
-          className="rounded-full px-4 py-2 text-[14px] font-semibold text-blue-600 underline-offset-2 enabled:hover:underline disabled:text-slate-400"
-        >
+      <div className="flex flex-col items-center gap-3">
+        {/* Outlined across the card, with its countdown (the approved prototype v58). */}
+        <ContinuePill variant="ghost" onClick={onResend} disabled={pending || left > 0} pending={pending} className="disabled:opacity-60" data-send-again>
           {left > 0 ? (
             <>
               {copy.sendAgainIn} <span className="tabular-nums">{`${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")}`}</span>
@@ -397,7 +447,7 @@ function Sms({
           ) : (
             copy.sendAgain
           )}
-        </button>
+        </ContinuePill>
         <button type="button" className="text-[14px] font-semibold text-blue-700 underline underline-offset-2" onClick={() => setNoSms((open) => !open)} aria-expanded={noSms}>
           {copy.noSms}
         </button>
@@ -435,6 +485,7 @@ function Password({
   phone,
   headingRef,
   onSubmit,
+  onRefused,
 }: {
   copy: Copy
   language: Language
@@ -442,12 +493,24 @@ function Password({
   phone: string
   headingRef: React.RefObject<HTMLHeadingElement | null>
   onSubmit?: () => void
+  onRefused?: () => void
 }) {
   const [state, formAction, pending] = useActionState(finishSelfConfirm, null)
-  const turnstile = useRef<TurnstileWidgetHandle>(null)
+  const form = useRef<HTMLFormElement>(null)
+  // The security check, out of sight unless it is slow or fails (prototype v5).
+  const check = useQuietCheck()
+  const { reset } = check
+  const refused = useRef(onRefused)
   useEffect(() => {
-    if (state) turnstile.current?.reset()
-  }, [state])
+    refused.current = onRefused
+  })
+  useEffect(() => {
+    if (!state) return
+    // A refused password form: the token is spent, and the step stays for a reload.
+    reset()
+    refused.current?.()
+  }, [state, reset])
+  const waiting = pending || check.waiting
   const message =
     state?.error === "password-mismatch"
       ? copy.passwordMismatch
@@ -458,16 +521,34 @@ function Password({
           : state?.error === "staff-session"
             ? ACCOUNT_COPY[language].messages["staff-session"].text
             : state?.error === "expired"
-            ? copy.expired
-            : state
-              ? copy.unavailable
-              : null
+              ? copy.expired
+              : state
+                ? copy.unavailable
+                : null
   return (
-    <form action={formAction} onSubmit={() => onSubmit?.()} className="flex flex-col gap-3 text-left" noValidate>
+    <form
+      ref={form}
+      action={formAction}
+      onSubmit={(event) => {
+        // Sent before the check has passed: the button waits, and the form
+        // sends by itself once it does, with the passwords as typed.
+        if (!new FormData(event.currentTarget).get("cf-turnstile-response") && !check.token()) {
+          event.preventDefault()
+          check.begin(() => form.current?.requestSubmit())
+          return
+        }
+        onSubmit?.()
+      }}
+      className="flex flex-col gap-3 text-left"
+      noValidate
+    >
       <h1 ref={headingRef} tabIndex={-1} className={cn(TITLE, "text-center")}>
         {copy.passwordTitle}
       </h1>
       <p className="text-center text-[15px] text-slate-600">{copy.passwordIntro}</p>
+      <p className="text-center text-[15px] text-slate-600">
+        {copy.signsInWith} <b className="font-semibold text-slate-800 tabular-nums">{localMobile(phone)}</b>
+      </p>
       <input type="hidden" name="attempt" value={attempt} />
       <input type="hidden" name="phone" value={phone} />
       <label htmlFor="self-confirm-password" className="sr-only">
@@ -485,9 +566,6 @@ function Password({
         icon={<Lock className="size-5" strokeWidth={1.75} aria-hidden />}
         aria-describedby="self-confirm-rule"
       />
-      <p id="self-confirm-rule" className="pl-4 text-[12px] text-slate-500">
-        {copy.passwordRule}
-      </p>
       <label htmlFor="self-confirm-confirm" className="sr-only">
         {copy.confirmPassword}
       </label>
@@ -501,15 +579,20 @@ function Password({
         required
         alignStart
         icon={<Lock className="size-5" strokeWidth={1.75} aria-hidden />}
+        aria-describedby="self-confirm-rule"
       />
+      {/* The rule under both boxes, as the approved prototype draws it. */}
+      <p id="self-confirm-rule" className="text-center text-[13px] text-slate-500">
+        {copy.passwordRule}
+      </p>
       {message && (
         <NoticeBox role="alert" tone="info">
           {message}
         </NoticeBox>
       )}
-      <TurnstileWidget ref={turnstile} action="agent" language={language} className="mt-1" />
-      <ContinuePill type="submit" pending={pending} disabled={pending}>
-        {pending ? copy.saving : copy.setPassword}
+      <QuietCheck check={check} language={language} className="mt-1" />
+      <ContinuePill type="submit" pending={waiting} disabled={waiting}>
+        {waiting ? copy.saving : copy.setPassword}
       </ContinuePill>
     </form>
   )

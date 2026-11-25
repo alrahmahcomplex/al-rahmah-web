@@ -56,6 +56,9 @@ type Copy = {
   yes: string
   no: string
   code: string
+  // The one folded Discount code row (prototype v5, W1 and W2): its label, and the answer for no code.
+  codeRow: string
+  none: string
   codeHint: string
   codePlaceholder: string
   reviewQuestion: string
@@ -148,6 +151,8 @@ export const COPY: Record<Language, Copy> = {
     yes: "Ndiyo",
     no: "Hapana",
     code: "Code yako ya Punguzo",
+    codeRow: "Code ya Punguzo",
+    none: "Hakuna",
     codeHint: "Iandike kama ulivyopewa, mfano ABC-123.",
     codePlaceholder: "Code ya Punguzo, mfano ABC-123",
     reviewQuestion: "Hakiki kisha utume",
@@ -253,6 +258,8 @@ export const COPY: Record<Language, Copy> = {
     yes: "Yes",
     no: "No",
     code: "Your Discount code",
+    codeRow: "Discount code",
+    none: "None",
     codeHint: "Type it as you were given it, for example ABC-123.",
     codePlaceholder: "Discount code, e.g. ABC-123",
     reviewQuestion: "Check, then send",

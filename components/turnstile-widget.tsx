@@ -32,7 +32,7 @@ type RenderOptions = {
   theme: "auto"
   appearance: "interaction-only"
   language: string
-  callback: () => void
+  callback: (token: string) => void
   "before-interactive-callback": () => void
   "error-callback": (code: string) => boolean
   "unsupported-callback": () => void
@@ -80,6 +80,16 @@ const COPY: Record<Language, Record<Exclude<CheckState, "hidden">, string>> = {
 }
 
 let loading: Promise<Turnstile> | null = null
+let loadingScript: HTMLScriptElement | null = null
+
+// A script request that never answered (neither load nor error) would hold
+// every later mount on the same promise: drop it so the next mount asks again.
+function abandonStalledLoad() {
+  if (window.turnstile || !loading) return
+  loadingScript?.remove()
+  loadingScript = null
+  loading = null
+}
 
 function loadTurnstile(): Promise<Turnstile> {
   if (window.turnstile) return Promise.resolve(window.turnstile)
@@ -87,15 +97,21 @@ function loadTurnstile(): Promise<Turnstile> {
     const script = document.createElement("script")
     script.src = SCRIPT_SRC
     script.async = true
-    // On failure, let a later mount try again.
+    loadingScript = script
+    // On failure, let a later mount try again, unless a retry already
+    // replaced this request.
     const fail = (message: string) => {
-      loading = null
+      if (loadingScript === script) {
+        loading = null
+        loadingScript = null
+      }
       script.remove()
       reject(new Error(message))
     }
     script.addEventListener("load", () => {
-      if (window.turnstile) resolve(window.turnstile)
-      else fail("Turnstile's script loaded without defining window.turnstile")
+      if (!window.turnstile) return fail("Turnstile's script loaded without defining window.turnstile")
+      if (loadingScript === script) loadingScript = null
+      resolve(window.turnstile)
     })
     script.addEventListener("error", () => fail("Turnstile's script failed to load"))
     document.head.appendChild(script)
@@ -103,10 +119,21 @@ function loadTurnstile(): Promise<Turnstile> {
   return loading
 }
 
+// What the check is doing, for a form that says so itself (`quiet`):
+// "checking" until a token, "ready" with one, "needsClick" while
+// Cloudflare's box asks for a click, "failed" when it didn't load (after the
+// retry grace), "unsupported" when this browser can't run it.
+export type CheckStatus = "checking" | "ready" | "needsClick" | "failed" | "unsupported"
+
 export type TurnstileWidgetHandle = {
   // Gets a fresh token. Call it after any server answer that isn't a
   // confirmation: a token is spent once Cloudflare has checked it.
   reset(): void
+  // Removes the check and draws it again from the start, loading Cloudflare's
+  // script again if it never came: "Run the check again" (agent sign-up
+  // prototype v5). A check that hangs with no answer at all is only cleared
+  // this way.
+  redraw(): void
   // Call it when the form is sent without a token. When the check needs the
   // person (or failed to load), scrolls it into view, moves focus to its
   // message and returns true, so the form can skip its own "wait" notice.
@@ -117,6 +144,8 @@ export function TurnstileWidget({
   action,
   language,
   className,
+  quiet = false,
+  onStatus,
   ref,
 }: {
   // Per form, and checked on the server: "admission", "agent".
@@ -125,6 +154,12 @@ export function TurnstileWidget({
   language: Language
   // Spacing around the check, used only while it shows.
   className?: string
+  // The form shows its own words for a slow or failed check (agent sign-up,
+  // prototype v5): the widget shows only Cloudflare's box when it needs a
+  // click, and its own lines are read to screen readers only.
+  quiet?: boolean
+  // Every change of what the check is doing, with the token once there is one.
+  onStatus?: (status: CheckStatus, token: string | null) => void
   ref?: Ref<TurnstileWidgetHandle>
 }) {
   const wrapper = useRef<HTMLDivElement>(null)
@@ -152,10 +187,17 @@ export function TurnstileWidget({
   const [size, setSize] = useState<Size | null>(null)
   const fits = useRef<Size | null>(null)
   const siteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY
+  // Bumped by redraw(): the check is removed and drawn again.
+  const [generation, setGeneration] = useState(0)
+  const report = useRef(onStatus)
+  useEffect(() => {
+    report.current = onStatus
+  })
 
   function show(next: CheckState) {
     stateRef.current = next
     setState(next)
+    if (next === "needsClick" || next === "failed" || next === "unsupported") report.current?.(next, null)
     if (next !== "hidden") {
       shownRef.current = true
       setShown(true)
@@ -165,6 +207,11 @@ export function TurnstileWidget({
   useImperativeHandle(ref, () => ({
     reset() {
       if (widget.current) widget.current.turnstile.reset(widget.current.id)
+      report.current?.("checking", null)
+    },
+    redraw() {
+      abandonStalledLoad()
+      setGeneration((n) => n + 1)
     },
     reveal() {
       if (stateRef.current === "hidden") return false
@@ -198,6 +245,7 @@ export function TurnstileWidget({
     }
     let cancelled = false
     let errors = 0
+    report.current?.("checking", null)
     let grace: ReturnType<typeof setTimeout> | undefined
     const recovered = () => {
       errors = 0
@@ -208,6 +256,7 @@ export function TurnstileWidget({
         if (cancelled || !container.current) return
         const reset = () => {
           if (widget.current) turnstile.reset(widget.current.id)
+          report.current?.("checking", null)
         }
         // Drawn flexible while invisible, in space that has since dropped
         // under 300px.
@@ -222,9 +271,10 @@ export function TurnstileWidget({
           // box near the fee read like a payment confirmation.
           appearance: "interaction-only",
           language: WIDGET_LANGUAGES.has(language) ? language : "auto",
-          callback: () => {
+          callback: (token: string) => {
             recovered()
             show("hidden")
+            report.current?.("ready", token)
           },
           "before-interactive-callback": () => {
             recovered()
@@ -271,7 +321,7 @@ export function TurnstileWidget({
       shownRef.current = false
       setShown(false)
     }
-  }, [siteKey, action, language, size])
+  }, [siteKey, action, language, size, generation])
 
   const needsClick = state === "needsClick"
   const problem = state === "failed" || state === "unsupported"
@@ -284,11 +334,12 @@ export function TurnstileWidget({
         ref={prompt}
         tabIndex={-1}
         aria-live="polite"
-        className={cn("text-center text-sm text-slate-700 outline-none", !needsClick && "sr-only")}
+        className={cn("text-center text-sm text-slate-700 outline-none", (!needsClick || quiet) && "sr-only")}
       >
         {needsClick ? COPY[language].needsClick : ""}
       </p>
-      {problem && (
+      {/* Quiet, the form says it in its own words, with Run the check again. */}
+      {problem && !quiet && (
         <p ref={alert} tabIndex={-1} role="alert" className="text-center text-sm text-red-700 outline-none">
           {COPY[language][state]}
         </p>

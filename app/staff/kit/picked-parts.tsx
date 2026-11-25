@@ -3,6 +3,7 @@
 import { useId, useRef, useState, type FormEvent } from "react"
 
 import {
+  CallOffice,
   CodeBox,
   ConfirmationNumber,
   FieldError,
@@ -10,6 +11,7 @@ import {
   hasTwoNames,
   NoticeBox,
   PersonNameBoxes,
+  StepIcon,
   StudentNameBoxes,
   type ConfirmationNumberHandle,
   type ConfirmationResult,
@@ -182,6 +184,27 @@ export function ConfirmationNumberCard() {
           </button>
         </NoticeBox>
       )}
+    </Card>
+  )
+}
+
+/**
+ * The agent sign-up's step parts (owner, prototype v5, 25 Nov 2026): the icon
+ * disc above a step's title and the office's number at a step's foot. The
+ * stacked answer row is on the Summary rows card.
+ */
+export function SignUpPartsCard() {
+  return (
+    <Card title="Sign-up steps" data-bento="full">
+      <p className="kp-spec">
+        Above a step&apos;s title, its icon in a Lavender Whisper disc; at its foot, the office&apos;s number.
+      </p>
+      <div className="flex flex-wrap items-center justify-center gap-6 py-2">
+        <StepIcon name="lock" className="m-0" />
+        <StepIcon name="smscode" className="m-0" />
+        <StepIcon name="mail" className="m-0" />
+      </div>
+      <CallOffice label="Questions? Call the admissions office" phone="+255 673 526 644" />
     </Card>
   )
 }

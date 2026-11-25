@@ -202,7 +202,8 @@ test.describe("the Discount code page's answers", () => {
     await chooseLanguage(page.context(), "sw")
     await page.goto("/discount-code")
     await fillRegistration(page, "sw", { name: "Zawadi Barua Pepe", phone: phone(), email: email("apart") })
-    await page.getByRole("button", { name: "Badilisha Jibu" }).click()
+    // One Discount code row (prototype v5): its Change Code opens the Yes/No question.
+    await page.getByRole("button", { name: "Badilisha Code" }).click()
     await expect(page.getByRole("group", { name: t.hasCode })).toBeVisible()
     await expect(page.getByText("Una code lakini bado hujapokea barua pepe ya kuweka nenosiri? Chagua Ndiyo.")).toBeVisible()
     await expect(page.getByText("Umeshaweka nenosiri?")).toBeVisible()

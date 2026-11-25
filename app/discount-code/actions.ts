@@ -111,10 +111,12 @@ export async function registerAsAgent(_previous: DiscountCodeState, formData: Fo
     }
   }
 
-  // Self-confirm first (#503), for someone who has a code: an Approved code
-  // with matching names goes on to the choice of how to sign in. While it is
-  // off, and for a Pending code, weak record names, or email closed on the
-  // code (after Remove this sign-in) with no SMS possible, today's claim path.
+  // Self-confirm first (#503), for someone who has a code: a code with
+  // matching names goes on to the choice of how to sign in. One the office
+  // hasn't approved yet goes on as a new agent's does: its email path puts the
+  // email on the record (20270130120100). While self-confirm is off, and for
+  // weak record names, or email closed on the code (after Remove this sign-in)
+  // with no SMS possible, today's claim path.
   if (parsed.data.hasCode && parsed.data.code) {
     const started = await beginSelfConfirm({ code: parsed.data.code, names: parsed.data.fullName, phone: parsed.data.phone })
     switch (started.kind) {
@@ -129,6 +131,7 @@ export async function registerAsAgent(_previous: DiscountCodeState, formData: Fo
           emailOpen: started.emailOpen,
           email: parsed.data.email,
           phone: parsed.data.phone,
+          ...(started.pendingCode ? { newAgent: true, code: started.pendingCode } : {}),
         }
       case "name_mismatch":
         return { status: "name-mismatch" }

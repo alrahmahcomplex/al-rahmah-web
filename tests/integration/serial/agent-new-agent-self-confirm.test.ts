@@ -183,13 +183,124 @@ describe("a new agent by mobile", () => {
     expect(await sendConfirmationNumber(secretClient(), sms.send, { attempt: started.attempt, browser: randomUUID() }, words, ENV)).toEqual({ ok: true, data: { kind: "expired" } })
   })
 
-  test("a code holder's attempt still needs an Approved code", async () => {
+})
+
+// A code the office hasn't approved yet, typed as a code holder (owner, 24 Nov
+// 2026): it goes on to the choice of how to sign in, as a new agent's does,
+// instead of today's claim path, which asked for an email first.
+describe("a code the office hasn't approved yet", () => {
+  // A Pending record from another browser, as when the person registered on
+  // another day and comes back with the code.
+  async function pendingCode() {
     const fullName = names()
     const phone = mobile()
     const started = await startNew(fullName, phone, randomUUID())
     if (started.kind !== "ready") throw new Error("not ready")
-    // The Pending code typed as a code holder goes to today's claim path.
-    expect(await startSelfConfirm(secretClient(), { code: started.code, names: fullName, phone, browser: randomUUID(), ip: null })).toEqual({ ok: true, data: { kind: "pending" } })
+    return { fullName, phone, code: started.code }
+  }
+
+  test("with matching names goes on to the choice, as a new agent's attempt, never showing the email on record", async () => {
+    const held = await pendingCode()
+    await asSystem((sql) => sql.query("update public.marketing_agents set email = $2 where code = $1", [held.code, `office-${randomUUID().slice(0, 8)}@example.test`]))
+    const browser = randomUUID()
+    const started = await startSelfConfirm(secretClient(), { code: held.code, names: held.fullName, phone: held.phone, browser, ip: null })
+    expect(started).toMatchObject({ ok: true, data: { kind: "ready", canText: true, typedMatches: true, emailOnRecord: false, emailOpen: true, pendingCode: held.code } })
+    if (!started.ok || started.data.kind !== "ready") return
+    const id = started.data.attempt
+    const attempt = await asSystem(async (sql) => (await sql.query("select new_agent, typed_phone from public.agent_confirm_attempts where id = $1", [id])).rows[0])
+    expect(attempt).toEqual({ new_agent: true, typed_phone: null })
+  })
+
+  test("wrong names still don't match", async () => {
+    const held = await pendingCode()
+    expect(await startSelfConfirm(secretClient(), { code: held.code, names: names(), phone: held.phone, browser: randomUUID(), ip: null })).toEqual({
+      ok: true,
+      data: { kind: "name_mismatch" },
+    })
+  })
+
+  test("by mobile, the number goes to the mobile on the record, never a typed one, and the login waits for the office", async () => {
+    const held = await pendingCode()
+    const browser = randomUUID()
+    const typed = mobile()
+    const started = await startSelfConfirm(secretClient(), { code: held.code, names: held.fullName, phone: typed, browser, ip: null })
+    if (!started.ok || started.data.kind !== "ready") throw new Error("not ready")
+    expect(started.data.typedMatches).toBe(false)
+    const sms = keptSender()
+    expect(await sendConfirmationNumber(secretClient(), sms.send, { attempt: started.data.attempt, browser }, words, ENV)).toEqual({
+      ok: true,
+      data: { kind: "sent", phone: e164(held.phone), onRecord: true, show: false },
+    })
+    expect(await checkConfirmationNumber(secretClient(), { attempt: started.data.attempt, browser, digits: sms.lastDigits() }, ENV)).toEqual({
+      ok: true,
+      data: { kind: "right", phone: e164(held.phone) },
+    })
+    const login = await createPhoneLogin(secretClient(), { attempt: started.data.attempt, browser, phone: e164(held.phone), password: PASSWORD }, 6)
+    expect(login.ok).toBe(true)
+    expect(await record(held.code)).toMatchObject({ status: "Pending", joined: true })
+    const session = await signInByMobile(held.phone)
+    expect((await session.rpc("agent_students", {})).data).toEqual({ state: "not_approved" })
+  })
+
+  test("by email, the email goes on the Pending record, from the browser that started only", async () => {
+    const held = await pendingCode()
+    const browser = randomUUID()
+    const started = await startSelfConfirm(secretClient(), { code: held.code, names: held.fullName, phone: held.phone, browser, ip: null })
+    if (!started.ok || started.data.kind !== "ready") throw new Error("not ready")
+    const address = `baraka-${randomUUID().slice(0, 8)}@example.test`
+    expect(await setNewAgentEmail(secretClient(), { attempt: started.data.attempt, browser: randomUUID(), email: address })).toEqual({ ok: true, data: { kind: "expired" } })
+    expect(await setNewAgentEmail(secretClient(), { attempt: started.data.attempt, browser, email: address })).toEqual({
+      ok: true,
+      data: { kind: "registered", code: held.code, email: address },
+    })
+    expect(await record(held.code)).toMatchObject({ status: "Pending", email: address, user_id: null })
+  })
+
+  test("after Remove this sign-in with email closed, the email path stays shut even when called directly", async () => {
+    const held = await pendingCode()
+    await asSystem((sql) =>
+      sql.query(
+        `insert into public.agent_sign_in_removals (agent_id, signed_in_with, close_email, removed_by)
+         select m.id, m.phone, true, (select s.id from public.staff_members s limit 1) from public.marketing_agents m where m.code = $1`,
+        [held.code],
+      ),
+    )
+    const browser = randomUUID()
+    const started = await startSelfConfirm(secretClient(), { code: held.code, names: held.fullName, phone: held.phone, browser, ip: null })
+    expect(started).toMatchObject({ ok: true, data: { kind: "ready", canText: true, emailOpen: false, pendingCode: held.code } })
+    if (!started.ok || started.data.kind !== "ready") return
+    const address = `baraka-${randomUUID().slice(0, 8)}@example.test`
+    expect(await setNewAgentEmail(secretClient(), { attempt: started.data.attempt, browser, email: address })).toEqual({ ok: true, data: { kind: "email_closed" } })
+    expect(await record(held.code)).toMatchObject({ status: "Pending", email: null })
+  })
+
+  test("an email claim still waiting for the Manager keeps the email path shut, so the claim stays in the queue", async () => {
+    const held = await pendingCode()
+    const claimed = `claim-${randomUUID().slice(0, 8)}@example.test`
+    await asSystem((sql) =>
+      sql.query(
+        `insert into public.agent_email_claims (agent_id, outcome, full_name, email)
+         select m.id, 'pending', m.full_name, $2 from public.marketing_agents m where m.code = $1`,
+        [held.code, claimed],
+      ),
+    )
+    const browser = randomUUID()
+    const started = await startSelfConfirm(secretClient(), { code: held.code, names: held.fullName, phone: held.phone, browser, ip: null })
+    expect(started).toMatchObject({ ok: true, data: { kind: "ready", canText: true, emailOpen: false, pendingCode: held.code } })
+    if (!started.ok || started.data.kind !== "ready") return
+    const other = `other-${randomUUID().slice(0, 8)}@example.test`
+    expect(await setNewAgentEmail(secretClient(), { attempt: started.data.attempt, browser, email: other })).toEqual({ ok: true, data: { kind: "email_closed" } })
+    expect(await record(held.code)).toMatchObject({ status: "Pending", email: null })
+    const queue = await asSystem(async (sql) => (await sql.query("select count(*)::int as n from public.agent_open_claims((select id from public.marketing_agents where code = $1))", [held.code])).rows[0])
+    expect(queue).toEqual({ n: 1 })
+  })
+
+  test("an Approved code's attempt is unchanged: not a new agent's", async () => {
+    const onRecord = await createAgent(await signedIn(MANAGER), { fullName: names(), phone: mobile(), whatsapp: "", email: "", code: "" })
+    if (!onRecord.ok || onRecord.data.kind !== "created") throw new Error("could not create")
+    const agent = onRecord.data.agent
+    const started = await startSelfConfirm(secretClient(), { code: agent.code, names: agent.fullName, phone: null, browser: randomUUID(), ip: null })
+    expect(started).toMatchObject({ ok: true, data: { kind: "ready", pendingCode: null } })
   })
 })
 

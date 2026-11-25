@@ -40,7 +40,8 @@ export function ConfirmForm({ tokenHash, agentSession = false }: { tokenHash: st
 
   return (
     <main className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-blue-100/50 to-white w-full p-4 sm:p-8 relative">
-      <div className="w-[325px] max-w-[90vw] shrink-0 bg-white px-8 py-[40px] rounded-[40px] sm:rounded-[50px] shadow-[0_30px_80px_-15px] shadow-blue-600/25 flex flex-col items-center">
+      {/* 400px with 288px contents, as components/auth-card.tsx (owner, agent sign-up prototype v5). */}
+      <div className="w-[400px] max-w-[90vw] shrink-0 bg-white px-8 py-[40px] rounded-[40px] sm:rounded-[50px] shadow-[0_30px_80px_-15px] shadow-blue-600/25 flex flex-col items-center">
         <div className="mb-5 shrink-0">
           <Image
             src="/Al-Rahmah_Official_Logo.svg"
@@ -52,6 +53,7 @@ export function ConfirmForm({ tokenHash, agentSession = false }: { tokenHash: st
           />
         </div>
 
+        <div className="flex w-full max-w-[288px] flex-col items-center" data-auth-card-contents>
         <h1 className="text-blue-600 font-exo font-extrabold italic text-2xl mb-2">Set your password</h1>
         {showForm && (
           <p className="text-center text-[12px] font-exo text-slate-500 mb-5">
@@ -124,6 +126,7 @@ export function ConfirmForm({ tokenHash, agentSession = false }: { tokenHash: st
             </Link>
           </div>
         )}
+        </div>
       </div>
     </main>
   )

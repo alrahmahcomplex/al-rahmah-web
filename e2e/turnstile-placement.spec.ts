@@ -138,13 +138,16 @@ async function boxAndCard(page: Page) {
   })
 }
 
-async function expectSendBringsCheckIntoView(page: Page, lang: "sw" | "en", send: string) {
+// Quiet (the agent sign-up, prototype v5), the line is for screen readers
+// only and Cloudflare's box speaks for itself.
+async function expectSendBringsCheckIntoView(page: Page, lang: "sw" | "en", send: string, { quiet = false } = {}) {
   const message = page.getByText(NEEDS_CLICK[lang])
-  await expect(message).toBeVisible()
+  if (quiet) await expect(message).toHaveClass(/sr-only/)
+  else await expect(message).toBeVisible()
   await page.evaluate(() => window.scrollTo(0, 0))
   await page.getByRole("button", { name: send }).click()
   await expect(message).toBeFocused()
-  await expect(message).toBeInViewport()
+  if (!quiet) await expect(message).toBeInViewport()
   await expect(page.locator("[data-fake-check]")).toBeInViewport()
   // The check speaks for itself, so the form's "wait a moment" stays away.
   await expect(page.getByText(/Wait a moment for the security check|Subiri ukaguzi wa usalama/)).toHaveCount(0)
@@ -206,7 +209,7 @@ for (const { name, size } of VIEWPORTS) {
       await chooseLanguage(page.context(), "sw")
       await page.goto("/discount-code")
       await fillRegistration(page, "sw", newcomer())
-      await expectSendBringsCheckIntoView(page, "sw", DISCOUNT.sw.send)
+      await expectSendBringsCheckIntoView(page, "sw", DISCOUNT.sw.send, { quiet: true })
     })
 
     test("a password link request still sends with the always-pass keys", async ({ page }) => {

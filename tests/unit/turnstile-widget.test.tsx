@@ -380,6 +380,58 @@ describe("TurnstileWidget", () => {
     expect(turnstile.reset).toHaveBeenCalledWith("widget-1")
   })
 
+  // The agent sign-up's quiet check (owner, prototype v5): the form says what
+  // the check is doing itself, and Run the check again draws it anew.
+  it("reports what the check is doing, with the token once there is one", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    const TurnstileWidget = await loadWidget()
+    const onStatus = vi.fn()
+    render(<TurnstileWidget action="agent" language="en" quiet onStatus={onStatus} />)
+    await waitFor(() => expect(turnstile.render).toHaveBeenCalled())
+    expect(onStatus).toHaveBeenLastCalledWith("checking", null)
+
+    act(() => (lastOptions().callback as unknown as (token: string) => void)("token-1"))
+    expect(onStatus).toHaveBeenLastCalledWith("ready", "token-1")
+    act(() => lastOptions()["expired-callback"]!())
+    expect(onStatus).toHaveBeenLastCalledWith("checking", null)
+    act(() => lastOptions()["before-interactive-callback"]!())
+    expect(onStatus).toHaveBeenLastCalledWith("needsClick", null)
+    act(() => {
+      lastOptions()["error-callback"]!("300030")
+      lastOptions()["error-callback"]!("300030")
+    })
+    expect(onStatus).toHaveBeenLastCalledWith("failed", null)
+  })
+
+  it("quiet, leaves the words to the form: no visible message, Cloudflare's box only", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    const TurnstileWidget = await loadWidget()
+    render(<TurnstileWidget action="agent" language="en" quiet />)
+    await waitFor(() => expect(turnstile.render).toHaveBeenCalled())
+    act(() => {
+      lastOptions()["error-callback"]!("300030")
+      lastOptions()["error-callback"]!("300030")
+    })
+    expect(screen.queryByRole("alert")).toBeNull()
+    expect(screen.queryByText("The security check couldn't load. Reload the page and try again.")).toBeNull()
+    act(() => lastOptions()["before-interactive-callback"]!())
+    expect(screen.getByText("Tick the security check below, then send.")).toHaveClass("sr-only")
+  })
+
+  it("draws the check again from the start when asked, as Run the check again does", async () => {
+    const TurnstileWidget = await loadWidget()
+    const widget = createRef<TurnstileWidgetHandle>()
+    const onStatus = vi.fn()
+    render(<TurnstileWidget ref={widget} action="agent" language="en" quiet onStatus={onStatus} />)
+    await waitFor(() => expect(turnstile.render).toHaveBeenCalledTimes(1))
+
+    act(() => widget.current!.redraw())
+
+    await waitFor(() => expect(turnstile.render).toHaveBeenCalledTimes(2))
+    expect(turnstile.remove).toHaveBeenCalledWith("widget-1")
+    expect(onStatus).toHaveBeenLastCalledWith("checking", null)
+  })
+
   it("removes the widget when the form goes away", async () => {
     const TurnstileWidget = await loadWidget()
     const { unmount } = render(<TurnstileWidget action="admission" language="sw" />)
@@ -434,6 +486,33 @@ describe("TurnstileWidget", () => {
       retry[0].dispatchEvent(new Event("load"))
     })
 
+    await waitFor(() => expect(turnstile.render).toHaveBeenCalledTimes(1))
+  })
+
+  it("asks for the script again when Run the check again follows a request that never answered", async () => {
+    delete (window as { turnstile?: unknown }).turnstile
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    const TurnstileWidget = await loadWidget()
+    const widget = createRef<TurnstileWidgetHandle>()
+    render(<TurnstileWidget ref={widget} action="agent" language="en" quiet />)
+    const stalled = document.querySelector(`script[src="${SCRIPT_SRC}"]`)!
+    expect(stalled).not.toBeNull()
+
+    // Neither load nor error ever fires for the first request.
+    act(() => widget.current!.redraw())
+
+    const scripts = document.querySelectorAll(`script[src="${SCRIPT_SRC}"]`)
+    expect(scripts).toHaveLength(1)
+    expect(scripts[0]).not.toBe(stalled)
+
+    // A late error from the dropped request leaves the new one in place.
+    act(() => {
+      stalled.dispatchEvent(new Event("error"))
+    })
+    Object.assign(window, { turnstile })
+    act(() => {
+      scripts[0].dispatchEvent(new Event("load"))
+    })
     await waitFor(() => expect(turnstile.render).toHaveBeenCalledTimes(1))
   })
 

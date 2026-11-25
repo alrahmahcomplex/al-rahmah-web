@@ -371,3 +371,35 @@ export function LiveCountPill({ children, bumpKey }: { children: ReactNode; bump
     </b>
   )
 }
+
+/**
+ * The icon above a step's title (agent sign-up prototype v5, as the approved
+ * v58 drew it): a 64px Lavender Whisper disc holding a 28px indigo line icon.
+ * Decorative: the title names the step.
+ */
+export function StepIcon({ name, className }: { name: IconName; className?: string }) {
+  return (
+    <span className={cn("mx-auto -mb-1 grid size-16 flex-none place-items-center rounded-full bg-gf-whisper text-blue-600", className)} data-step-icon>
+      <Icon name={name} />
+    </span>
+  )
+}
+
+/**
+ * The office's number at the foot of a step (agent sign-up prototype v5): a
+ * quiet line, then the number as a call link in Exo, for someone who gets stuck.
+ */
+export function CallOffice({ label, phone, className }: { label: ReactNode; phone: string; className?: string }) {
+  return (
+    <div className={cn("flex flex-col items-center", className)} data-call-office>
+      <p className="text-sm text-slate-600">{label}</p>
+      <a
+        href={`tel:${phone.replaceAll(" ", "")}`}
+        className="mt-1 inline-flex min-h-11 items-center gap-2 rounded-full px-4 font-exo text-lg font-bold text-blue-600 italic outline-none hover:bg-blue-50 focus-visible:ring-3 focus-visible:ring-(color:--gf-focus-ring)"
+      >
+        <Icon name="phone" />
+        {phone}
+      </a>
+    </div>
+  )
+}

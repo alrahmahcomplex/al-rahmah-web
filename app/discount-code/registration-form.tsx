@@ -241,13 +241,13 @@ export function DiscountCodeForm({
     return ORDER.indexOf(FIELD_STEP[found]) <= ORDER.indexOf(step) ? found : null
   }
 
-  function next(step: Step, answer: CodeAnswer = codeAnswer) {
+  function next(step: Step, answer: CodeAnswer = codeAnswer, to?: Step) {
     const found = problemUpTo(step)
     if (found) return show({ field: found, server: false })
     const now = new Set(answered).add(step)
     setAnswered(now)
     setProblem(null)
-    setOpen(ORDER.find((k) => !now.has(k) && !skip(k, answer)) ?? "send")
+    setOpen(to ?? ORDER.find((k) => !now.has(k) && !skip(k, answer)) ?? "send")
   }
 
   function openStep(step: Step) {
@@ -271,14 +271,16 @@ export function DiscountCodeForm({
     openStep(ORDER[Math.max(0, i)])
   }
 
-  // Yes opens the code box; No goes straight to the review. Picking the same
-  // answer again (after Back, Change Answer or a reload) moves on too.
+  // Yes opens the code box, even one already answered: Change Code comes
+  // here, so Yes is how the code gets fixed (Greptile, #544). No goes
+  // straight to the review. Picking the same answer again (after Back,
+  // Change Code or a reload) moves on too.
   function answerHasCode(value: string) {
     const answer = value as Exclude<CodeAnswer, null>
     setCodeAnswer(answer)
     setProblem(null)
     window.clearTimeout(tileTimer.current)
-    tileTimer.current = window.setTimeout(() => next("has", answer), TILE_PAUSE_MS)
+    tileTimer.current = window.setTimeout(() => next("has", answer, answer === "yes" ? "code" : undefined), TILE_PAUSE_MS)
   }
 
   function startOver() {

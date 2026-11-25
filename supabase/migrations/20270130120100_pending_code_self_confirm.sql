@@ -26,6 +26,11 @@
 --   - The page never learns the record's email: email_on_record is false for
 --     a Pending code, so the email path asks for it, and set_new_agent_email
 --     refuses one that differs from an email already on the record.
+--   - After Remove this sign-in with its tick (email closed), the email path
+--     stays shut for a Pending record too: set_new_agent_email now checks
+--     agent_email_self_confirm_closed itself, as prepare_self_confirm_invite
+--     does, so hiding the choice on the page isn't the only guard (Greptile,
+--     #544).
 
 create or replace function public.start_agent_self_confirm(code text, typed_names text, typed_phone text, browser text, ip text)
 returns jsonb
@@ -117,3 +122,55 @@ $$;
 
 revoke execute on function public.start_agent_self_confirm(text, text, text, text, text) from public, anon, authenticated;
 grant execute on function public.start_agent_self_confirm(text, text, text, text, text) to service_role;
+
+-- The email path of a new agent's or a Pending code's attempt, as in
+-- 20270128110100_new_agent_self_confirm.sql, now also shut while email
+-- self-confirm is closed on the code ("off", which the page already handles).
+create or replace function public.set_new_agent_email(attempt uuid, browser text, typed_email text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+    a public.agent_confirm_attempts;
+    agent public.marketing_agents;
+    address text := nullif(lower(btrim(coalesce(set_new_agent_email.typed_email, ''))), '');
+begin
+    if auth.role() is distinct from 'service_role' then
+        raise exception 'not_permitted';
+    end if;
+    a := public.agent_confirm_attempt(set_new_agent_email.attempt, set_new_agent_email.browser);
+    if a.id is null or not a.new_agent then return jsonb_build_object('outcome', 'expired'); end if;
+    if not public.agent_attempt_open(a) then return jsonb_build_object('outcome', 'off'); end if;
+    select m.* into agent from public.marketing_agents m where m.id = a.agent_id for update;
+    if agent.status <> 'Pending' then return jsonb_build_object('outcome', 'off'); end if;
+    if public.agent_email_self_confirm_closed(agent.id) then return jsonb_build_object('outcome', 'off'); end if;
+    perform public.set_audit_actor('public_form', null);
+
+    if address is null or address !~ '^[^@\s]+@[^@\s]+\.[^@\s]+$' or char_length(address) > 254 then
+        return jsonb_build_object('outcome', 'no_email');
+    end if;
+    -- An email already on the record (the office may have added one while
+    -- the attempt was open) is never replaced from the public page (Sol, #538).
+    if agent.email is not null and agent.email <> address then
+        return jsonb_build_object('outcome', 'email_unusable');
+    end if;
+    if agent.email is null then
+        perform public.lock_login_email(address);
+        if public.agent_email_taken(address) or exists (select 1 from auth.users u where lower(u.email) = address) then
+            return jsonb_build_object('outcome', 'email_unusable');
+        end if;
+        update public.marketing_agents m set email = address where m.id = agent.id;
+    end if;
+
+    -- The attempt is done: no number goes out now.
+    update public.agent_confirm_numbers n set voided_at = clock_timestamp() where n.attempt_id = a.id and n.used_at is null and n.voided_at is null;
+    update public.agent_confirm_attempts o set channel = 'email', destination = address, state = 'void' where o.id = a.id;
+
+    return jsonb_build_object('outcome', 'registered', 'code', agent.code, 'email', address);
+end;
+$$;
+
+revoke execute on function public.set_new_agent_email(uuid, text, text) from public, anon, authenticated;
+grant execute on function public.set_new_agent_email(uuid, text, text) to service_role;

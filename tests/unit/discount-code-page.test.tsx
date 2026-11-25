@@ -388,7 +388,15 @@ describe("the Discount code page", { timeout: 30_000 }, () => {
     // One row, "Discount code" and the code; Change Code opens the Yes/No question again.
     const codeRow = screen.getByRole("button", { name: "Change Code" }).closest<HTMLElement>("[data-summary-row]")!
     expect(codeRow).toHaveTextContent(/^Discount code.*AAN-132$/)
+    expect(screen.queryByRole("button", { name: "Change Code" })).toBeInTheDocument()
     expect(screen.queryByRole("button", { name: "Change Answer" })).toBeNull()
+    // Yes again opens the code box to fix the code (Greptile, #544).
+    await user.click(screen.getByRole("button", { name: "Change Code" }))
+    await user.click(screen.getByRole("radio", { name: WORDS.en.yes }))
+    await waitFor(() => expect(screen.getByLabelText(WORDS.en.code)).toHaveFocus())
+    expect(screen.getByLabelText(WORDS.en.code)).toHaveValue("AAN-132")
+    await next(user, "en")
+    expect(await screen.findByRole("button", { name: WORDS.en.sendClaim })).toBeInTheDocument()
     // Changing the answer to No drops the code box and its code.
     await user.click(screen.getByRole("button", { name: "Change Code" }))
     await user.click(screen.getByRole("radio", { name: WORDS.en.no }))

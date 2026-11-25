@@ -256,6 +256,24 @@ describe("a code the office hasn't approved yet", () => {
     expect(await record(held.code)).toMatchObject({ status: "Pending", email: address, user_id: null })
   })
 
+  test("after Remove this sign-in with email closed, the email path stays shut even when called directly", async () => {
+    const held = await pendingCode()
+    await asSystem((sql) =>
+      sql.query(
+        `insert into public.agent_sign_in_removals (agent_id, signed_in_with, close_email, removed_by)
+         select m.id, m.phone, true, (select s.id from public.staff_members s limit 1) from public.marketing_agents m where m.code = $1`,
+        [held.code],
+      ),
+    )
+    const browser = randomUUID()
+    const started = await startSelfConfirm(secretClient(), { code: held.code, names: held.fullName, phone: held.phone, browser, ip: null })
+    expect(started).toMatchObject({ ok: true, data: { kind: "ready", canText: true, emailOpen: false, pendingCode: held.code } })
+    if (!started.ok || started.data.kind !== "ready") return
+    const address = `baraka-${randomUUID().slice(0, 8)}@example.test`
+    expect(await setNewAgentEmail(secretClient(), { attempt: started.data.attempt, browser, email: address })).toEqual({ ok: true, data: { kind: "off" } })
+    expect(await record(held.code)).toMatchObject({ status: "Pending", email: null })
+  })
+
   test("an Approved code's attempt is unchanged: not a new agent's", async () => {
     const onRecord = await createAgent(await signedIn(MANAGER), { fullName: names(), phone: mobile(), whatsapp: "", email: "", code: "" })
     if (!onRecord.ok || onRecord.data.kind !== "created") throw new Error("could not create")

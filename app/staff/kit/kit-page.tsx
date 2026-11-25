@@ -310,11 +310,18 @@ function DesignSystem({ tab, today }: { tab: string; today: string }) {
               trend={{ change: 0, label: "Same as the week before" }}
               actions={<RoundButton icon="filter" label="Show another week" size={40} on />}
             />
+            <StatCard
+              title="Applied this week"
+              icon="applicants"
+              value={37}
+              trend={{ change: -5, label: "5 fewer than last week" }}
+              actions={<RoundButton icon="filter" label="Show another week" size={40} />}
+            />
           </div>
           <p className="kp-spec">
             An 18px indigo icon before the title, nothing behind it at rest. Hover a card or tab to its button: the icon’s detail turns orange and a
             round Lavender Whisper highlight grows in (it fades in place under reduced motion). The number sits under the icon, Exo 800 italic 48.5px,
-            with its trend; Home puts its 7-day line at the bottom.
+            with its trend (up, no change, down); Home puts its 7-day line at the bottom.
           </p>
         </Card>
 

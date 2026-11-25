@@ -149,6 +149,9 @@ export async function setNewAgentEmailAction(attempt: string, email: string): Pr
       return { status: "no-email" }
     case "email_unusable":
       return { status: "email-unusable" }
+    // As the invite path says it: the email path is shut on this code.
+    case "email_closed":
+      return { status: "unavailable" }
     default:
       return { status: "expired" }
   }

@@ -270,8 +270,29 @@ describe("a code the office hasn't approved yet", () => {
     expect(started).toMatchObject({ ok: true, data: { kind: "ready", canText: true, emailOpen: false, pendingCode: held.code } })
     if (!started.ok || started.data.kind !== "ready") return
     const address = `baraka-${randomUUID().slice(0, 8)}@example.test`
-    expect(await setNewAgentEmail(secretClient(), { attempt: started.data.attempt, browser, email: address })).toEqual({ ok: true, data: { kind: "off" } })
+    expect(await setNewAgentEmail(secretClient(), { attempt: started.data.attempt, browser, email: address })).toEqual({ ok: true, data: { kind: "email_closed" } })
     expect(await record(held.code)).toMatchObject({ status: "Pending", email: null })
+  })
+
+  test("an email claim still waiting for the Manager keeps the email path shut, so the claim stays in the queue", async () => {
+    const held = await pendingCode()
+    const claimed = `claim-${randomUUID().slice(0, 8)}@example.test`
+    await asSystem((sql) =>
+      sql.query(
+        `insert into public.agent_email_claims (agent_id, outcome, full_name, email)
+         select m.id, 'pending', m.full_name, $2 from public.marketing_agents m where m.code = $1`,
+        [held.code, claimed],
+      ),
+    )
+    const browser = randomUUID()
+    const started = await startSelfConfirm(secretClient(), { code: held.code, names: held.fullName, phone: held.phone, browser, ip: null })
+    expect(started).toMatchObject({ ok: true, data: { kind: "ready", canText: true, emailOpen: false, pendingCode: held.code } })
+    if (!started.ok || started.data.kind !== "ready") return
+    const other = `other-${randomUUID().slice(0, 8)}@example.test`
+    expect(await setNewAgentEmail(secretClient(), { attempt: started.data.attempt, browser, email: other })).toEqual({ ok: true, data: { kind: "email_closed" } })
+    expect(await record(held.code)).toMatchObject({ status: "Pending", email: null })
+    const queue = await asSystem(async (sql) => (await sql.query("select count(*)::int as n from public.agent_open_claims((select id from public.marketing_agents where code = $1))", [held.code])).rows[0])
+    expect(queue).toEqual({ n: 1 })
   })
 
   test("an Approved code's attempt is unchanged: not a new agent's", async () => {

@@ -146,7 +146,7 @@ function invalidField(details: string | null | undefined): "full_name" | "phone"
   }
 }
 
-export type NewAgentEmailOutcome = { kind: "registered"; code: string; email: string } | { kind: "expired" | "off" | "no_email" | "email_unusable" }
+export type NewAgentEmailOutcome = { kind: "registered"; code: string; email: string } | { kind: "expired" | "off" | "no_email" | "email_unusable" | "email_closed" }
 
 /** A new agent's email path: the email goes on their Pending record; nothing is sent now. */
 export async function setNewAgentEmail(
@@ -159,7 +159,7 @@ export async function setNewAgentEmail(
   if (row.outcome === "registered" && typeof row.code === "string" && typeof row.email === "string") {
     return { ok: true, data: { kind: "registered", code: row.code, email: row.email } }
   }
-  const kind = (["expired", "off", "no_email", "email_unusable"] as const).find((k) => k === row.outcome)
+  const kind = (["expired", "off", "no_email", "email_unusable", "email_closed"] as const).find((k) => k === row.outcome)
   if (!kind) {
     console.error("Self-confirm: unexpected new-agent email answer", row)
     return { ok: false, error: "unavailable" }

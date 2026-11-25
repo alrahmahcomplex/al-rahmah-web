@@ -31,6 +31,12 @@
 --     agent_email_self_confirm_closed itself, as prepare_self_confirm_invite
 --     does, so hiding the choice on the page isn't the only guard (Greptile,
 --     #544).
+--   - An email claim on a Pending record still waiting for the Manager (made
+--     by today's claim path before this shipped) stays the Manager's: the
+--     record's email path is shut while it waits, in start_agent_self_confirm
+--     (email_open false; with no mobile on record, today's claim path) and
+--     in set_new_agent_email, so a second address never hides the claim from
+--     the queue (Astra, #544).
 
 create or replace function public.start_agent_self_confirm(code text, typed_names text, typed_phone text, browser text, ip text)
 returns jsonb
@@ -86,6 +92,11 @@ begin
     -- mobile (the person removed may have joined with one). With no mobile on
     -- record, today's claim path takes it, where the Manager decides.
     closed := public.agent_email_self_confirm_closed(agent.id);
+    -- A Pending record with an email claim still waiting for the Manager
+    -- (sent by today's claim path before this) stays the Manager's to decide:
+    -- its email path is shut too, so a second address can't take the record
+    -- out of the queue (Astra, #544).
+    closed := closed or (pending and exists (select 1 from public.agent_open_claims(agent.id)));
     if closed and not coalesce(agent.phone ~ '^\+255[67][0-9]{8}$', false) then
         return jsonb_build_object('outcome', 'email_closed');
     end if;
@@ -124,8 +135,9 @@ revoke execute on function public.start_agent_self_confirm(text, text, text, tex
 grant execute on function public.start_agent_self_confirm(text, text, text, text, text) to service_role;
 
 -- The email path of a new agent's or a Pending code's attempt, as in
--- 20270128110100_new_agent_self_confirm.sql, now also shut while email
--- self-confirm is closed on the code ("off", which the page already handles).
+-- 20270128110100_new_agent_self_confirm.sql, now also shut ("email_closed")
+-- while email self-confirm is closed on the code or a claim waits for the
+-- Manager.
 create or replace function public.set_new_agent_email(attempt uuid, browser text, typed_email text)
 returns jsonb
 language plpgsql
@@ -145,7 +157,9 @@ begin
     if not public.agent_attempt_open(a) then return jsonb_build_object('outcome', 'off'); end if;
     select m.* into agent from public.marketing_agents m where m.id = a.agent_id for update;
     if agent.status <> 'Pending' then return jsonb_build_object('outcome', 'off'); end if;
-    if public.agent_email_self_confirm_closed(agent.id) then return jsonb_build_object('outcome', 'off'); end if;
+    if public.agent_email_self_confirm_closed(agent.id) or exists (select 1 from public.agent_open_claims(agent.id)) then
+        return jsonb_build_object('outcome', 'email_closed');
+    end if;
     perform public.set_audit_actor('public_form', null);
 
     if address is null or address !~ '^[^@\s]+@[^@\s]+\.[^@\s]+$' or char_length(address) > 254 then

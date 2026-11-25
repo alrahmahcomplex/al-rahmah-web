@@ -10,6 +10,7 @@ export {
   type ConfirmationResult,
 } from "./confirmation-number"
 export {
+  CallOffice,
   ChangeLink,
   ChoiceTiles,
   ContinuePill,
@@ -24,6 +25,7 @@ export {
   OfferPill,
   PriceAnchor,
   QuestionTitle,
+  StepIcon,
   type ChoiceOption,
   type ChoiceTilesProps,
   type ContinuePillProps,

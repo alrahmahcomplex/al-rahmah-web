@@ -27,7 +27,10 @@ export function AuthCard({
     <>
       <LanguageSwitch language={language} returnTo={returnTo} inPlace={!!returnTo} className="shrink-0" />
       <div className="flex w-full flex-1 items-center justify-center py-6">
-        <div className="flex w-[325px] max-w-full shrink-0 flex-col items-center rounded-[40px] bg-white px-8 py-[40px] shadow-[0_30px_80px_-15px] shadow-blue-600/25 sm:rounded-[50px]">
+        {/* 400px wide, with the contents kept at 288px so the extra width is white
+            space on each side (owner, agent sign-up prototype v5). On a phone the
+            card fills the screen, as before, and the contents fill the card. */}
+        <div className="flex w-[400px] max-w-full shrink-0 flex-col items-center rounded-[40px] bg-white px-8 py-[40px] shadow-[0_30px_80px_-15px] shadow-blue-600/25 sm:rounded-[50px]">
           <div className="mb-5 shrink-0">
             <Image
               src="/Al-Rahmah_Official_Logo.svg"
@@ -39,11 +42,13 @@ export function AuthCard({
             />
           </div>
 
-          <div className="mb-4 flex h-11 w-full items-center justify-center rounded-full bg-blue-600 shadow-sm">
-            <span className="font-exo text-[16px] font-extrabold uppercase italic tracking-[1px] text-white">AL-RAHMAH COMPLEX</span>
-          </div>
+          <div className="flex w-full max-w-[288px] flex-col items-center" data-auth-card-contents>
+            <div className="mb-4 flex h-11 w-full items-center justify-center rounded-full bg-blue-600 shadow-sm">
+              <span className="font-exo text-[16px] font-extrabold uppercase italic tracking-[1px] text-white">AL-RAHMAH COMPLEX</span>
+            </div>
 
-          <div className="flex w-full flex-col">{children}</div>
+            <div className="flex w-full flex-col">{children}</div>
+          </div>
         </div>
       </div>
     </>

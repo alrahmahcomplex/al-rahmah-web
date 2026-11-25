@@ -10,14 +10,21 @@
   width: 100%;
   min-height: 64px;
 }
+/* The six boxes share the card's width (owner, agent sign-up prototype v4):
+   at most 48px each, shrinking together in a narrow card, always centred,
+   never past the card's edge (they were 304px wide in a ~261-290px card). */
 .gf-otp-row {
-  display: flex;
-  gap: 8px;
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 48px));
+  gap: clamp(4px, 2.4%, 8px);
   justify-content: center;
+  width: 100%;
 }
 .gf-otp-box {
-  width: 44px;
-  height: 56px;
+  width: 100%;
+  min-width: 0;
+  height: auto;
+  aspect-ratio: 44 / 56;
   border-radius: 16px;
   border: 1.5px solid var(--gf-line);
   background: var(--gf-paper);
@@ -207,12 +214,7 @@ html.rm .gf-otp-ring {
   stroke-dashoffset: 0;
 }
 @media (max-width: 360px) {
-  .gf-otp-row {
-    gap: 6px;
-  }
   .gf-otp-box {
-    width: 40px;
-    height: 52px;
     font-size: 22px;
   }
 }

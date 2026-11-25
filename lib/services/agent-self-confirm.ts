@@ -17,8 +17,10 @@ import { fitsOneSms, sendSms, type SmsSender } from "./sms"
 // only its HMAC (OTP_HMAC_SECRET, server-only), bound to its attempt.
 
 export type StartOutcome =
-  | { kind: "ready"; attempt: string; mobileOnRecord: boolean; typedMatches: boolean; canText: boolean; emailOnRecord: boolean; emailOpen: boolean }
-  | { kind: "off" | "access_off" | "no_match" | "name_mismatch" | "weak_names" | "pending" | "joined" | "locked" | "setups_limited" | "email_closed" }
+  // `pendingCode`: the code the office hasn't approved yet; its attempt goes on
+  // as a new agent's does (20270130120100). Null for an Approved code.
+  | { kind: "ready"; attempt: string; mobileOnRecord: boolean; typedMatches: boolean; canText: boolean; emailOnRecord: boolean; emailOpen: boolean; pendingCode: string | null }
+  | { kind: "off" | "access_off" | "no_match" | "name_mismatch" | "weak_names" | "joined" | "locked" | "setups_limited" | "email_closed" }
 
 export type SendOutcome =
   | { kind: "sent"; phone: string; onRecord: boolean; show: boolean }
@@ -82,10 +84,11 @@ export async function startSelfConfirm(
         emailOnRecord: row.email_on_record === true,
         // Closed after Remove this sign-in with its tick (#503).
         emailOpen: row.email_open !== false,
+        pendingCode: row.pending === true && typeof row.code === "string" ? row.code : null,
       },
     }
   }
-  const known = ["off", "access_off", "no_match", "name_mismatch", "weak_names", "pending", "joined", "locked", "setups_limited", "email_closed"] as const
+  const known = ["off", "access_off", "no_match", "name_mismatch", "weak_names", "joined", "locked", "setups_limited", "email_closed"] as const
   const kind = known.find((k) => k === outcome)
   if (!kind) {
     console.error("Self-confirm: unexpected start answer", row)

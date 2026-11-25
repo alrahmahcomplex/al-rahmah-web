@@ -11,12 +11,16 @@ import "./guided-form.css"
  * The two-word "Badilisha …" link on a folded row (`.btn-text`): indigo,
  * underlined, 44px tall, never wraps above 380px.
  */
-export function ChangeLink({ className, children, type = "button", ...props }: ButtonHTMLAttributes<HTMLButtonElement>) {
+export function ChangeLink({ className, children, type = "button", small = false, ...props }: ButtonHTMLAttributes<HTMLButtonElement> & { small?: boolean }) {
   return (
     <button
       type={type}
       className={cn(
-        "inline-flex min-h-11 items-center gap-1.5 rounded-full px-2.5 text-[15px] font-semibold whitespace-nowrap text-blue-600 underline decoration-blue-600/35 underline-offset-4 transition-colors outline-none hover:bg-blue-50 focus-visible:ring-3 focus-visible:ring-(color:--gf-focus-ring) active:scale-[0.97] max-[380px]:whitespace-normal",
+        small
+          ? // The stacked answer row's link (agent sign-up prototype v5): the question's own 13px, not bold,
+            // underlined; an invisible margin keeps the tap target about 44px tall.
+            "relative inline-flex flex-none items-center gap-1 text-[13px] leading-[1.35] font-normal whitespace-nowrap text-blue-600 underline decoration-1 underline-offset-[3px] outline-none before:absolute before:-inset-x-1.5 before:-inset-y-3 before:content-[''] hover:decoration-2 focus-visible:rounded-sm focus-visible:ring-3 focus-visible:ring-(color:--gf-focus-ring)"
+          : "inline-flex min-h-11 items-center gap-1.5 rounded-full px-2.5 text-[15px] font-semibold whitespace-nowrap text-blue-600 underline decoration-blue-600/35 underline-offset-4 transition-colors outline-none hover:bg-blue-50 focus-visible:ring-3 focus-visible:ring-(color:--gf-focus-ring) active:scale-[0.97] max-[380px]:whitespace-normal",
         className,
       )}
       {...props}
@@ -365,5 +369,37 @@ export function LiveCountPill({ children, bumpKey }: { children: ReactNode; bump
     >
       {children}
     </b>
+  )
+}
+
+/**
+ * The icon above a step's title (agent sign-up prototype v5, as the approved
+ * v58 drew it): a 64px Lavender Whisper disc holding a 28px indigo line icon.
+ * Decorative: the title names the step.
+ */
+export function StepIcon({ name, className }: { name: IconName; className?: string }) {
+  return (
+    <span className={cn("mx-auto -mb-1 grid size-16 flex-none place-items-center rounded-full bg-gf-whisper text-blue-600", className)} data-step-icon>
+      <Icon name={name} />
+    </span>
+  )
+}
+
+/**
+ * The office's number at the foot of a step (agent sign-up prototype v5): a
+ * quiet line, then the number as a call link in Exo, for someone who gets stuck.
+ */
+export function CallOffice({ label, phone, className }: { label: ReactNode; phone: string; className?: string }) {
+  return (
+    <div className={cn("flex flex-col items-center", className)} data-call-office>
+      <p className="text-sm text-slate-600">{label}</p>
+      <a
+        href={`tel:${phone.replaceAll(" ", "")}`}
+        className="mt-1 inline-flex min-h-11 items-center gap-2 rounded-full px-4 font-exo text-lg font-bold text-blue-600 italic outline-none hover:bg-blue-50 focus-visible:ring-3 focus-visible:ring-(color:--gf-focus-ring)"
+      >
+        <Icon name="phone" />
+        {phone}
+      </a>
+    </div>
   )
 }

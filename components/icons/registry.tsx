@@ -279,6 +279,24 @@ export const signout = icon({
   detail: <path d="M4 12h12M12 7l5 5-5 5" />,
 })
 
+// The agent sign-up's step discs (owner, prototype v5, 25 Nov 2026): a padlock
+// (choose how to sign in, set your password), an envelope (the email path), and
+// a message with three stars inside, a secret code sent by SMS.
+export const lock = icon({
+  outline: <rect x="4" y="10" width="16" height="11" rx="2.5" />,
+  detail: <path d="M8 10V7a4 4 0 0 1 8 0v3M12 14.5v2.5" />,
+})
+
+export const mail = icon({
+  outline: <rect x="3" y="5" width="18" height="14" rx="2.5" />,
+  detail: <path d="m3.5 7 8.5 6 8.5-6" />,
+})
+
+export const smscode = icon({
+  outline: <path d="M4 6.5A2.5 2.5 0 0 1 6.5 4h11A2.5 2.5 0 0 1 20 6.5v8a2.5 2.5 0 0 1-2.5 2.5H10l-4.5 3.5V17A2.5 2.5 0 0 1 4 14.5z" />,
+  detail: <path strokeWidth={1.7} d="M8.4 8.75v3M7.1 9.5l2.6 1.5M7.1 11l2.6-1.5M12 8.75v3M10.7 9.5l2.6 1.5M10.7 11l2.6-1.5M15.6 8.75v3M14.3 9.5l2.6 1.5M14.3 11l2.6-1.5" />,
+})
+
 export const ICONS = {
   today,
   checkin,
@@ -327,6 +345,9 @@ export const ICONS = {
   copy,
   chat,
   signout,
+  lock,
+  mail,
+  smscode,
 } satisfies Record<string, IconDef>
 
 export type IconName = keyof typeof ICONS

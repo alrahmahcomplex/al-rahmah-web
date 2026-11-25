@@ -28,7 +28,6 @@ import {
 } from "@/components/guided-form"
 import { rainConfetti } from "@/components/kit/confetti"
 import { FinishMark } from "@/components/kit/states"
-import { TurnstileWidget, type TurnstileWidgetHandle } from "@/components/turnstile-widget"
 import { buttonVariants } from "@/components/ui/button"
 import { agentCodePrefix, agentFullName, agentRegistrationProblem, type AgentDraft, type AgentField } from "@/lib/agent-registration"
 import { discountCodeShareLink } from "@/lib/discount-code-share"
@@ -36,8 +35,10 @@ import type { Language } from "@/lib/language"
 import { cn } from "@/lib/utils"
 
 import { clearDraft, readDraft, writeDraft } from "./draft"
+import { clearFlow, readFlow, type SavedStep } from "./flow-state"
 import { CARD } from "./frame"
 import { registerAsAgent } from "./actions"
+import { QuietCheck, useQuietCheck } from "./quiet-check"
 import { SelfConfirmFlow } from "./self-confirm-flow"
 import { SELF_CONFIRM_COPY } from "./self-confirm-copy"
 import { COPY, discountWords } from "./copy"
@@ -136,6 +137,8 @@ export function DiscountCodeForm({
   const [done, setDone] = useState<Done | null>(null)
   // Self-confirm (#503): code and names matched; the choice of sign-in follows.
   const [selfConfirm, setSelfConfirm] = useState<Extract<DiscountCodeState, { status: "self-confirm" }> | null>(null)
+  // When its attempt opened, and the step a reload comes back to (./flow-state.ts).
+  const [flowStart, setFlowStart] = useState<{ startedAt: number; step?: SavedStep; smsOff: boolean }>({ startedAt: 0, smsOff: false })
   const [confirming, setConfirming] = useState(false)
   const [sending, startSending] = useTransition()
   // Counts restarts, so an answer to a send from before a restart is ignored.
@@ -143,7 +146,8 @@ export function DiscountCodeForm({
   // The round the self-confirm flow on screen belongs to: a late reply from a
   // flow the form has since cleared must not clear the newer form's draft.
   const flowRound = useRef(0)
-  const turnstile = useRef<TurnstileWidgetHandle>(null)
+  // The security check, out of sight unless it is slow or fails (prototype v5).
+  const check = useQuietCheck()
   const form = useRef<HTMLFormElement>(null)
   const heading = useRef<HTMLHeadingElement>(null)
   const moved = useRef(false)
@@ -184,6 +188,13 @@ export function DiscountCodeForm({
       setOpen(ORDER.find((k) => !now.has(k) && !skipped(k, answer) && (asks || k !== "email")) ?? "send")
       setInstant(true)
       window.setTimeout(() => setInstant(false), 0)
+    }
+    // A reload while choosing how to sign in comes back to that step.
+    const flow = readFlow()
+    if (flow) {
+      flowRound.current = round.current
+      setFlowStart({ startedAt: flow.startedAt, step: flow.step, smsOff: flow.smsOff })
+      setSelfConfirm(flow.started)
     }
     setRestored(true)
     /* eslint-enable react-hooks/set-state-in-effect */
@@ -243,6 +254,8 @@ export function DiscountCodeForm({
     // A tile picked a moment ago would otherwise move on over this choice.
     window.clearTimeout(tileTimer.current)
     if (step === open) return
+    // Leaving the send: a send waiting on the security check no longer goes on.
+    if (open === "send") check.cancel()
     // Leaving an answered step half-fixed would fold a wrong answer away.
     if (open !== "send" && answered.has(open)) {
       const found = problemUpTo(open)
@@ -284,7 +297,9 @@ export function DiscountCodeForm({
     setNotice(null)
     setDone(null)
     setSelfConfirm(null)
+    clearFlow()
     setConfirming(false)
+    check.cancel()
     // A full restart skips the fold animations, for that one render.
     setInstant(true)
     window.setTimeout(() => setInstant(false), 0)
@@ -304,13 +319,15 @@ export function DiscountCodeForm({
     if (found) return show({ field: found, server: false })
 
     const data = new FormData(form.current)
-    // Turnstile fills its token in a moment after the step opens; sending
-    // before then would only be refused.
-    if (!data.get("cf-turnstile-response")) {
-      // A check that needs a click says so itself, next to Send.
-      setNotice(turnstile.current?.reveal() ? null : "check-pending")
+    // Turnstile fills its token in a moment after the step opens. Sent before
+    // then, the button waits and the form sends by itself once it passes.
+    const token = data.get("cf-turnstile-response") || check.token()
+    if (!token) {
+      setNotice(null)
+      check.begin(() => sendNow.current())
       return
     }
+    data.set("cf-turnstile-response", token)
     data.set("firstName", entries.firstName)
     data.set("middleName", entries.middleName)
     data.set("lastName", entries.lastName)
@@ -341,24 +358,32 @@ export function DiscountCodeForm({
       }
       if (result.status === "self-confirm") {
         flowRound.current = sentIn
+        setFlowStart({ startedAt: Date.now(), smsOff: false })
         setSelfConfirm(result)
         return
       }
       if (result.status === "email-needed") {
         // Today's claim path, or self-confirm off since the page loaded: the
         // email question comes back, before a send again.
-        turnstile.current?.reset()
+        check.reset()
         moved.current = true
         setEmailNeeded(true)
         setOpen("email")
         return
       }
       // The token is spent once checked, so get a fresh one for the next try.
-      turnstile.current?.reset()
+      check.reset()
       if (result.status === "invalid") return show({ field: result.field, server: true })
       setNotice(result.status === "idle" ? "unavailable" : result.status)
     })
   }
+
+  // The send the check runs by itself once it passes: always the latest one,
+  // with the answers as they are then.
+  const sendNow = useRef(onSend)
+  useEffect(() => {
+    sendNow.current = onSend
+  })
 
   const topBar = <BrandTopBar variant="complex" language={language} showLanguagePrompt={showLanguagePrompt} onClearForm={startOver} />
 
@@ -367,8 +392,13 @@ export function DiscountCodeForm({
       <>
         {topBar}
         <SelfConfirmFlow
+          key={selfConfirm.attempt}
           language={language}
+          officePhone={officePhone}
           started={selfConfirm}
+          startedAt={flowStart.startedAt}
+          initialStep={flowStart.step}
+          initialSmsOff={flowStart.smsOff}
           // The email is on its way or the password is being set: the answers are no longer needed.
           onFinished={() => {
             if (round.current === flowRound.current) clearDraft()
@@ -377,6 +407,7 @@ export function DiscountCodeForm({
           onChangeEmail={
             askEmail
               ? () => {
+                  clearFlow()
                   setSelfConfirm(null)
                   setOpen("email")
                 }
@@ -387,6 +418,7 @@ export function DiscountCodeForm({
           onRegistered={(registered) => {
             if (round.current !== flowRound.current) return
             clearDraft()
+            clearFlow()
             moved.current = true
             setSelfConfirm(null)
             setDone(registered)
@@ -442,7 +474,11 @@ export function DiscountCodeForm({
 
   const visible = (step: Step) => !skip(step, codeAnswer) && (answered.has(step) || open === step)
   const stateOf = (step: Step) => (open === step ? "open" : "folded")
-  const change = (step: Step, label: string) => <ChangeLink onClick={() => openStep(step)}>{label}</ChangeLink>
+  const change = (step: Step, label: string) => (
+    <ChangeLink small onClick={() => openStep(step)}>
+      {label}
+    </ChangeLink>
+  )
   const describedBy = (...ids: (string | false)[]) => ids.filter(Boolean).join(" ") || undefined
 
   const youDone = (answered.has("name") ? 1 : 0) + (answered.has("phone") ? 2 : 0)
@@ -503,7 +539,7 @@ export function DiscountCodeForm({
                 key="name"
                 state={stateOf("name")}
                 onOpened={focusFirstField}
-                summary={answered.has("name") && <SummaryRow label={copy.fullName} value={fullName} action={change("name", copy.change.name)} />}
+                summary={answered.has("name") && <SummaryRow stacked label={copy.fullName} value={fullName} action={change("name", copy.change.name)} />}
               >
                 <QuestionTitle id="name-title">{copy.nameQuestion}</QuestionTitle>
                 <div className="flex flex-col gap-2">
@@ -534,18 +570,10 @@ export function DiscountCodeForm({
                 summary={
                   answered.has("phone") && (
                     <SummaryRow
+                      stacked
                       label={copy.phone}
-                      value={
-                        <>
-                          {draft.phone.trim()}
-                          {entries.whatsapp.trim() && (
-                            <>
-                              <br />
-                              <span className="text-sm font-normal text-slate-600">WhatsApp {entries.whatsapp.trim()}</span>
-                            </>
-                          )}
-                        </>
-                      }
+                      value={draft.phone.trim()}
+                      sub={entries.whatsapp.trim() ? `WhatsApp ${entries.whatsapp.trim()}` : undefined}
                       action={change("phone", copy.change.phone)}
                     />
                   )
@@ -613,7 +641,7 @@ export function DiscountCodeForm({
                 state={stateOf("email")}
                 onOpened={focusFirstField}
                 openOnMount
-                summary={answered.has("email") && <SummaryRow label={copy.email} value={<span className="wrap-anywhere">{draft.email.trim()}</span>} action={change("email", copy.change.email)} />}
+                summary={answered.has("email") && <SummaryRow stacked label={copy.email} value={<span className="wrap-anywhere">{draft.email.trim()}</span>} action={change("email", copy.change.email)} />}
               >
                 <QuestionTitle htmlFor="email">{copy.emailQuestion}</QuestionTitle>
                 <div className="flex flex-col gap-2">
@@ -645,12 +673,15 @@ export function DiscountCodeForm({
               <GuidedStep
                 key="has"
                 state={stateOf("has")}
+                // After Yes the folded question shows nothing: the code's row stands for both (owner, prototype v5).
+                className={codeAnswer === "yes" && open !== "has" ? "hidden" : undefined}
                 onOpened={focusFirstField}
                 openOnMount
                 summary={
-                  answered.has("has") && (
-                    <SummaryRow label={copy.hasCode} value={codeAnswer === "yes" ? copy.yes : copy.no} action={change("has", copy.change.hasCode)} />
-                  )
+                  // One Discount code row, not the question's Yes/No (owner, prototype v5):
+                  // "None" here after No; after Yes the code's own step carries the row.
+                  answered.has("has") &&
+                  codeAnswer === "no" && <SummaryRow stacked label={copy.codeRow} value={copy.none} none action={change("has", copy.change.code)} />
                 }
               >
                 {/* A click, Space or Enter on the answer already chosen fires no change,
@@ -694,7 +725,7 @@ export function DiscountCodeForm({
                 state={stateOf("code")}
                 onOpened={focusFirstField}
                 openOnMount
-                summary={answered.has("code") && <SummaryRow label={copy.code} value={entries.code.trim()} action={change("code", copy.change.code)} />}
+                summary={answered.has("code") && <SummaryRow stacked label={copy.codeRow} value={entries.code.trim()} action={change("has", copy.change.code)} />}
               >
                 <QuestionTitle htmlFor="code">{copy.code}</QuestionTitle>
                 <div className="flex flex-col gap-2">
@@ -748,10 +779,11 @@ export function DiscountCodeForm({
                   </NoticeBox>
                 )}
                 {/* Inside the form, so its token is sent; invisible unless Cloudflare
-                    needs a click, and then right above Send. */}
-                <TurnstileWidget ref={turnstile} action="agent" language={language} />
-                <ContinuePill type="submit" pending={sending} disabled={sending}>
-                  {sending ? copy.sending : entries.hasCode ? copy.sendClaim : copy.send}
+                    needs a click, and then right above Send. A slow or failed check
+                    says so here, with Run the check again. */}
+                <QuietCheck check={check} language={language} />
+                <ContinuePill type="submit" pending={sending || check.waiting} disabled={sending || check.waiting}>
+                  {sending || check.waiting ? copy.sending : entries.hasCode ? copy.sendClaim : copy.send}
                 </ContinuePill>
               </GuidedStep>
             )}

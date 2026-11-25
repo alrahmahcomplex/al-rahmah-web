@@ -263,9 +263,36 @@ describe("in self-confirm's order", () => {
   })
 
   it("a code holder whose code goes to today's claim path is asked for the email first", async () => {
-    stubs.begin.mockResolvedValue({ kind: "pending" })
+    stubs.begin.mockResolvedValue({ kind: "weak_names" })
     expect(await send(later({ has_code: "yes", code: "RJ-407" }))).toEqual({ status: "email-needed" })
     expect(stubs.register).not.toHaveBeenCalled()
+  })
+
+  // Owner, 24 Nov 2026: a code the office hasn't approved yet asked for an
+  // email before any choice. It now goes on to the choice as a new agent's.
+  it("a code the office hasn't approved yet goes on to the choice, as a new agent's, with no email asked", async () => {
+    stubs.begin.mockResolvedValue({ kind: "ready", attempt: "att-2", mobileOnRecord: true, typedMatches: true, canText: true, emailOnRecord: false, emailOpen: true, pendingCode: "YAI-121" })
+    expect(await send(later({ has_code: "yes", code: "YAI-121" }))).toEqual({
+      status: "self-confirm",
+      attempt: "att-2",
+      mobileOnRecord: true,
+      typedMatches: true,
+      canText: true,
+      emailOnRecord: false,
+      emailOpen: true,
+      email: "",
+      phone: "0712 345 678",
+      newAgent: true,
+      code: "YAI-121",
+    })
+    expect(stubs.register).not.toHaveBeenCalled()
+  })
+
+  it("an Approved code goes on to the choice as a code holder's", async () => {
+    stubs.begin.mockResolvedValue({ kind: "ready", attempt: "att-3", mobileOnRecord: true, typedMatches: true, canText: true, emailOnRecord: true, emailOpen: true, pendingCode: null })
+    const state = await send(later({ has_code: "yes", code: "AAN-132" }))
+    expect(state).toMatchObject({ status: "self-confirm", attempt: "att-3" })
+    expect(state).not.toHaveProperty("newAgent")
   })
 
   it("without flow=self-confirm an empty email is still refused, as today", async () => {

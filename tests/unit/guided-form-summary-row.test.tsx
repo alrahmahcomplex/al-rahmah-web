@@ -36,3 +36,28 @@ describe("SummaryRow", () => {
     expect(screen.getByRole("button", { name: "Badilisha" }).parentElement).toHaveClass("self-end")
   })
 })
+
+// The stacked look (owner, agent sign-up prototype v5): the question small on
+// top with its link beside it, the answer under them, the only bold text.
+describe("SummaryRow stacked", () => {
+  it("puts the link on the question's line and the answer under them", () => {
+    const { container } = render(
+      <SummaryRow stacked label="Phone number" value="0712 345 123" sub="WhatsApp 0754 111 222" action={<ChangeLink small onClick={() => {}}>Change Number</ChangeLink>} />,
+    )
+    const label = container.querySelector<HTMLElement>("[data-summary-label]")!
+    const link = screen.getByRole("button", { name: "Change Number" })
+    expect(label.parentElement).toBe(link.parentElement)
+    const value = container.querySelector<HTMLElement>("[data-summary-value]")!
+    expect(value).toHaveTextContent("0712 345 123")
+    expect(value).toHaveClass("font-semibold")
+    expect(label.compareDocumentPosition(value) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(screen.getByText("WhatsApp 0754 111 222")).toBeInTheDocument()
+    // The small link: the question's size, not bold.
+    expect(link).toHaveClass("text-[13px]", "font-normal")
+  })
+
+  it("greys an answer that says there is nothing", () => {
+    render(<SummaryRow stacked none label="Discount code" value="None" />)
+    expect(screen.getByText("None")).toHaveClass("text-slate-600")
+  })
+})

@@ -175,6 +175,50 @@ a.kit-fpill { display: inline-flex; align-items: center; text-decoration: none; 
   .kit-task { border-radius: 32px; padding: 24px 18px; }
 }
 
+/* ---------- stat card (#520): the icon before the title, the number under them, then the card's own graph ---------- */
+.kit-stat {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto auto minmax(0, 1fr); column-gap: 10px; row-gap: 10px;
+  min-height: 0; padding: 14px 14px 12px 18px; border-radius: 22px; background: var(--gf-paper); border: var(--gf-stroke) solid var(--gf-line);
+  transition: border-color var(--gf-t-med);
+}
+.kit-stat:hover { border-color: var(--gf-line-strong); }
+/* A long title wraps under its own first word, never under the icon. */
+.kit-stat-t {
+  grid-column: 1; grid-row: 1; align-self: center; display: flex; align-items: flex-start; gap: 8px; min-width: 0; margin: 0;
+  font-size: 14px; font-weight: 600; line-height: 1.3; color: var(--gf-ink);
+}
+.kit-stat-tt { min-width: 0; overflow-wrap: anywhere; }
+/* Indigo at rest with nothing behind it. The 32px highlight sits outside the layout, so nothing moves when it shows. */
+.kit-stat-ic { position: relative; flex: none; width: 18px; height: 18px; display: grid; place-items: center; color: var(--gf-indigo); }
+.kit-stat-ic .gf-ic { position: relative; z-index: 1; }
+.kit-stat-ic::before {
+  content: ""; position: absolute; left: 50%; top: 50%; width: 32px; height: 32px; margin: -16px 0 0 -16px; border-radius: 50%;
+  background: var(--gf-whisper); opacity: 0; transform: scale(0.55);
+  transition: opacity var(--gf-t-med) var(--gf-ease-out), transform var(--gf-t-med) var(--gf-ease-out);
+}
+.kit-stat:is(:hover, :focus-within) .kit-stat-ic::before { opacity: 1; transform: none; }
+.kit-stat:is(:hover, :focus-within) .kit-stat-ic .gf-ic { --icon-line: var(--gf-indigo); --icon-detail: var(--gf-orange); }
+html.rm .kit-stat-ic::before { transform: none; }
+@media (prefers-reduced-motion: reduce) { .kit-stat-ic::before { transform: none; } }
+/* The kit's 40px round buttons, drawn 36px; the ring keeps the 44px target. */
+.kit-stat-act { grid-column: 2; grid-row: 1; align-self: center; display: flex; align-items: center; gap: 6px; }
+.kit-stat-act .kit-round { width: 36px; height: 36px; }
+.kit-stat-act .kit-round::after { inset: -4px; }
+.kit-stat-n { grid-column: 1 / -1; grid-row: 2; display: flex; align-items: center; gap: 10px; min-width: 0; }
+.kit-stat-n b {
+  font: italic 800 48.5px/0.92 var(--font-exo), "Exo", system-ui, sans-serif; letter-spacing: -0.03em; color: var(--gf-indigo);
+  padding-right: 0.06em;
+}
+.kit-stat-n .kit-trend { align-self: flex-start; }
+.kit-stat-g { grid-column: 1 / -1; grid-row: 3; align-self: end; min-width: 0; }
+
+/* The trend: green up, red down, an indigo line when nothing changed. */
+.kit-trend { display: inline-flex; align-items: center; gap: 3px; margin-top: 2px; font-weight: 700; font-size: 15px; line-height: 1; white-space: nowrap; }
+.kit-trend svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+.kit-trend[data-kind="up"] { color: var(--gf-green); }
+.kit-trend[data-kind="down"] { color: var(--gf-red); }
+.kit-trend[data-kind="flat"] { color: var(--gf-indigo); }
+
 /* ---------- bento grid (prototype v40, Design system; #455) ----------
    Cards side by side: every card in a row is as tall as the tallest, its
    content at the top, and a short last row fills the width, so no hole is

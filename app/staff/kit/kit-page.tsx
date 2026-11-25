@@ -28,6 +28,7 @@ import {
   RoundButton,
   Section,
   SkeletonBlock,
+  StatCard,
   StatusChip,
   Table,
   Tag,
@@ -291,6 +292,30 @@ function DesignSystem({ tab, today }: { tab: string; today: string }) {
           </p>
           <Note tone="good">Fathers’ names match. The 10% sibling discount applies by itself.</Note>
           <Note tone="wait">Fathers’ names don’t match. Ask for proof.</Note>
+        </Card>
+
+        <Card title="Stat card" data-bento="full">
+          <div className="kp-stats">
+            <StatCard
+              title="Interviews today"
+              icon="interviews"
+              value={14}
+              trend={{ change: 3, label: "3 more than the same day last week" }}
+              actions={<RoundButton icon="calendar" label="Open the calendar" size={40} />}
+            />
+            <StatCard
+              title="Applied 9–15 Nov"
+              icon="applicants"
+              value={42}
+              trend={{ change: 0, label: "Same as the week before" }}
+              actions={<RoundButton icon="filter" label="Show another week" size={40} on />}
+            />
+          </div>
+          <p className="kp-spec">
+            An 18px indigo icon before the title, nothing behind it at rest. Hover a card or tab to its button: the icon’s detail turns orange and a
+            round Lavender Whisper highlight grows in (it fades in place under reduced motion). The number sits under the icon, Exo 800 italic 48.5px,
+            with its trend; Home puts its 7-day line at the bottom.
+          </p>
         </Card>
 
         <Card title="Class picker">

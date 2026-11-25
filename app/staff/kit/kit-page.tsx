@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useSyncExternalStore } from "react"
 
-import { ChangeLink, SummaryRow } from "@/components/guided-form"
+import { ChangeLink, GuidedHead, Icon as GuidedIcon, OfferPill, SummaryRow } from "@/components/guided-form"
 import { ProgressBar, type ProgressGroup } from "@/components/guided-form/progress-bar"
 import { Icon, ICONS, type IconName } from "@/components/icons"
 import { Illustration, type IllustrationName } from "@/components/illustrations"
@@ -28,6 +28,7 @@ import {
   RoundButton,
   Section,
   SkeletonBlock,
+  StatCard,
   StatusChip,
   Table,
   Tag,
@@ -293,6 +294,37 @@ function DesignSystem({ tab, today }: { tab: string; today: string }) {
           <Note tone="wait">Fathers’ names don’t match. Ask for proof.</Note>
         </Card>
 
+        <Card title="Stat card" data-bento="full">
+          <div className="kp-stats">
+            <StatCard
+              title="Interviews today"
+              icon="interviews"
+              value={14}
+              trend={{ change: 3, label: "3 more than the same day last week" }}
+              actions={<RoundButton icon="calendar" label="Open the calendar" size={40} />}
+            />
+            <StatCard
+              title="Applied 9–15 Nov"
+              icon="applicants"
+              value={42}
+              trend={{ change: 0, label: "Same as the week before" }}
+              actions={<RoundButton icon="filter" label="Show another week" size={40} on />}
+            />
+            <StatCard
+              title="Applied this week"
+              icon="applicants"
+              value={37}
+              trend={{ change: -5, label: "5 fewer than last week" }}
+              actions={<RoundButton icon="filter" label="Show another week" size={40} />}
+            />
+          </div>
+          <p className="kp-spec">
+            An 18px indigo icon before the title, nothing behind it at rest. Hover a card or tab to its button: the icon’s detail turns orange and a
+            round Lavender Whisper highlight grows in (it fades in place under reduced motion). The number sits under the icon, Exo 800 italic 48.5px,
+            with its trend (up, no change, down); Home puts its 7-day line at the bottom.
+          </p>
+        </Card>
+
         <Card title="Class picker">
           <p className="kp-spec">
             The class sheet&rsquo;s body: the levels on the sliding track, then the level&rsquo;s classes. It opens on the level of the picked class.
@@ -329,14 +361,33 @@ function DesignSystem({ tab, today }: { tab: string; today: string }) {
             <code>SummaryRow stacked</code> with <code>ChangeLink small</code>: the question small and grey on top, light Change on its right, and the bold answer full width underneath.
           </p>
           <ol className="gf-stack">
+            <GuidedHead
+              aside={
+                <ChangeLink small>
+                  <GuidedIcon name="plus" small />
+                  Add Student
+                </ChangeLink>
+              }
+            >
+              Students
+            </GuidedHead>
             <li className="gf-item">
               <SummaryRow stacked label="Full name" value="AMINA JUMA SALIM" sub="Father: JUMA SALIM MRISHO" action={<ChangeLink small>Change</ChangeLink>} />
             </li>
             <li className="gf-item">
-              <SummaryRow stacked label="Class" value="FORM 1 · 2027" action={<ChangeLink small>Change</ChangeLink>} />
+              <SummaryRow
+                stacked
+                icon={<GuidedIcon name="user" className="size-[15px]" />}
+                label="STD 3 · 2027 · Boarding"
+                value="HASSAN JUMA SALIM"
+                action={<ChangeLink small>Change</ChangeLink>}
+              />
             </li>
             <li className="gf-item">
               <SummaryRow stacked label="Discount code" value="No code" none action={<ChangeLink small>Change</ChangeLink>} />
+            </li>
+            <li className="gf-item">
+              <SummaryRow stacked label="Fee" value="TZS 7,500 · with code" action={<OfferPill onClick={() => {}}>TZS 2,500 off</OfferPill>} />
             </li>
             <li className="gf-item">
               <SummaryRow

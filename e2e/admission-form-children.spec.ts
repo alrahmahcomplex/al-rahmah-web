@@ -75,6 +75,8 @@ test("two students on one form are sent together, and the confirmation lists eac
   await fillStudent(page, "sw", brother.typed, nextYear)
   await openQuestion(page).getByRole("button", { name: t.noMore }).click()
   await expectQuestion(page, t.parentName)
+  await expect(page.getByText("Hakuna mwanafunzi mwingine")).toHaveCount(0)
+  await expect(page.getByRole("button", { name: "Ongeza Mwanafunzi", exact: true })).toBeVisible()
   await expect(openQuestion(page).getByText("Mtu anayewalea wanafunzi na kulipa ada ya shule.")).toBeVisible()
   await pickSomeoneElse(page, "sw")
   await nameBox(page, "sw", "first").fill(who.parent)

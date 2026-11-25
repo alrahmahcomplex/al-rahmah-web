@@ -12,6 +12,8 @@
 .kp-sw b { display: block; color: var(--gf-ink); font-size: 12px; font-weight: 600; }
 
 .kp-rowx { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+/* Stat cards as wide as Home's side column, two to a row where they fit. */
+.kp-stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 300px)); gap: 14px; }
 /* The prototype's icon grid (v38): each icon over its name; then the three sizes. */
 .kp-icg { display: grid; grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); gap: 8px; color: var(--gf-indigo); }
 .kp-icg > span { padding: 12px 4px 8px; border-radius: 14px; background: var(--gf-chrome); display: flex; flex-direction: column; align-items: center; gap: 6px; }

@@ -68,7 +68,6 @@ type Copy = {
   anotherQ: string
   anotherYes: string
   anotherNo: string
-  noMore: string
   addStudent: string
   removeStudent: string
   removeNamed: (name: string) => string
@@ -229,7 +228,6 @@ export const COPY: Record<Language, Copy> = {
     anotherQ: "Unaomba kwa mwanafunzi mwingine pia?",
     anotherYes: "Ndiyo, ongeza mwanafunzi",
     anotherNo: "Hapana, endelea",
-    noMore: "Hakuna mwanafunzi mwingine",
     addStudent: "Ongeza Mwanafunzi",
     removeStudent: "Ondoa Mwanafunzi",
     removeNamed: (name) => `Ondoa ${name}`,
@@ -411,7 +409,6 @@ export const COPY: Record<Language, Copy> = {
     anotherQ: "Are you applying for another student too?",
     anotherYes: "Yes, add a student",
     anotherNo: "No, continue",
-    noMore: "No other student",
     addStudent: "Add Student",
     removeStudent: "Remove Student",
     removeNamed: (name) => `Remove ${name}`,

@@ -55,9 +55,9 @@ describe("SummaryRow", () => {
       const link = screen.getByRole("button", { name: "Change" })
       expect(label).toHaveTextContent("Full name")
       expect(value).toHaveTextContent("AMINA JUMA SALIM")
-      expect(value).toHaveClass("text-slate-800")
+      expect(value).toHaveClass("font-semibold", "text-slate-800")
       expect(sub).toHaveTextContent("Father: JUMA SALIM MRISHO")
-      expect(link).toHaveClass("font-normal", "text-[13px]")
+      expect(link).toHaveClass("inline-flex", "font-normal", "text-[13px]")
       // Top line shares a parent between label and link; answer comes after both.
       expect(label.parentElement).toBe(link.parentElement)
       expect(link.compareDocumentPosition(value) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
@@ -66,7 +66,7 @@ describe("SummaryRow", () => {
 
     it("renders a none answer in plain grey", () => {
       const { container } = render(<SummaryRow stacked label="Discount code" value="No code" none action={<ChangeLink small>Change</ChangeLink>} />)
-      expect(container.querySelector("[data-summary-value]")).toHaveClass("text-slate-600", "font-normal")
+      expect(container.querySelector("[data-summary-value]")).toHaveClass("font-normal", "text-slate-600")
     })
 
     it("renders a fixed row with no action", () => {

@@ -254,8 +254,7 @@ export function revealStep(li: HTMLElement) {
  * Rows): the question small and grey on top, its action on the same line at the
  * right (pass a `ChangeLink small`), and the answer under them, the only bold
  * text, left-aligned across the whole row. `sub` is a quiet line under the
- * answer; `none` puts an answer that says there is nothing ("None", "No code")
- * in plain grey, not bold.
+ * answer; `none` greys an answer that says there is nothing ("None", "No code").
  * Without a label, the answer takes the top line beside its action.
  */
 export function SummaryRow({
@@ -275,9 +274,16 @@ export function SummaryRow({
   sub?: ReactNode
   none?: boolean
 }) {
-  const dot = <span className="grid size-7 flex-none place-items-center rounded-full bg-blue-50 text-blue-600">{icon ?? <Icon name="check" small />}</span>
+  const dot = (
+    <span className="grid size-7 flex-none place-items-center rounded-full bg-blue-50 text-blue-600">
+      {icon ?? <Icon name="check" small className={stacked ? "size-[15px]" : undefined} />}
+    </span>
+  )
   const answer = (
-    <span className={cn("text-base leading-[1.35] [overflow-wrap:anywhere]", none ? "font-normal text-slate-600" : "font-semibold text-slate-800")} data-summary-value>
+    <span
+      className={cn("text-base leading-[1.35] [overflow-wrap:anywhere]", none ? "font-normal text-slate-600" : "font-semibold text-slate-800")}
+      data-summary-value
+    >
       {value}
     </span>
   )
@@ -293,7 +299,7 @@ export function SummaryRow({
         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
           {label ? (
             <>
-              <div className="flex min-w-0 items-baseline gap-2.5">
+              <div className="flex min-w-0 flex-wrap items-baseline gap-x-2.5 gap-y-1">
                 <span className="min-w-0 flex-1 text-[13px] leading-[1.35] text-slate-500 [overflow-wrap:anywhere]" data-summary-label>
                   {label}
                 </span>
@@ -302,7 +308,7 @@ export function SummaryRow({
               {answer}
             </>
           ) : (
-            <div className="flex min-w-0 items-baseline gap-2.5">
+            <div className="flex min-w-0 flex-wrap items-baseline gap-x-2.5 gap-y-1">
               <span className="min-w-0 flex-1">{answer}</span>
               {action}
             </div>

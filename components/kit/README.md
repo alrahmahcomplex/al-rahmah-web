@@ -195,6 +195,14 @@ Cards side by side go in a `Bento` (prototype v40, Design system): every card in
 </Bento>
 ```
 
+`StatCard` is a number card, such as Home's two (#520): `title` names the region, `icon` draws the 18px icon before it, `value` is the number, `trend` takes the `change` and its spoken `label`, `actions` takes the round buttons on the right of the title row, and `children` fills the bottom, such as Home's 7-day line. Hovering the card or focusing a button in it turns the icon's detail orange and shows a round highlight behind it; the screen draws none of this itself.
+
+```tsx
+<StatCard title="Interviews today" icon="interviews" value={14} trend={{ change: 3, label: "3 more than the same day last week" }} actions={<RoundButton icon="calendar" label="Open the calendar" size={40} />}>
+  <Spark days={days} />
+</StatCard>
+```
+
 `PageHeader` is the page's one `h1`. A client part deeper down adds an action to its slot with `<PageActions>`. A `Card` with a title is a region named by it. `TaskCard` is the one lifted card on a page.
 
 `ListRow` is a link with `href`, a button with `onClick`, a plain row otherwise; `icon` draws the featured disc, `leading` takes a Line tag instead. `Table` takes `columns` (`header`, `cell`, `align: "end"` for money, `rowHeader` for the cell that names its row, such as a name) and `rows`; `onOpen` makes rows focusable, opened by click or Enter, named by `rowLabel`. `total` adds the bold total row. `KeyValueList` items take a `reason` line and `numeric`. `Section` heads a part of a card or sheet. `Timeline` lists what happened, newest first, as the prototype v38 Design system page draws it: each item has a `title`, a `meta` line (who and when), an optional `tone` (`ok` green, `wait` orange; indigo otherwise) and children below, such as the fields an edit changed; `label` names the list. `Note tone="info" | "good" | "wait" | "bad"` takes a `role`: `status` for news, `alert` for a failure. Each tone is a faint tint with a thin line in its own colour.

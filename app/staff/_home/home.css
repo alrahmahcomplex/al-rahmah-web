@@ -44,51 +44,14 @@
 .hm-side:empty { display: none; }
 .hm-body:has(> .hm-side:empty) { grid-template-columns: minmax(0, 1fr); }
 
-/* ---------- a stat card ---------- */
-/* Title and picker on top, the icon before the number, the 7-day line last. */
-.hm-stat {
-  display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto auto minmax(0, 1fr); column-gap: 10px; row-gap: 12px;
-  min-height: 0; padding: 14px 14px 12px 18px; border-radius: 22px; background: var(--gf-paper); border: var(--gf-stroke) solid var(--gf-line);
-  transition: border-color var(--gf-t-med);
-}
-.hm-stat:hover { border-color: var(--gf-line-strong); }
-.hm-stat-n { grid-column: 1 / -1; grid-row: 2; display: flex; align-items: center; gap: 12px; min-width: 0; }
-.hm-stat-ic {
-  flex: none; width: 46px; height: 46px; border-radius: 15px; background: var(--gf-whisper); color: var(--gf-indigo);
-  display: grid; place-items: center;
-}
-.hm-stat-ic .gf-ic { width: 23px; height: 23px; }
-.hm-stat-n .hm-trend { align-self: flex-start; }
-.hm-stat-n b {
-  font: italic 800 51px/0.92 var(--font-exo), "Exo", system-ui, sans-serif; letter-spacing: -0.03em; color: var(--gf-indigo);
-  padding-right: 0.06em;
-}
-.hm-stat-pick { grid-column: 2; grid-row: 1; align-self: center; display: flex; align-items: center; gap: 6px; }
-.hm-stat-g { grid-column: 1 / -1; grid-row: 3; align-self: end; min-width: 0; }
-/* A past day's title ("Interviews on Wed 11 Nov") is longer than the room
-   beside Reset and the picker: it takes a second line and is never cut. */
-.hm-stat-t {
-  grid-column: 1; grid-row: 1; align-self: center; min-width: 0; margin: 0; overflow-wrap: anywhere;
-  font-size: 14px; font-weight: 600; line-height: 1.3; color: var(--gf-ink);
-}
-/* v38 draws these 36px but outlined; the kit's ring keeps the 44px target. */
-.hm-stat .kit-round { width: 36px; height: 36px; }
-.hm-stat .kit-round::after { inset: -4px; }
-
+/* ---------- a stat card: the kit's StatCard (#520) ---------- */
 /* Reset sits beside the picker and shows on hover or keyboard focus; on a touch screen it always shows. */
 .hm-stat-reset {
   opacity: 0; transform: scale(0.85); pointer-events: none;
-  transition: opacity var(--gf-t-med) var(--gf-ease-out), transform var(--gf-t-med) var(--gf-ease-out);
+  transition: opacity var(--gf-t-med) var(--gf-ease-out), transform var(--gf-t-med) var(--gf-ease-out), background var(--gf-t-med) var(--gf-ease-out);
 }
-.hm-stat:hover .hm-stat-reset, .hm-stat:focus-within .hm-stat-reset { opacity: 1; transform: none; pointer-events: auto; }
+.kit-stat:hover .hm-stat-reset, .kit-stat:focus-within .hm-stat-reset { opacity: 1; transform: none; pointer-events: auto; }
 @media (hover: none) { .hm-stat-reset { opacity: 1; transform: none; pointer-events: auto; } }
-
-/* The trend: green up, red down, an indigo line when nothing changed. */
-.hm-trend { display: inline-flex; align-items: center; gap: 3px; margin-top: 2px; font-weight: 700; font-size: 15px; line-height: 1; white-space: nowrap; }
-.hm-trend svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
-.hm-trend[data-kind="up"] { color: var(--gf-green); }
-.hm-trend[data-kind="down"] { color: var(--gf-red); }
-.hm-trend[data-kind="flat"] { color: var(--gf-indigo); }
 
 /* The 7-day line: a soft glow under it, a dot a day, the last day stronger. */
 .hm-spark { position: relative; height: 76px; }

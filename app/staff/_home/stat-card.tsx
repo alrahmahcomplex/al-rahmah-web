@@ -3,36 +3,10 @@
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { useId, useState } from "react"
 
-import { Icon } from "@/components/icons"
-import { MonthGrid, Popover, RoundButton } from "@/components/kit"
+import { MonthGrid, Popover, RoundButton, StatCard as KitStatCard } from "@/components/kit"
 
 import { sparkShape, SPARK_HEIGHT, SPARK_WIDTH } from "./spark"
 import { mondayOf, shortDay, type StatCard as StatCardData } from "./stats"
-
-const TREND_PATHS = {
-  up: ["M3 17l6-6 4 4 8-8", "M15 7h6v6"],
-  down: ["M3 7l6 6 4-4 8 8", "M15 17h6v-6"],
-  flat: ["M4 12h16"],
-}
-
-/** The change beside the number: a green arrow up, a red arrow down, or a flat indigo line. */
-function Trend({ change, comparedWith }: { change: number; comparedWith: string }) {
-  const kind = change > 0 ? "up" : change < 0 ? "down" : "flat"
-  const spoken = change === 0 ? `Same as ${comparedWith}` : `${Math.abs(change)} ${change > 0 ? "more" : "fewer"} than ${comparedWith}`
-  return (
-    <span className="hm-trend" data-kind={kind} role="img" aria-label={spoken}>
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        {TREND_PATHS[kind].map((d) => (
-          <path key={d} d={d} />
-        ))}
-      </svg>
-      <span aria-hidden="true">
-        {change > 0 ? "+" : change < 0 ? "−" : ""}
-        {Math.abs(change)}
-      </span>
-    </span>
-  )
-}
 
 /** The 7 days ending on the day or week shown, with the number of a day on hover. */
 function Spark({ days }: { days: StatCardData["days"] }) {
@@ -73,11 +47,11 @@ function Spark({ days }: { days: StatCardData["days"] }) {
 }
 
 /**
- * One of Home's two stat cards (#323), as prototype v40 draws it: the title
- * on top with the picker in the round button, then an icon before the number
- * and its trend, and the 7-day line at the bottom. Once a past day or week is
- * shown, Reset sits beside the picker and brings back today or this week by
- * dropping `param` from the address.
+ * One of Home's two stat cards (#323), in the kit's stat card (#520): the
+ * icon and title on top with the picker in the round button, the number and
+ * its trend under them, and the 7-day line at the bottom. Once a past day or
+ * week is shown, Reset sits beside the picker and brings back today or this
+ * week by dropping `param` from the address.
  */
 export function StatCard({
   card,
@@ -98,7 +72,6 @@ export function StatCard({
   const router = useRouter()
   const pathname = usePathname()
   const params = useSearchParams()
-  const labelId = useId()
   const [open, setOpen] = useState(false)
 
   function show(value: string | null) {
@@ -115,33 +88,33 @@ export function StatCard({
     else show(mondayOf(day) < mondayOf(today) ? mondayOf(day) : null)
   }
 
+  const spokenChange =
+    card.change === 0
+      ? `Same as ${card.comparedWith}`
+      : `${Math.abs(card.change)} ${card.change > 0 ? "more" : "fewer"} than ${card.comparedWith}`
+
   return (
-    <section className="hm-stat" aria-labelledby={labelId}>
-      <p className="hm-stat-t" id={labelId}>
-        {card.label}
-      </p>
-      <div className="hm-stat-pick">
-        {picked && <RoundButton icon="reset" label={words.reset} size={40} className="hm-stat-reset" onClick={() => show(null)} />}
-        <Popover
-          open={open}
-          onOpenChange={setOpen}
-          title={<span className="sr-only">{words.choose}</span>}
-          closeLabel={words.close}
-          trigger={<RoundButton icon={param === "day" ? "calendar" : "filter"} label={words.pick} size={40} on={!!picked} />}
-        >
-          <MonthGrid mode={param} value={picked ?? today} max={today} onPick={pick} autoFocus />
-        </Popover>
-      </div>
-      <div className="hm-stat-n">
-        <span className="hm-stat-ic">
-          <Icon name={param === "day" ? "interviews" : "applicants"} size={24} />
-        </span>
-        <b className="kit-num">{card.value}</b>
-        <Trend change={card.change} comparedWith={card.comparedWith} />
-      </div>
-      <div className="hm-stat-g">
-        <Spark days={card.days} />
-      </div>
-    </section>
+    <KitStatCard
+      title={card.label}
+      icon={param === "day" ? "interviews" : "applicants"}
+      value={card.value}
+      trend={{ change: card.change, label: spokenChange }}
+      actions={
+        <>
+          {picked && <RoundButton icon="reset" label={words.reset} size={40} className="hm-stat-reset" onClick={() => show(null)} />}
+          <Popover
+            open={open}
+            onOpenChange={setOpen}
+            title={<span className="sr-only">{words.choose}</span>}
+            closeLabel={words.close}
+            trigger={<RoundButton icon={param === "day" ? "calendar" : "filter"} label={words.pick} size={40} on={!!picked} />}
+          >
+            <MonthGrid mode={param} value={picked ?? today} max={today} onPick={pick} autoFocus />
+          </Popover>
+        </>
+      }
+    >
+      <Spark days={card.days} />
+    </KitStatCard>
   )
 }

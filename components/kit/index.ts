@@ -4,6 +4,7 @@ export { Button, ButtonLink, RoundButton, TextLink, type ButtonLinkProps, type B
 export { Bento, type BentoProps } from "./bento"
 export { Card, TaskCard, type CardProps } from "./card"
 export { ClassPicker, type ClassLevel } from "./class-picker"
+export { StatCard, type StatCardProps, type StatTrend } from "./stat-card"
 export { ChipButtons, ChoiceTiles, DefaultTile, type ChipOption, type ChoiceOption, type ChoiceTilesProps } from "./choices"
 export { StatusChip, Tag, type TagTone } from "./chips"
 export { KeyValueList, Note, Section, type KeyValueItem, type NoteTone } from "./details"

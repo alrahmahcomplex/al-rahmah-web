@@ -17,6 +17,7 @@ export type StreamTakes = (typeof STREAM_TAKES)[number]
 
 export type Stream = {
   id: string
+  // "": no label; the stream is shown as its class alone (owner 2026-11-26).
   label: string
   takes: StreamTakes
   // Places for new students that year, not the stream's size.
@@ -77,11 +78,29 @@ export type YearStreams = {
 }
 
 export type StreamError =
-  "forbidden" | "not_found" | "seat_mode_legacy" | "no_schedule" | "label_taken" | "below_placed" | "not_full" | "invalid" | "unavailable"
+  | "forbidden"
+  | "not_found"
+  | "seat_mode_legacy"
+  | "no_schedule"
+  | "label_taken"
+  | "below_placed"
+  | "not_full"
+  | "not_empty"
+  | "invalid"
+  | "unavailable"
 
 type RpcError = { message: string; code?: string }
 
-const KNOWN: ReadonlySet<string> = new Set<StreamError>(["seat_mode_legacy", "no_schedule", "label_taken", "below_placed", "not_full", "invalid", "not_found"])
+const KNOWN: ReadonlySet<string> = new Set<StreamError>([
+  "seat_mode_legacy",
+  "no_schedule",
+  "label_taken",
+  "below_placed",
+  "not_full",
+  "not_empty",
+  "invalid",
+  "not_found",
+])
 
 function streamError(error: RpcError, doing: string): StreamError {
   if (error.message === "not_permitted" || error.message === "forbidden" || error.code === "42501") return "forbidden"
@@ -93,7 +112,8 @@ function streamError(error: RpcError, doing: string): StreamError {
 
 type StreamRow = {
   id: string
-  label: string
+  // Null: no label.
+  label: string | null
   takes: StreamTakes
   seats: number
   position: number
@@ -105,7 +125,7 @@ type StreamRow = {
 
 const toStream = (row: StreamRow): Stream => ({
   id: row.id,
-  label: row.label,
+  label: row.label ?? "",
   takes: row.takes,
   seats: row.seats,
   position: row.position,
@@ -193,6 +213,7 @@ export async function getYearStreams(supabase: SupabaseClient, year: number): Pr
 export type NewStream = {
   year: number
   className: LeadClass
+  // Empty: no label, allowed while no stream it overlaps has none.
   label: string
   takes: StreamTakes
   seats: number
@@ -205,7 +226,7 @@ export async function openStream(supabase: SupabaseClient, stream: NewStream): P
   const { data, error } = await supabase.rpc("open_stream", {
     schedule_year: stream.year,
     class: stream.className,
-    label: stream.label,
+    label: stream.label.trim() || null,
     takes: stream.takes,
     seats: stream.seats,
     request_id: stream.requestId,
@@ -270,11 +291,11 @@ export type StreamChangeRefusal =
 export async function changeStream(supabase: SupabaseClient, change: StreamChange): Promise<{ ok: true; data: StreamChanged } | StreamChangeRefusal> {
   const { data, error } = await supabase.rpc("change_stream", {
     stream_id: change.streamId,
-    label: change.label,
+    label: change.label.trim() || null,
     seats: change.seats,
     takes: change.takes,
     open_takes: change.open?.takes ?? null,
-    open_label: change.open?.label ?? null,
+    open_label: change.open ? change.open.label.trim() || null : null,
     open_seats: change.open?.seats ?? null,
     open_request: change.open?.requestId ?? null,
     raise_stream: change.raise?.streamId ?? null,
@@ -343,6 +364,25 @@ export async function bringUpStreams(supabase: SupabaseClient, year: number, sou
   return { ok: true, data: (data as StreamRow[]).map(toStream) }
 }
 
+export type StreamDeleteRefusal =
+  | { ok: false; error: Exclude<StreamError, "not_empty"> }
+  // `placed`: the children in it at that moment, which the screen may not have shown.
+  | { ok: false; error: "not_empty"; placed: number | null }
+
+/**
+ * Deletes a stream nobody is placed in, for good (delete_stream); the streams
+ * after it move up one place. Needs academic_years.manage.
+ */
+export async function deleteStream(supabase: SupabaseClient, streamId: string): Promise<{ ok: true; data: Stream } | StreamDeleteRefusal> {
+  const { data, error } = await supabase.rpc("delete_stream", { stream_id: streamId })
+  if (error) {
+    const code = streamError(error, "delete a stream")
+    if (code === "not_empty") return { ok: false, error: code, placed: placedFromDetail(detailOf(error)) }
+    return { ok: false, error: code }
+  }
+  return { ok: true, data: toStream(data as StreamRow) }
+}
+
 /**
  * Asks the Admissions Manager to open a new stream: for a child (their class,
  * year and need come from their record) or for a class and need. Needs
@@ -371,7 +411,7 @@ export async function requestStream(
 type StreamRef = {
   id: string
   class_name: LeadClass
-  label: string
+  label: string | null
   takes: StreamTakes
 }
 
@@ -415,7 +455,7 @@ const toRef = (row: StreamRef | null) =>
     ? {
         id: row.id,
         className: row.class_name,
-        label: row.label,
+        label: row.label ?? "",
         takes: row.takes,
       }
     : null
@@ -491,7 +531,11 @@ export async function getGenderOutlook(supabase: SupabaseClient, leadId: string,
   return { ok: true, data: { placed: toRef(row.placed), moves: row.moves, wouldTake: toRef(row.would_take) } }
 }
 
-/** A stream as screens name it: its class, its label, and who it takes when it isn't Mixed ("FORM 1 B (Boys)"). */
+/**
+ * A stream as screens name it: its class, its label, and who it takes when it
+ * isn't Mixed ("FORM 1 B (Boys)"). With no label, the class alone ("STD 1",
+ * "FORM 1 (Girls)").
+ */
 export function streamName(className: LeadClass, label: string, takes: StreamTakes): string {
-  return `${className} ${label}${takes === "Mixed" ? "" : ` (${takes})`}`
+  return `${className}${label ? ` ${label}` : ""}${takes === "Mixed" ? "" : ` (${takes})`}`
 }

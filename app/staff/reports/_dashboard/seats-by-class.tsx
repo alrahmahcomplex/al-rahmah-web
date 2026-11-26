@@ -101,7 +101,7 @@ function StreamSeatsTable({ classes }: { classes: ClassStreamFigures[] }) {
             row.kind === "class" ? (
               <b>{row.className}</b>
             ) : row.kind === "stream" ? (
-              `${row.className} ${row.stream.label}`
+              (row.stream.label ? `${row.className} ${row.stream.label}` : row.className)
             ) : (
               <b>{row.entry.className} total</b>
             ),

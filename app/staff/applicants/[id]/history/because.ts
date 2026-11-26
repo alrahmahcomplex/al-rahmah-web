@@ -25,6 +25,8 @@ const CAUSES: Readonly<Record<string, string>> = {
   gender: "Boy or girl was corrected",
   // Changing who a stream takes (owner 2026-11-26).
   stream_takes: "Who the stream takes was changed",
+  // Deleting the class's last stream lets its waiting children go (owner 2026-11-26).
+  stream_deleted: "The class’s last stream was deleted",
 }
 
 const RECORDS: Readonly<Record<string, BecauseOf>> = {

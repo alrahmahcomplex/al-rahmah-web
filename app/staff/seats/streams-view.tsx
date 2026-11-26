@@ -163,7 +163,7 @@ function ClassCard({
               <span className="st-pos">{i + 1}</span>
               <span className="st-stream">
                 <b>
-                  {className} {stream.label}
+                  {stream.label ? `${className} ${stream.label}` : className}
                 </b>
                 <TakesTag takes={stream.takes} />
                 {mixLine(stream) && <span className="st-mix st-num">{mixLine(stream)}</span>}

@@ -161,15 +161,18 @@ export async function getLeadHistory(
       [...leadIds],
       (row) => `${row.student_name} · ${row.admission_number}`,
     ),
-    readNames<{ class_name: LeadClass; label: string; takes: StreamTakes; opened_at: string }, { name: string; openedAt: string }>(
+    readNames<{ class_name: LeadClass; label: string | null; takes: StreamTakes; opened_at: string }, { name: string; openedAt: string }>(
       supabase,
       "streams",
       "id, class_name, label, takes, opened_at",
       [...streamIds],
-      (row) => ({ name: streamName(row.class_name, row.label, row.takes), openedAt: row.opened_at }),
+      (row) => ({ name: streamName(row.class_name, row.label ?? "", row.takes), openedAt: row.opened_at }),
     ),
   ])
   const streamNames = Object.fromEntries(Object.entries(streams).map(([id, stream]) => [id, stream.name]))
+  // A stream deleted since (owner 2026-11-26) keeps its name, marked deleted.
+  const gone = [...streamIds].filter((id) => !(id in streams))
+  if (gone.length > 0) Object.assign(streamNames, await deletedStreamNames(supabase, gone))
   const streamOpenedAt = Object.fromEntries(Object.entries(streams).map(([id, stream]) => [id, stream.openedAt]))
   return { ok: true, data: { entries, contactNames, leadNames, streamNames, streamOpenedAt } }
 }
@@ -177,6 +180,27 @@ export async function getLeadHistory(
 // Ids per request, so a long history never makes one oversized URL. The ids
 // come only from this lead's own entries, each read once.
 const NAMES_PER_REQUEST = 100
+
+/**
+ * "STD 1 B (deleted)" for each deleted stream among `ids`, from its delete row
+ * in the audit log. Missing on any failure: the history then shows the id, as
+ * for any name it can't read.
+ */
+async function deletedStreamNames(supabase: SupabaseClient, ids: string[]): Promise<Record<string, string>> {
+  const names: Record<string, string> = {}
+  for (let start = 0; start < ids.length; start += NAMES_PER_REQUEST) {
+    const { data, error } = await supabase.rpc("deleted_stream_names", { ids: ids.slice(start, start + NAMES_PER_REQUEST) })
+    if (error) {
+      console.error("Could not read the names of deleted streams", error)
+      return names
+    }
+    for (const row of (data ?? []) as { id: string; class_name: LeadClass; label: string | null; takes: StreamTakes }[]) {
+      if (!ids.includes(row.id) || typeof row.class_name !== "string") continue
+      names[row.id] = `${streamName(row.class_name, row.label ?? "", row.takes)} (deleted)`
+    }
+  }
+  return names
+}
 
 // The current name of each contact, sibling or stream (a stream's with when
 // it was opened). The names only decorate the history, so a batch that can't

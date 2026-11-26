@@ -21,18 +21,32 @@ export function labelAt(n: number): string {
 
 /**
  * The first free label for a new stream that takes `takes`: the database's
- * allocator (next_stream_label), as the open sheet's suggestion. The
- * database checks the label again on save.
+ * allocator (next_stream_label). A stream it overlaps with no label ("") reads
+ * as the A, so A is skipped next to one. The database checks the label again
+ * on save.
  */
 export function nextLabel(streams: readonly { label: string; takes: StreamTakes }[], takes: StreamTakes): string {
   const taken = new Set(streams.filter((s) => labelsClash(s.takes, takes)).map((s) => s.label.toLowerCase()))
+  if (taken.has("")) taken.add("a")
   for (let n = 0; ; n++) {
     const label = labelAt(n)
     if (!taken.has(label.toLowerCase())) return label
   }
 }
 
-/** The stream a new label would clash with, if any. */
+/**
+ * The label a sheet suggests for a new stream: none ("") while no stream of
+ * the class overlaps who it takes, so a class's first stream is shown as the
+ * class alone (owner 2026-11-26); otherwise the next free letter.
+ */
+export function suggestedLabel(streams: readonly { label: string; takes: StreamTakes }[], takes: StreamTakes): string {
+  return streams.some((s) => labelsClash(s.takes, takes)) ? nextLabel(streams, takes) : ""
+}
+
+/**
+ * The stream a label would clash with, if any. An empty label clashes with a
+ * stream it overlaps that has none: only one may go without.
+ */
 export function clashingStream<T extends { label: string; takes: StreamTakes }>(streams: readonly T[], label: string, takes: StreamTakes): T | null {
   const wanted = label.trim().toLowerCase()
   return streams.find((s) => s.label.toLowerCase() === wanted && labelsClash(s.takes, takes)) ?? null

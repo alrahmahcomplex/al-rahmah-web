@@ -1147,6 +1147,20 @@ export const FUNCTIONS: Record<string, FunctionEntry> = {
     args: { schedule_year: "2027" },
     agent: { refused: "not_permitted" },
   },
+  // Deleting an empty stream (owner 2026-11-26): academic_years.manage; the
+  // names of deleted streams for a child's history: payments.view.
+  "public.delete_stream(stream_id uuid)": {
+    roles: ["authenticated"],
+    setup:
+      "insert into public.streams (id, enrollment_year, class_name, label, takes, seats, position) values ('5a5a0000-0000-4000-8000-000000000452', 2027, 'FORM 1', 'Z', 'Mixed', 1, 99)",
+    args: { stream_id: "'5a5a0000-0000-4000-8000-000000000452'" },
+    agent: { refused: "not_permitted" },
+  },
+  "public.deleted_stream_names(ids uuid[])": {
+    roles: ["authenticated"],
+    args: { ids: "array['5a5a0000-0000-4000-8000-000000000452']::uuid[]" },
+    agent: { refused: "not_permitted" },
+  },
   // Streams, slice 4b (#449): payments.view reads; a request for a child
   // also needs leads.view; the outlook needs both.
   "public.year_streams(schedule_year integer)": {

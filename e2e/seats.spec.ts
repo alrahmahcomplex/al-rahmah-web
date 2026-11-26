@@ -67,7 +67,7 @@ test("a child no stream can take can't pay until the Manager opens a stream, and
   const sheet = page.getByRole("dialog", { name: `Open a new ${className} stream` })
   // Filled in for boys: the next free label after A.
   await expect(sheet.getByLabel("Label", { exact: true })).toHaveValue("B")
-  await sheet.getByLabel("Seats for new students").fill("2")
+  await sheet.getByLabel("Seats", { exact: true }).fill("2")
   await sheet.getByRole("button", { name: "Open the stream" }).click()
   await expect(page.getByRole("status").filter({ hasText: `${className} B (Boys) is open with 2 seats.` })).toBeVisible()
   await expect(streams).toHaveCount(2)
@@ -116,17 +116,52 @@ test("the Manager changes a Mixed stream to Boys and opens a girls' stream for t
   await choose("Boys")
   await expect(sheet.getByRole("heading", { name: "1 girl has to move" })).toBeVisible()
   await choose(/Open a new stream for girl/)
-  // The girls may have an A of their own: it doesn't clash with the boys' A.
-  await expect(sheet.getByLabel("Label", { exact: true }).nth(1)).toHaveValue("A")
+  // No other stream takes girls, so the new one starts with no label (owner 2026-11-26).
+  await expect(sheet.getByLabel("Label", { exact: true }).nth(1)).toHaveValue("")
   await sheet.getByLabel("Seats", { exact: true }).nth(1).fill("1")
   await sheet.getByRole("button", { name: "Save and move 1 girl" }).click()
 
   await expect(
-    page.getByRole("status").filter({ hasText: `${className} A (Boys) now takes boys. 1 girl moved to ${className} A (Girls). ${className} A (Girls) is open.` }),
+    page.getByRole("status").filter({ hasText: `${className} A (Boys) now takes boys. 1 girl moved to ${className} (Girls). ${className} (Girls) is open.` }),
   ).toBeVisible()
   await expect(streams).toHaveCount(2)
   await expect(streams.first()).toContainText("1 boy")
   await expect(streams.first()).not.toContainText("girl")
   await expect(streams.nth(1)).toContainText("Girls")
   await expect(streams.nth(1)).toContainText("1 girl")
+})
+
+// An optional label and deleting an empty stream (owner 2026-11-26, prototype
+// 7p183225JMd529T29EHJBp): a class's first stream shows as the class alone,
+// and the Manager deletes a stream nobody is in.
+test("the Manager deletes an empty stream; the class's first stream has no label", async ({ page }) => {
+  const fixture = await streamYear()
+  years.push(fixture)
+  const { year, className } = fixture
+
+  await open(year, className, "", "Mixed", 2)
+  await open(year, className, "B", "Mixed", 2)
+  await open(year, className, "C", "Mixed", 2)
+  const child = await pupil(year, className, "Girl")
+  await payDeposit(child.id, yesterday)
+
+  await signIn(page, MANAGER)
+  await page.goto(`/staff/seats?year=${year}`)
+  const streams = page.getByRole("list", { name: `${className} streams` }).getByRole("listitem")
+  await expect(streams).toHaveCount(3)
+
+  // The first stream holds the child: it can't be deleted.
+  await page.getByRole("button", { name: `Change ${className}`, exact: true }).click()
+  const first = page.getByRole("dialog", { name: `Change ${className}` })
+  await expect(first).toContainText(`Only an empty stream can be deleted. 1 child is placed in ${className}.`)
+  await first.getByRole("button", { name: "Close" }).click()
+
+  await page.getByRole("button", { name: `Change ${className} B` }).click()
+  await page.getByRole("dialog", { name: `Change ${className} B` }).getByRole("button", { name: "Delete this stream" }).click()
+  const confirm = page.getByRole("dialog", { name: `Delete ${className} B?` })
+  await confirm.getByRole("button", { name: `Yes, delete ${className} B` }).click()
+  await expect(page.getByRole("status").filter({ hasText: `${className} B is deleted.` })).toBeVisible()
+  await expect(streams).toHaveCount(2)
+  await expect(streams.nth(1)).toContainText(`${className} C`)
+  await expect(streams.nth(1).locator(".st-pos")).toHaveText("2")
 })

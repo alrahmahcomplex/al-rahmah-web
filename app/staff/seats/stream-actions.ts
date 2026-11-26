@@ -3,11 +3,21 @@
 import { revalidatePath } from "next/cache"
 
 import { LEAD_CLASSES, type LeadClass } from "@/lib/services/leads"
-import { bringUpStreams, changeStream, getSeatOutlook, openStream, requestStream, STREAM_TAKES, type StreamError, type StreamTakes } from "@/lib/services/streams"
+import {
+  bringUpStreams,
+  changeStream,
+  deleteStream,
+  getSeatOutlook,
+  openStream,
+  requestStream,
+  STREAM_TAKES,
+  type StreamError,
+  type StreamTakes,
+} from "@/lib/services/streams"
 import { createClient } from "@/utils/supabase/server"
 
-// Seats, once streams are on (#449, prototype v42): open, change and bring up
-// streams, and ask the Admissions Manager for one. The database checks every
+// Seats, once streams are on (#449, prototype v42): open, change, bring up and
+// delete streams, and ask the Admissions Manager for one. The database checks every
 // permission and rule again; these turn its answers into the screen's words.
 
 // `childCanPay`: opened from a child’s Record payment, whether a school-fee
@@ -22,6 +32,13 @@ function revalidateSeats() {
 }
 
 const LOST = "The change could not be saved just now. Try again in a moment."
+
+// A label refusal in the screen's words. An empty label is refused when a
+// stream of the class it overlaps already has none (owner 2026-11-26).
+function labelTaken(label: string, newStream = false): string {
+  if (label.trim() === "") return `Another stream of this class already has no label, so ${newStream ? "the new stream" : "this one"} needs one.`
+  return newStream ? "That label is already taken in this class. Choose another label for the new stream." : "That label is already taken in this class. Choose another label."
+}
 
 function refused(error: StreamError): StreamOutcome {
   switch (error) {
@@ -71,7 +88,7 @@ export async function openStreamAction(input: {
     seats: input.seats,
     requestId: input.requestId,
   })
-  if (!opened.ok) return refused(opened.error)
+  if (!opened.ok) return opened.error === "label_taken" ? { status: "refused", message: labelTaken(input.label) } : refused(opened.error)
   revalidateSeats()
   const message = `${input.name} is open with ${opened.data.seats} seats.`
   if (typeof input.forLeadId !== "string") return { status: "done", message }
@@ -148,9 +165,7 @@ export async function changeStreamAction(input: {
     if (changed.error === "label_taken") {
       return {
         status: "refused",
-        message: changed.opening
-          ? "That label is already taken in this class. Choose another label for the new stream."
-          : "That label is already taken in this class. Choose another label.",
+        message: changed.opening ? labelTaken(open?.label ?? "", true) : labelTaken(input.label),
       }
     }
     if (changed.error === "forbidden") return { status: "refused", message: "Only the Admissions Manager can change a stream." }
@@ -165,6 +180,35 @@ export async function changeStreamAction(input: {
     moved,
     seatedFromWaiting,
   }
+}
+
+/** Deletes a stream nobody is placed in, for good (owner 2026-11-26). */
+export async function deleteStreamAction(input: { streamId: string; name: string }): Promise<StreamOutcome> {
+  if (typeof input.streamId !== "string" || typeof input.name !== "string") return { status: "refused", message: LOST }
+  const supabase = await createClient()
+  const deleted = await deleteStream(supabase, input.streamId)
+  if (!deleted.ok) {
+    if (deleted.error === "not_empty") {
+      // A payment may have placed a child since the sheet opened.
+      revalidateSeats()
+      const n = deleted.placed
+      return {
+        status: "refused",
+        message:
+          n === null
+            ? `A child is placed in ${input.name} now, so it can’t be deleted.`
+            : `${n} ${n === 1 ? "child is" : "children are"} placed in ${input.name} now, so it can’t be deleted.`,
+      }
+    }
+    if (deleted.error === "not_found") {
+      revalidateSeats()
+      return { status: "refused", message: `${input.name} is already deleted.` }
+    }
+    if (deleted.error === "forbidden") return { status: "refused", message: "Only the Admissions Manager can delete a stream." }
+    return refused(deleted.error)
+  }
+  revalidateSeats()
+  return { status: "done", message: `${input.name} is deleted.` }
 }
 
 export async function bringUpAction(input: { year: number; sources: string[] }): Promise<StreamOutcome> {

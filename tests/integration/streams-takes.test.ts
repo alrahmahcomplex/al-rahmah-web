@@ -146,7 +146,7 @@ describe("change_stream", () => {
       expect(await refusal(sql, "select public.change_stream($1, 'A', 5, 'Boys', 'Girls', 'C', 3, null)", [a.id])).toBe("invalid")
       expect(await refusal(sql, "select public.change_stream($1, 'A', 5, 'Boys', 'Girls', 'C', 0, gen_random_uuid())", [a.id])).toBe("invalid")
       expect(await refusal(sql, "select public.change_stream($1, 'A', 5, 'Boys', 'Girls', 'C', 3, gen_random_uuid(), $2, 9)", [a.id, b.id])).toBe("invalid")
-      expect(await refusal(sql, "select public.change_stream($1, ' ', 5, 'Boys')", [a.id])).toBe("invalid")
+      expect(await refusal(sql, "select public.change_stream($1, repeat('L', 21), 5, 'Boys')", [a.id])).toBe("invalid")
     })
   })
 

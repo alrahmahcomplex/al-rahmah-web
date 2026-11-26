@@ -12,6 +12,7 @@ import {
   previewTakes,
   seatNeeds,
   seatsSoNobodyWaits,
+  suggestedLabel,
   tanzaniaTime,
   type TakesPlan,
 } from "@/app/staff/seats/stream-rules"
@@ -94,6 +95,17 @@ describe("labels", () => {
     const form1 = [stream("Ruby", "Boys")]
     expect(clashingStream(form1, " ruby ", "Boys")?.label).toBe("Ruby")
     expect(clashingStream(form1, "ruby", "Girls")).toBeNull()
+  })
+
+  test("no label (empty) counts as a label: one per overlap, A skipped next to it, none suggested for a class's first stream (owner 2026-11-26)", () => {
+    const std1 = [stream("", "Mixed")]
+    expect(clashingStream(std1, " ", "Boys")?.label).toBe("")
+    expect(clashingStream([stream("", "Girls")], "", "Boys")).toBeNull()
+    expect(nextLabel(std1, "Mixed")).toBe("B")
+    expect(suggestedLabel(std1, "Mixed")).toBe("B")
+    expect(suggestedLabel([], "Mixed")).toBe("")
+    expect(suggestedLabel([stream("", "Girls")], "Boys")).toBe("")
+    expect(suggestedLabel([stream("A", "Girls")], "Mixed")).toBe("B")
   })
 })
 

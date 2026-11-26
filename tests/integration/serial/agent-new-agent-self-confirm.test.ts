@@ -274,6 +274,41 @@ describe("a code the office hasn't approved yet", () => {
     expect(await record(held.code)).toMatchObject({ status: "Pending", email: null })
   })
 
+  // Owner, 26 Nov 2026 (prototype v6 item 3, 20270131120100).
+  test("with short names goes on by the mobile on record only; its email path is today's claim, shut here even when called directly", async () => {
+    const held = await pendingCode()
+    await asSystem((sql) => sql.query("update public.marketing_agents set full_name = 'NEEMA JUMA' where code = $1", [held.code]))
+    const browser = randomUUID()
+    const started = await startSelfConfirm(secretClient(), { code: held.code, names: "Neema Juma", phone: mobile(), browser, ip: null })
+    expect(started).toMatchObject({ ok: true, data: { kind: "ready", canText: true, typedMatches: false, emailOpen: false, emailClaim: true, pendingCode: held.code } })
+    if (!started.ok || started.data.kind !== "ready") return
+    const address = `short-${randomUUID().slice(0, 8)}@example.test`
+    expect(await setNewAgentEmail(secretClient(), { attempt: started.data.attempt, browser, email: address })).toEqual({ ok: true, data: { kind: "email_closed" } })
+    expect(await record(held.code)).toMatchObject({ status: "Pending", email: null })
+  })
+
+  // Sol, #546: the code's record_only attempt must not count as this browser's own sign-up.
+  test("with short names, typing the code then sending as a new agent from that browser can't open the email path", async () => {
+    const held = await pendingCode()
+    // One spelling for the record and both sends: the new-agent start resumes
+    // only on the exact name, so this reaches the record_only guard itself.
+    const short = `Rehema A ${held.fullName.split(" ").at(-1)}`
+    await asSystem((sql) => sql.query("update public.marketing_agents set full_name = $2 where code = $1", [held.code, short]))
+    const browser = randomUUID()
+    const started = await startSelfConfirm(secretClient(), { code: held.code, names: short, phone: held.phone, browser, ip: null })
+    expect(started).toMatchObject({ ok: true, data: { kind: "ready", emailClaim: true } })
+    expect(await startNew(short, held.phone, browser)).toEqual({ kind: "code_needed" })
+    expect(await record(held.code)).toMatchObject({ status: "Pending", email: null })
+
+    // A code with strong names, the same two sends: the browser goes on with
+    // the record, as before, since its email path was open already.
+    const strong = await pendingCode()
+    const other = randomUUID()
+    const opened = await startSelfConfirm(secretClient(), { code: strong.code, names: strong.fullName, phone: strong.phone, browser: other, ip: null })
+    expect(opened).toMatchObject({ ok: true, data: { kind: "ready", emailOpen: true } })
+    expect(await startNew(strong.fullName, strong.phone, other)).toMatchObject({ kind: "ready", code: strong.code })
+  })
+
   test("an email claim still waiting for the Manager keeps the email path shut, so the claim stays in the queue", async () => {
     const held = await pendingCode()
     const claimed = `claim-${randomUUID().slice(0, 8)}@example.test`
@@ -305,6 +340,19 @@ describe("a code the office hasn't approved yet", () => {
 })
 
 describe("a new agent by email", () => {
+  // Their own attempt is never record_only, whatever their names (Sol, #546).
+  test("with an initial in their name still puts the email on their Pending record", async () => {
+    const browser = randomUUID()
+    const started = await startNew(`Rehema A ${names().split(" ").at(-1)}`, mobile(), browser)
+    if (started.kind !== "ready") throw new Error(`not ready: ${JSON.stringify(started)}`)
+    const address = `initial-${randomUUID().slice(0, 8)}@example.test`
+    expect(await setNewAgentEmail(secretClient(), { attempt: started.attempt, browser, email: address })).toEqual({
+      ok: true,
+      data: { kind: "registered", code: started.code, email: address },
+    })
+    expect(await record(started.code)).toMatchObject({ status: "Pending", email: address })
+  })
+
   test("puts the email on the Pending record and sends nothing now", async () => {
     const browser = randomUUID()
     const started = await startNew(names(), mobile(), browser)

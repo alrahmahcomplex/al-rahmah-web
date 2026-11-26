@@ -19,7 +19,19 @@ import { fitsOneSms, sendSms, type SmsSender } from "./sms"
 export type StartOutcome =
   // `pendingCode`: the code the office hasn't approved yet; its attempt goes on
   // as a new agent's does (20270130120100). Null for an Approved code.
-  | { kind: "ready"; attempt: string; mobileOnRecord: boolean; typedMatches: boolean; canText: boolean; emailOnRecord: boolean; emailOpen: boolean; pendingCode: string | null }
+  // `emailClaim`: short names on the record (20270131120100): the mobile on
+  // record proves the person, and the email path is today's claim.
+  | {
+      kind: "ready"
+      attempt: string
+      mobileOnRecord: boolean
+      typedMatches: boolean
+      canText: boolean
+      emailOnRecord: boolean
+      emailOpen: boolean
+      emailClaim: boolean
+      pendingCode: string | null
+    }
   | { kind: "off" | "access_off" | "no_match" | "name_mismatch" | "weak_names" | "joined" | "locked" | "setups_limited" | "email_closed" }
 
 export type SendOutcome =
@@ -58,6 +70,25 @@ async function call(supabase: SupabaseClient, fn: string, args: Record<string, u
   return { ok: true, data: (data as Row) ?? null }
 }
 
+/**
+ * Before today's claim from the choice's email path (flow=claim): a record
+ * with strong names and no mobile counts the claim's names against
+ * self-confirm's lock and misses (20270131120100). "ok" for any other record.
+ */
+export async function checkClaimNames(
+  supabase: SupabaseClient,
+  input: { code: string; names: string },
+): Promise<Result<"ok" | "locked" | "name_mismatch", SelfConfirmError>> {
+  const answer = await call(supabase, "check_agent_claim_names", { code: input.code, typed_names: input.names })
+  if (!answer.ok) return answer
+  const outcome = (["ok", "locked", "name_mismatch"] as const).find((k) => k === answer.data?.outcome)
+  if (!outcome) {
+    console.error("Self-confirm: unexpected claim names answer", answer.data)
+    return { ok: false, error: "unavailable" }
+  }
+  return { ok: true, data: outcome }
+}
+
 export async function startSelfConfirm(
   supabase: SupabaseClient,
   input: { code: string; names: string; phone: string | null; browser: string; ip: string | null },
@@ -84,6 +115,7 @@ export async function startSelfConfirm(
         emailOnRecord: row.email_on_record === true,
         // Closed after Remove this sign-in with its tick (#503).
         emailOpen: row.email_open !== false,
+        emailClaim: row.email_claim === true,
         pendingCode: row.pending === true && typeof row.code === "string" ? row.code : null,
       },
     }

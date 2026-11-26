@@ -39,7 +39,7 @@ import { clearFlow, readFlow, type SavedStep } from "./flow-state"
 import { CARD } from "./frame"
 import { registerAsAgent } from "./actions"
 import { QuietCheck, useQuietCheck } from "./quiet-check"
-import { SelfConfirmFlow } from "./self-confirm-flow"
+import { SelfConfirmFlow, type ClaimProblem } from "./self-confirm-flow"
 import { SELF_CONFIRM_COPY } from "./self-confirm-copy"
 import { COPY, discountWords } from "./copy"
 import type { DiscountCodeMessage, DiscountCodeState } from "./outcome"
@@ -122,7 +122,7 @@ export function DiscountCodeForm({
   discount?: number | null
   showLanguagePrompt?: boolean
   // Self-confirm is on (#503 slice 4d-b): no email question before the send;
-  // it is asked on the email path, or when a send needs one.
+  // it is asked on the email path of the choice of how to sign in.
   selfConfirmOrder?: boolean
 }) {
   const copy = COPY[language]
@@ -154,10 +154,9 @@ export function DiscountCodeForm({
   const tileTimer = useRef<number | undefined>(undefined)
   // The draft is read once, after hydration, before it is written back.
   const [restored, setRestored] = useState(false)
-  // In self-confirm's order, a send that needs the email (today's claim path)
-  // brings the email question back; so does a draft that already holds one.
-  const [emailNeeded, setEmailNeeded] = useState(false)
-  const askEmail = !selfConfirmOrder || emailNeeded || answered.has("email")
+  // In self-confirm's order the email is asked after the send, on the email
+  // path; a draft that already holds one still shows its question.
+  const askEmail = !selfConfirmOrder || answered.has("email")
   const skip = (step: Step, answer: CodeAnswer) => skipped(step, answer) || (step === "email" && !askEmail)
 
   // What gets checked and sent: WhatsApp only while its field is shown, the
@@ -289,8 +288,6 @@ export function DiscountCodeForm({
     window.clearTimeout(tileTimer.current)
     clearDraft()
     setDraft(EMPTY)
-    // A new form asks in the page's own order again (Sol, #538).
-    setEmailNeeded(false)
     setWhatsappOn(false)
     setCodeAnswer(null)
     setAnswered(new Set())
@@ -336,7 +333,7 @@ export function DiscountCodeForm({
     data.set("phone", entries.phone)
     data.set("whatsapp", entries.whatsapp)
     data.set("email", askEmail ? entries.email : "")
-    // Self-confirm's order: the server asks for the email when it needs one.
+    // Self-confirm's order: the email is asked after the send, on the email path.
     data.set("flow", askEmail ? "" : "self-confirm")
     data.set("has_code", entries.hasCode ? "yes" : "no")
     data.set("code", entries.code)
@@ -364,15 +361,6 @@ export function DiscountCodeForm({
         setSelfConfirm(result)
         return
       }
-      if (result.status === "email-needed") {
-        // Today's claim path, or self-confirm off since the page loaded: the
-        // email question comes back, before a send again.
-        check.reset()
-        moved.current = true
-        setEmailNeeded(true)
-        setOpen("email")
-        return
-      }
       // The token is spent once checked, so get a fresh one for the next try.
       check.reset()
       if (result.status === "invalid") return show({ field: result.field, server: true })
@@ -386,6 +374,64 @@ export function DiscountCodeForm({
   useEffect(() => {
     sendNow.current = onSend
   })
+
+  // The email path of the choice of how to sign in when it is today's claim
+  // or sign-up (owner, prototype v6 item 3): the answers again, with the email
+  // typed there, straight to the claim. Done: today's finish. A message about
+  // the answers themselves: back to the review, where it shows as today.
+  async function claimByEmail(email: string, token: string): Promise<ClaimProblem | null> {
+    const data = new FormData()
+    data.set("cf-turnstile-response", token)
+    data.set("firstName", entries.firstName)
+    data.set("middleName", entries.middleName)
+    data.set("lastName", entries.lastName)
+    data.set("phone", entries.phone)
+    data.set("whatsapp", entries.whatsapp)
+    data.set("email", email)
+    data.set("flow", "claim")
+    data.set("has_code", entries.hasCode ? "yes" : "no")
+    data.set("code", entries.code)
+    const sentIn = round.current
+    let result: DiscountCodeState
+    try {
+      result = await registerAsAgent({ status: "idle" }, data)
+    } catch {
+      result = { status: "unavailable" }
+    }
+    // The form was cleared meanwhile: nothing more to show.
+    if (round.current !== sentIn) return null
+    switch (result.status) {
+      case "registered":
+      case "claimed":
+        clearDraft()
+        clearFlow()
+        moved.current = true
+        setSelfConfirm(null)
+        setDone(result)
+        return null
+      case "invalid":
+        if (result.field === "email") return "email"
+        clearFlow()
+        setSelfConfirm(null)
+        show({ field: result.field, server: true })
+        return null
+      case "email-unusable":
+      case "check-failed":
+      case "rate-limited":
+      case "unavailable":
+        return result.status
+      case "idle":
+      case "self-confirm":
+        return "unavailable"
+      default:
+        clearFlow()
+        setSelfConfirm(null)
+        moved.current = true
+        setOpen("send")
+        setNotice(result.status)
+        return null
+    }
+  }
 
   const topBar = <BrandTopBar variant="complex" language={language} showLanguagePrompt={showLanguagePrompt} onClearForm={startOver} />
 
@@ -415,6 +461,7 @@ export function DiscountCodeForm({
                 }
               : undefined
           }
+          onClaim={claimByEmail}
           // A new agent's email path: the code is theirs, and the set-password
           // email follows the office's approval, as today.
           onRegistered={(registered) => {

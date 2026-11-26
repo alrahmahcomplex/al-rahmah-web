@@ -11,7 +11,7 @@ import { verifyTurnstile } from "@/lib/turnstile"
 import { publicFormClient } from "@/utils/supabase/public-form"
 
 import type { DiscountCodeState } from "./outcome"
-import { beginNewAgentSelfConfirm, beginSelfConfirm } from "./self-confirm-browser"
+import { beginNewAgentSelfConfirm, beginSelfConfirm, claimNamesCheck } from "./self-confirm-browser"
 
 const MESSAGES: Record<Exclude<SignUpOutcome["kind"], "registered" | "claimed">, DiscountCodeState> = {
   code_needed: { status: "code-needed" },
@@ -71,9 +71,26 @@ export async function registerAsAgent(_previous: DiscountCodeState, formData: Fo
   if (!supabase) return { status: "unavailable" }
 
   // Self-confirm's order (#503 slice 4d-b) sends no email: it is asked on the
-  // email path. A send that still needs one (today's claim path, or
-  // self-confirm switched off since the page loaded) asks for it.
+  // email path.
   const emailLater = parsed.data.email === ""
+  // That email path, when it is today's claim or sign-up (owner, prototype v6
+  // item 3): the email typed on it goes straight there. Self-confirm opened
+  // no attempt for it, so none is started now either.
+  const claimNow = formData.get("flow") === "claim"
+  // A send that needs today's claim or sign-up and has no email yet: the
+  // choice of how to sign in, by email only, which the office checks first.
+  const officeEmail: DiscountCodeState = {
+    status: "self-confirm",
+    attempt: "",
+    mobileOnRecord: false,
+    typedMatches: false,
+    canText: false,
+    emailOnRecord: false,
+    emailOpen: false,
+    emailClaim: true,
+    email: "",
+    phone: parsed.data.phone,
+  }
 
   // A brand-new agent in self-confirm's order: today's Pending record, then the
   // choice of how to sign in, as a code holder has.
@@ -105,7 +122,7 @@ export async function registerAsAgent(_previous: DiscountCodeState, formData: Fo
       case "setups_limited":
         return { status: "rate-limited" }
       case "off":
-        return { status: "email-needed" }
+        return officeEmail
       default:
         return { status: "unavailable" }
     }
@@ -114,10 +131,12 @@ export async function registerAsAgent(_previous: DiscountCodeState, formData: Fo
   // Self-confirm first (#503), for someone who has a code: a code with
   // matching names goes on to the choice of how to sign in. One the office
   // hasn't approved yet goes on as a new agent's does: its email path puts the
-  // email on the record (20270130120100). While self-confirm is off, and for
-  // weak record names, or email closed on the code (after Remove this sign-in)
-  // with no SMS possible, today's claim path.
-  if (parsed.data.hasCode && parsed.data.code) {
+  // email on the record (20270130120100). Short names on the record go on too,
+  // proved by the mobile on record alone, their email path today's claim
+  // (20270131120100). While self-confirm is off, for short names with no SMS
+  // possible, or email closed on the code (after Remove this sign-in) with no
+  // mobile on record, the choice offers only today's claim by email.
+  if (parsed.data.hasCode && parsed.data.code && !claimNow) {
     const started = await beginSelfConfirm({ code: parsed.data.code, names: parsed.data.fullName, phone: parsed.data.phone })
     switch (started.kind) {
       case "ready":
@@ -129,6 +148,7 @@ export async function registerAsAgent(_previous: DiscountCodeState, formData: Fo
           canText: started.canText,
           emailOnRecord: started.emailOnRecord,
           emailOpen: started.emailOpen,
+          emailClaim: started.emailClaim,
           email: parsed.data.email,
           phone: parsed.data.phone,
           ...(started.pendingCode ? { newAgent: true, code: started.pendingCode } : {}),
@@ -149,8 +169,19 @@ export async function registerAsAgent(_previous: DiscountCodeState, formData: Fo
         if (emailLater) return { status: "unavailable" }
         break
     }
-    // Today's claim path needs the email.
-    if (emailLater) return { status: "email-needed" }
+    // Self-confirm off, short names with no SMS possible, or email closed
+    // with no mobile on record: today's claim, which needs the email.
+    if (emailLater) return officeEmail
+  }
+
+  // The claim from the choice's email path skipped self-confirm's start, so
+  // its names lock is checked here: a record whose names are the proof can't
+  // be guessed at through claims (Fable, #546).
+  if (claimNow && parsed.data.hasCode && parsed.data.code) {
+    const named = await claimNamesCheck({ code: parsed.data.code, names: parsed.data.fullName })
+    if (named === "locked") return { status: "self-confirm-locked" }
+    if (named === "name_mismatch") return { status: "name-mismatch" }
+    if (named === "unavailable") return { status: "unavailable" }
   }
 
   let signedUp

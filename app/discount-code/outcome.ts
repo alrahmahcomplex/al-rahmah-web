@@ -15,10 +15,24 @@ export type DiscountCodeState =
   // Self-confirm (#503 slice 3, only while it is on): code and names match;
   // the page goes on to the choice of how to sign in.
   // `newAgent` (#503 slice 4d-b): a brand-new agent, whose Pending code is `code`.
-  | { status: "self-confirm"; attempt: string; mobileOnRecord: boolean; typedMatches: boolean; canText: boolean; emailOnRecord: boolean; emailOpen: boolean; email: string; phone: string; newAgent?: boolean; code?: string }
-  // Self-confirm's order sent no email, but this send needs one (today's claim
-  // path, or self-confirm switched off since the page loaded): the form asks for it.
-  | { status: "email-needed" }
+  // `emailClaim` (owner, prototype v6 item 3): the email path is today's claim
+  // or sign-up, which the Marketing Office checks first: for short names on
+  // the record, and, with no `attempt` ("") and no SMS possible, for a code
+  // whose email is shut with no mobile on record, or while self-confirm is off.
+  | {
+      status: "self-confirm"
+      attempt: string
+      mobileOnRecord: boolean
+      typedMatches: boolean
+      canText: boolean
+      emailOnRecord: boolean
+      emailOpen: boolean
+      emailClaim?: boolean
+      email: string
+      phone: string
+      newAgent?: boolean
+      code?: string
+    }
   // Self-confirm locked for the code after too many wrong names.
   | { status: "self-confirm-locked" }
   // Messages that keep the form, each with its own words.
@@ -36,4 +50,4 @@ export type DiscountCodeState =
   | { status: "invalid"; field: AgentField }
   | { status: "unavailable" }
 
-export type DiscountCodeMessage = Exclude<DiscountCodeState["status"], "idle" | "registered" | "claimed" | "invalid" | "self-confirm" | "email-needed">
+export type DiscountCodeMessage = Exclude<DiscountCodeState["status"], "idle" | "registered" | "claimed" | "invalid" | "self-confirm">

@@ -10,7 +10,11 @@ const actions = vi.hoisted(() => ({
   setNewAgentEmailAction: vi.fn(),
 }))
 vi.mock("@/app/discount-code/self-confirm-actions", () => actions)
-vi.mock("@/components/turnstile-widget", () => ({ TurnstileWidget: () => null }))
+// The check's token, when a test gives one: Cloudflare puts it in a hidden field.
+const widget = vi.hoisted(() => ({ token: null as string | null }))
+vi.mock("@/components/turnstile-widget", () => ({
+  TurnstileWidget: () => (widget.token ? <input type="hidden" name="cf-turnstile-response" value={widget.token} readOnly /> : null),
+}))
 
 import { FLOW_KEY } from "@/app/discount-code/flow-state"
 import { SelfConfirmFlow } from "@/app/discount-code/self-confirm-flow"
@@ -32,9 +36,36 @@ const STARTED = {
 
 beforeEach(() => {
   Object.values(actions).forEach((fn) => fn.mockReset())
+  widget.token = null
 })
 
 describe("SelfConfirmFlow", () => {
+  // Owner, prototype v6 item 3: the title, the line under it, then the choices.
+  it("draws the line under the title, before the choices", () => {
+    render(<SelfConfirmFlow language="sw" officePhone="+255 673 526 644" startedAt={Date.now()} started={STARTED} onChangeEmail={() => {}} />)
+    const intro = screen.getByText("Utatumia chaguo hili pamoja na nenosiri lako kila unapoingia.")
+    const first = screen.getByRole("radio", { name: /Kwa namba ya simu/ })
+    expect(intro.compareDocumentPosition(first) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(intro.closest("legend")).not.toBeNull()
+  })
+
+  it("short names: by mobile as any code, by email today's claim, which the office checks first", async () => {
+    widget.token = "claim-token"
+    const onClaim = vi.fn(async () => "email-unusable" as const)
+    const started = { ...STARTED, email: "", emailOpen: false, emailClaim: true }
+    render(<SelfConfirmFlow language="sw" officePhone="+255 673 526 644" startedAt={Date.now()} started={started} onClaim={onClaim} />)
+    expect(screen.getByRole("radio", { name: /Kwa namba ya simu/ })).toBeInTheDocument()
+    await userEvent.click(screen.getByRole("radio", { name: /Ofisi ya Masoko italithibitisha kwanza/ }))
+    await userEvent.click(screen.getByRole("button", { name: "Endelea" }))
+    await userEvent.type(await screen.findByLabelText("Barua pepe yako?"), "neema@mfano.com")
+    await userEvent.click(screen.getByRole("button", { name: "Endelea" }))
+    await waitFor(() => expect(onClaim).toHaveBeenCalledWith("neema@mfano.com", "claim-token"))
+    // Neither of self-confirm's own email paths.
+    expect(actions.sendSelfConfirmEmail).not.toHaveBeenCalled()
+    expect(actions.setNewAgentEmailAction).not.toHaveBeenCalled()
+    expect(await screen.findByRole("alert")).toBeInTheDocument()
+  })
+
   it("by mobile: the number to the mobile on record, then the password", async () => {
     actions.sendSelfConfirmNumber.mockResolvedValue({ status: "sent", masked: "07•• ••• 123", onRecord: true })
     actions.checkSelfConfirmNumber.mockResolvedValue({ status: "right", phone: "+255712345123" })

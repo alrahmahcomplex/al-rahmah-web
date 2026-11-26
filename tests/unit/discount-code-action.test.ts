@@ -12,6 +12,7 @@ const stubs = vi.hoisted(() => ({
   // today's sign-up path answers as before.
   begin: vi.fn(),
   beginNew: vi.fn(),
+  claimNames: vi.fn(),
 }))
 
 vi.mock("server-only", () => ({}))
@@ -44,6 +45,7 @@ vi.mock("@/lib/services/referral", async (original) => ({
 vi.mock("@/app/discount-code/self-confirm-browser", () => ({
   beginSelfConfirm: (...args: unknown[]) => stubs.begin(...args),
   beginNewAgentSelfConfirm: (...args: unknown[]) => stubs.beginNew(...args),
+  claimNamesCheck: (...args: unknown[]) => stubs.claimNames(...args),
 }))
 
 import { registerAsAgent } from "@/app/discount-code/actions"
@@ -81,6 +83,7 @@ beforeEach(() => {
   stubs.estimate.mockReset().mockResolvedValue({ ok: true, data: { state: "pending", amount: 50000 } })
   stubs.begin.mockReset().mockResolvedValue({ kind: "unavailable" })
   stubs.beginNew.mockReset().mockResolvedValue({ kind: "unavailable" })
+  stubs.claimNames.mockReset().mockResolvedValue("ok")
 })
 
 describe("registering for a Discount code", () => {
@@ -227,6 +230,19 @@ describe("registering for a Discount code", () => {
 // Self-confirm's order (#503 slice 4d-b): the form sends no email, flow=self-confirm.
 describe("in self-confirm's order", () => {
   const later = (fields: Record<string, string> = {}) => posted({ email: "", flow: "self-confirm", ...fields })
+  // No SMS possible: the choice offers only today's claim (or sign-up) by email.
+  const officeEmail = {
+    status: "self-confirm",
+    attempt: "",
+    mobileOnRecord: false,
+    typedMatches: false,
+    canText: false,
+    emailOnRecord: false,
+    emailOpen: false,
+    emailClaim: true,
+    email: "",
+    phone: "0712 345 678",
+  }
 
   it("a new agent's send opens their attempt and goes on to the choice, with their waiting code", async () => {
     stubs.beginNew.mockResolvedValue({ kind: "ready", attempt: "att-1", code: "RAJ-124", canText: true })
@@ -253,8 +269,8 @@ describe("in self-confirm's order", () => {
     [{ kind: "access_off" }, { status: "access-off" }],
     [{ kind: "setups_limited" }, { status: "rate-limited" }],
     [{ kind: "invalid", field: "phone" }, { status: "invalid", field: "phone" }],
-    // Switched off since the page loaded: the email question comes back.
-    [{ kind: "off" }, { status: "email-needed" }],
+    // Switched off since the page loaded: the choice, by email only (today's sign-up).
+    [{ kind: "off" }, officeEmail],
     [{ kind: "unavailable" }, { status: "unavailable" }],
   ])("a new agent's start answering %o shows %o", async (started, state) => {
     stubs.beginNew.mockResolvedValue(started)
@@ -262,9 +278,54 @@ describe("in self-confirm's order", () => {
     expect(stubs.register).not.toHaveBeenCalled()
   })
 
-  it("a code holder whose code goes to today's claim path is asked for the email first", async () => {
-    stubs.begin.mockResolvedValue({ kind: "weak_names" })
-    expect(await send(later({ has_code: "yes", code: "RJ-407" }))).toEqual({ status: "email-needed" })
+  // Owner, 26 Nov 2026 (prototype v6 item 3): these asked for an email
+  // before any choice. Now the choice comes first, by email only, which is
+  // today's claim and the Marketing Office checks it first.
+  it.each(["weak_names", "email_closed", "off"])("a code whose start answers %s goes on to the choice, by email only", async (kind) => {
+    stubs.begin.mockResolvedValue({ kind })
+    expect(await send(later({ has_code: "yes", code: "RJ-407" }))).toEqual(officeEmail)
+    expect(stubs.register).not.toHaveBeenCalled()
+  })
+
+  it("short names on the record go on to the choice with the mobile on record, the email path today's claim", async () => {
+    stubs.begin.mockResolvedValue({ kind: "ready", attempt: "att-4", mobileOnRecord: true, typedMatches: true, canText: true, emailOnRecord: false, emailOpen: false, emailClaim: true, pendingCode: null })
+    expect(await send(later({ has_code: "yes", code: "NJ-140" }))).toEqual({
+      status: "self-confirm",
+      attempt: "att-4",
+      mobileOnRecord: true,
+      typedMatches: true,
+      canText: true,
+      emailOnRecord: false,
+      emailOpen: false,
+      emailClaim: true,
+      email: "",
+      phone: "0712 345 678",
+    })
+  })
+
+  it("the choice's email path sends today's claim straight away, starting no attempt", async () => {
+    stubs.register.mockResolvedValue({ ok: true, data: { kind: "claimed", code: "RJ-407" } })
+    const state = await send(posted({ flow: "claim", has_code: "yes", code: "RJ-407" }))
+    expect(state).toMatchObject({ status: "claimed", code: "RJ-407" })
+    expect(stubs.begin).not.toHaveBeenCalled()
+    expect(stubs.beginNew).not.toHaveBeenCalled()
+    expect(stubs.claimNames).toHaveBeenCalledWith({ code: "RJ-407", names: "REHEMA ALI JUMA" })
+    expect(stubs.register).toHaveBeenCalled()
+  })
+
+  // Fable, #546: the claim skipped self-confirm's start, so its names lock is checked first.
+  it.each([
+    ["locked", { status: "self-confirm-locked" }],
+    ["name_mismatch", { status: "name-mismatch" }],
+    ["unavailable", { status: "unavailable" }],
+  ])("the choice's claim answering the names check %s sends nothing", async (named, state) => {
+    stubs.claimNames.mockResolvedValue(named)
+    expect(await send(posted({ flow: "claim", has_code: "yes", code: "RJ-407" }))).toEqual(state)
+    expect(stubs.register).not.toHaveBeenCalled()
+  })
+
+  it("the choice's email path still needs an email", async () => {
+    expect(await send(posted({ flow: "claim", email: "", has_code: "yes", code: "RJ-407" }))).toEqual({ status: "invalid", field: "email" })
     expect(stubs.register).not.toHaveBeenCalled()
   })
 

@@ -36,6 +36,20 @@ describe("parseFlow", () => {
     expect(parseFlow(raw(flow({ started })), NOW)?.started).toEqual(started)
   })
 
+  // Owner, prototype v6 item 3: no SMS possible, so the choice is today's
+  // claim by email, with no attempt behind it.
+  it("keeps a choice by email only with no attempt, and refuses an empty attempt for anything else", () => {
+    const office = { ...STARTED, attempt: "", canText: false, emailOpen: false, emailClaim: true, mobileOnRecord: false, typedMatches: false }
+    expect(parseFlow(raw(flow({ started: office, step: { at: "ask-email" } })), NOW)?.started).toEqual(office)
+    expect(parseFlow(raw(flow({ started: { ...STARTED, attempt: "" } })), NOW)).toBeNull()
+    expect(parseFlow(raw(flow({ started: { ...office, canText: true } })), NOW)).toBeNull()
+  })
+
+  it("keeps short names' claim flag with the attempt", () => {
+    const started = { ...STARTED, emailOpen: false, emailClaim: true }
+    expect(parseFlow(raw(flow({ started })), NOW)?.started).toEqual(started)
+  })
+
   it("drops a flow older than its attempt's 60 minutes", () => {
     expect(parseFlow(raw(flow({ startedAt: NOW - FLOW_MAX_AGE_MS - 1 })), NOW)).toBeNull()
   })

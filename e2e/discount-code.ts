@@ -150,14 +150,19 @@ export async function fillRegistration(
 export const FORBIDDEN = /agent|referral|approv|wakala|idhini/i
 
 const EMAIL_CHOICE = { sw: /Kwa barua pepe/, en: /With my email/ } as const
+// The email choice when it is today's claim (owner, prototype v6 item 3).
+const OFFICE_CHOICE = { sw: /Ofisi ya Masoko italithibitisha kwanza/, en: /The Marketing Office checks it first/ } as const
 const CONTINUE = { sw: "Endelea", en: "Continue" } as const
 
 /**
  * After Send, in self-confirm's order (#503): a new agent chooses how to sign
  * in, and this takes the email path, which asks for the email and ends on
- * today's finish; today's claim path brings the form's email question back,
- * which this answers before sending again. Anything else (a finish, a notice,
- * a code holder's choice) is left for the test.
+ * today's finish. Today's claim path goes on to the choice too, by email only
+ * (prototype v6 item 3), and this takes it the same way; its email step runs
+ * the security check and sends by itself once it passes. A form still asking
+ * for the email (self-confirm off when the page loaded) is answered before
+ * sending again. Anything else (a finish, a notice, a code holder's own
+ * choice) is left for the test.
  */
 export async function afterSend(page: Page, lang: Lang, who: { email: string }, claim = false) {
   const t = WORDS[lang]
@@ -174,7 +179,8 @@ export async function afterSend(page: Page, lang: Lang, who: { email: string }, 
     await sendButton(page, lang, claim).click()
     return afterSend(page, lang, who, claim)
   }
-  if (!claim && (await choice.isVisible())) {
+  const officeChoice = page.getByRole("radio", { name: OFFICE_CHOICE[lang] })
+  if ((await choice.isVisible()) && (!claim || (await officeChoice.isVisible()))) {
     await choice.check({ force: true })
     await page.getByRole("button", { name: CONTINUE[lang] }).click()
     await page.getByLabel(t.email).fill(who.email)

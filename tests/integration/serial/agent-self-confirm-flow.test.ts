@@ -5,6 +5,7 @@ import { afterAll, beforeAll, describe, expect, test, vi } from "vitest"
 vi.mock("server-only", () => ({}))
 
 import {
+  checkClaimNames,
   checkConfirmationNumber,
   createPhoneLogin,
   digestOf,
@@ -168,9 +169,56 @@ describe("self-confirm by mobile", () => {
     expect(await start(agent, randomUUID())).toEqual({ kind: "locked" })
   })
 
-  test("a record with fewer than three names goes to today's claim path", async () => {
+  // Owner, 26 Nov 2026 (prototype v6 item 3, 20270131120100).
+  test("short names with a mobile on record go on, proved only by that mobile, the email path today's claim", async () => {
     const agent = await agentOnRecord({ names: "Neema Juma" })
-    expect(await start(agent, randomUUID())).toEqual({ kind: "weak_names" })
+    const browser = randomUUID()
+    const someoneElse = mobile()
+    const started = await start(agent, browser, someoneElse)
+    expect(started).toMatchObject({ kind: "ready", canText: true, typedMatches: false, emailOnRecord: false, emailOpen: false, emailClaim: true })
+    if (started.kind !== "ready") return
+    // The number goes to the mobile on record, never the one typed.
+    const sms = keptSender()
+    const sent = await sendConfirmationNumber(secretClient(), sms.send, { attempt: started.attempt, browser }, words, ENV)
+    expect(sent).toEqual({ ok: true, data: { kind: "sent", phone: agent.phone, onRecord: true, show: false } })
+    // The self-confirm email is shut for it, even called directly.
+    const invite = vi.fn()
+    expect(
+      await sendSelfConfirmInvite(secretClient(), invite, { attempt: started.attempt, browser, email: `short-${randomUUID().slice(0, 8)}@example.test`, hourlyBudget: 1000 }, "http://localhost:3100/discount-code/set-password"),
+    ).toEqual({ ok: true, data: { kind: "email_closed" } })
+    expect(invite).not.toHaveBeenCalled()
+    const email = await asSystem(async (sql) => (await sql.query<{ email: string | null }>("select email from public.marketing_agents where id = $1", [agent.id])).rows[0].email)
+    expect(email).toBeNull()
+  })
+
+  // Fable, #546: the claim from the choice's email path skips the start.
+  test("a claim on a record whose names are the proof counts its misses and lock; other records pass", async () => {
+    const agent = await agentOnRecord({ phone: null })
+    const claim = (names: string) => checkClaimNames(secretClient(), { code: agent.code, names })
+    expect(await claim(agent.fullName)).toEqual({ ok: true, data: "ok" })
+    for (let i = 0; i < 5; i += 1) expect(await claim("Zawadi Mwanaisha Kombo")).toEqual({ ok: true, data: "name_mismatch" })
+    expect(await claim(agent.fullName)).toEqual({ ok: true, data: "locked" })
+    // The lock is self-confirm's own: its start is locked too.
+    expect(await start(agent, randomUUID())).toEqual({ kind: "locked" })
+
+    const withMobile = await agentOnRecord()
+    expect(await checkClaimNames(secretClient(), { code: withMobile.code, names: "Zawadi Mwanaisha Kombo" })).toEqual({ ok: true, data: "ok" })
+
+    // More than six names: only the claim's exact rule can accept them (Greptile, #546).
+    const long = await agentOnRecord({ phone: null, names: "Neema Simu Juma Ali Hassan Omari Bakari" })
+    expect(await checkClaimNames(secretClient(), { code: long.code, names: long.fullName })).toEqual({ ok: true, data: "ok" })
+  })
+
+  test("short names with no mobile on record, or names that don't match, go to today's claim path without a miss", async () => {
+    // A landline on record can't take an SMS.
+    const landline = `022${String(randomInt(1_000_000, 10_000_000))}`
+    expect(await start(await agentOnRecord({ phone: landline, names: "Neema Juma" }), randomUUID())).toEqual({ kind: "weak_names" })
+    const agent = await agentOnRecord({ names: "Neema Juma" })
+    for (let i = 0; i < 6; i += 1) {
+      expect(await startSelfConfirm(secretClient(), { code: agent.code, names: "Zawadi Mwanaisha Kombo", phone: null, browser: randomUUID(), ip: null })).toEqual({ ok: true, data: { kind: "weak_names" } })
+    }
+    // Never locked: the real agent still goes on.
+    expect(await start(agent, randomUUID())).toMatchObject({ kind: "ready", emailClaim: true })
   })
 
   test("a mobile that already signs in to another login is refused after the proof (E8)", async () => {

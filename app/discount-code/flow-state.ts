@@ -39,7 +39,9 @@ function parseStarted(value: unknown): Started | null {
   const attempt = text(v.attempt, 36)
   const email = text(v.email, 254)
   const phone = text(v.phone, 200)
-  if (!attempt || !UUID.test(attempt) || email === null || phone === null) return null
+  // No attempt: the choice offers only today's claim by email (outcome.ts).
+  const officeOnly = attempt === "" && v.emailClaim === true && v.canText !== true && v.emailOpen !== true
+  if (attempt === null || !(UUID.test(attempt) || officeOnly) || email === null || phone === null) return null
   const started: Started = {
     status: "self-confirm",
     attempt,
@@ -48,6 +50,7 @@ function parseStarted(value: unknown): Started | null {
     canText: flag(v.canText),
     emailOnRecord: flag(v.emailOnRecord),
     emailOpen: flag(v.emailOpen),
+    ...(flag(v.emailClaim) ? { emailClaim: true } : {}),
     email,
     phone,
   }

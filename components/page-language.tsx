@@ -63,13 +63,12 @@ export function SyncPageLanguage({ language }: { language: Language }) {
   return null
 }
 
-/**
- * Sets the `lang` cookie without rendering the page again (app/api/language).
- * The switch's Server Action would make Next.js render the page again, and
- * here that render is the copy for the cookie the request carried, so the
- * form would remount. False when the cookie couldn't be set.
- */
-export async function storeLanguage(language: Language): Promise<boolean> {
+// Saves run one after another, so the cookie ends on the latest pick even when
+// an earlier request is slow (the first-visit card, then the Menu, on a slow line).
+let saving: Promise<unknown> = Promise.resolve()
+let latestSave = 0
+
+async function postLanguage(language: Language): Promise<boolean> {
   const data = new FormData()
   data.set("lang", language)
   try {
@@ -77,6 +76,20 @@ export async function storeLanguage(language: Language): Promise<boolean> {
   } catch {
     return false
   }
+}
+
+/**
+ * Sets the `lang` cookie without rendering the page again (app/api/language).
+ * The switch's Server Action would make Next.js render the page again, and
+ * here that render is the copy for the cookie the request carried, so the
+ * form would remount. False when the cookie couldn't be set, or when a later
+ * pick replaced this one: only the latest pick changes the page.
+ */
+export async function storeLanguage(language: Language): Promise<boolean> {
+  const turn = ++latestSave
+  const save = saving.then(() => postLanguage(language))
+  saving = save
+  return (await save) && turn === latestSave
 }
 
 /**

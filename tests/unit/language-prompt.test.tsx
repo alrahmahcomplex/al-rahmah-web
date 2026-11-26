@@ -118,16 +118,36 @@ describe("LanguagePrompt", () => {
     expect(screen.getByRole("dialog")).toBeInTheDocument()
   })
 
-  it("finishes even when the page re-renders without the prompt", async () => {
-    const ref = menuButton()
-    const { rerender } = render(<LanguagePrompt show language="sw" menuButtonRef={ref} />)
+  it("finishes the fold even when the page re-renders without the prompt", async () => {
+    // A shrink still running when setLanguage's re-render drops `show`.
+    const runs: Animation[] = []
+    const animate = vi.fn(() => {
+      const run = { onfinish: null, cancel: () => {} } as unknown as Animation
+      runs.push(run)
+      return run
+    })
+    Object.defineProperty(HTMLElement.prototype, "animate", { value: animate, configurable: true })
+    try {
+      const ref = menuButton()
+      const { rerender } = render(<LanguagePrompt show language="sw" menuButtonRef={ref} />)
 
-    fireEvent.click(screen.getByRole("button", { name: "Continue in English" }))
-    rerender(<LanguagePrompt show={false} language="en" menuButtonRef={ref} />)
-    await flush()
+      fireEvent.click(screen.getByRole("button", { name: "Continue in English" }))
+      rerender(<LanguagePrompt show={false} language="en" menuButtonRef={ref} />)
+      await flush()
 
-    expect(sentLanguages()).toEqual(["en"])
-    expect(screen.queryByRole("dialog")).toBeNull()
-    expect(ref.current).toHaveClass("gf-catch")
+      expect(sentLanguages()).toEqual(["en"])
+      expect(screen.getByRole("dialog")).toBeInTheDocument()
+      expect(ref.current).not.toHaveClass("gf-catch")
+
+      // The card's own shrink is the one with an onfinish handler.
+      const shrink = runs.find((run) => typeof run.onfinish === "function")!
+      act(() => shrink.onfinish!.call(shrink, new Event("finish") as AnimationPlaybackEvent))
+
+      expect(screen.queryByRole("dialog")).toBeNull()
+      expect(ref.current).toHaveClass("gf-catch")
+      expect(document.documentElement.style.overflow).toBe("")
+    } finally {
+      delete (HTMLElement.prototype as { animate?: unknown }).animate
+    }
   })
 })

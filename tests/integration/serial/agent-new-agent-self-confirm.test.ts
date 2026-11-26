@@ -290,12 +290,14 @@ describe("a code the office hasn't approved yet", () => {
   // Sol, #546: the code's record_only attempt must not count as this browser's own sign-up.
   test("with short names, typing the code then sending as a new agent from that browser can't open the email path", async () => {
     const held = await pendingCode()
-    const last = held.fullName.split(" ").at(-1)!
-    await asSystem((sql) => sql.query("update public.marketing_agents set full_name = $2 where code = $1", [held.code, `REHEMA A ${last.toUpperCase()}`]))
+    // One spelling for the record and both sends: the new-agent start resumes
+    // only on the exact name, so this reaches the record_only guard itself.
+    const short = `Rehema A ${held.fullName.split(" ").at(-1)}`
+    await asSystem((sql) => sql.query("update public.marketing_agents set full_name = $2 where code = $1", [held.code, short]))
     const browser = randomUUID()
-    const started = await startSelfConfirm(secretClient(), { code: held.code, names: `Rehema A ${last}`, phone: held.phone, browser, ip: null })
+    const started = await startSelfConfirm(secretClient(), { code: held.code, names: short, phone: held.phone, browser, ip: null })
     expect(started).toMatchObject({ ok: true, data: { kind: "ready", emailClaim: true } })
-    expect(await startNew(`Rehema A ${last}`, held.phone, browser)).toEqual({ kind: "code_needed" })
+    expect(await startNew(short, held.phone, browser)).toEqual({ kind: "code_needed" })
     expect(await record(held.code)).toMatchObject({ status: "Pending", email: null })
 
     // A code with strong names, the same two sends: the browser goes on with

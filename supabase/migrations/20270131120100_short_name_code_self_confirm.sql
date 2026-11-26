@@ -399,6 +399,10 @@ begin
         'mobile_on_record', true,
         'typed_matches', true,
         'can_text', coalesce(agent.phone, '') ~ '^\+255[67][0-9]{8}$',
+        'email_on_record', false
+    );
+end;
+$$;
 
 revoke execute on function public.start_new_agent_self_confirm(text, text, text, text, text) from public, anon, authenticated;
 grant execute on function public.start_new_agent_self_confirm(text, text, text, text, text) to service_role;

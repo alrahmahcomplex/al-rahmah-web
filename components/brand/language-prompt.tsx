@@ -13,10 +13,6 @@ import { catchMenuButton } from "./brand-menu"
 import { LANGUAGE_PROMPT_COPY, LANGUAGE_PROMPT_PICKS } from "./copy"
 import "@/components/guided-form/guided-form.css"
 
-const ASK_MS = 5000
-const CONFIRM_MS = 3000
-const TICK_MS = 50
-
 export type LanguagePromptProps = {
   /** True when the request had no `lang` cookie (see `languagePromptNeeded`). Read once, on mount. */
   show: boolean
@@ -42,50 +38,29 @@ function canAnimate(el: HTMLElement | null): el is HTMLElement {
 /**
  * The first-visit language card. It grows out of the menu button over a
  * frosted indigo backdrop and asks in Swahili: "Endelea kwa Kiswahili" or
- * "Continue in English". A pick (or 5 seconds untouched, or Escape) sets the
- * `lang` cookie through `setLanguage`, shows a 3-second confirmation while the
- * phone picture plays once, then the card shrinks back into the menu button,
- * which pops. Hover, a finger on the card or the keyboard stops the 5 seconds.
- * It stays mounted through the re-render `setLanguage` causes.
+ * "Continue in English". It waits for a pick however long that takes: there
+ * is no countdown, and a tap outside the card or Escape leaves it open. A pick
+ * sets the `lang` cookie through `setLanguage` and the card shrinks straight
+ * back into the menu button, which pops. It stays mounted through the
+ * re-render `setLanguage` causes.
  */
 export function LanguagePrompt({ show, menuButtonRef, inPlace = false }: LanguagePromptProps) {
   const chooseLanguage = useChooseLanguage()
-  // The server stops sending `show` once the cookie is set, mid-confirmation; the card finishes anyway.
+  // The server stops sending `show` once the cookie is set, mid-fold; the card finishes anyway.
   // Opened after hydration, so no unusable modal sits in the page before its script runs.
   const [open, setOpen] = useState(false)
   const shown = useRef(show)
   useEffect(() => {
     if (shown.current) setOpen(true)
   }, [])
-  const [stage, setStage] = useState<"ask" | "confirm">("ask")
-  const [cardLang, setCardLang] = useState<Language>("sw")
-  const [picked, setPicked] = useState<Language | null>(null)
-  const [running, setRunning] = useState(false)
   const [visible, setVisible] = useState(false)
-  const [timerStopped, setTimerStopped] = useState(false)
 
   const card = useRef<HTMLDivElement>(null)
   const inner = useRef<HTMLDivElement>(null)
-  const timerBar = useRef<HTMLElement>(null)
-  const status = useRef<HTMLDivElement>(null)
   const firstPick = useRef<HTMLButtonElement>(null)
-  const left = useRef(ASK_MS)
-  const hover = useRef(false)
-  const held = useRef(false)
-  const stageRef = useRef<"ask" | "confirm" | "closing">("ask")
-  const ticker = useRef(0)
-  const timeouts = useRef<number[]>([])
-
-  const later = (fn: () => void, ms: number) => {
-    timeouts.current.push(window.setTimeout(fn, ms))
-  }
-
-  const stopTicker = () => window.clearInterval(ticker.current)
+  const closing = useRef(false)
 
   const finish = useCallback(() => {
-    if (stageRef.current === "closing") return
-    stageRef.current = "closing"
-    stopTicker()
     const el = card.current
     const hadFocus = !!el && el.contains(document.activeElement)
     setVisible(false)
@@ -115,50 +90,31 @@ export function LanguagePrompt({ show, menuButtonRef, inPlace = false }: Languag
     exit.onfinish = done
   }, [menuButtonRef])
 
-  const confirm = useCallback(
-    (lang: Language) => {
-      if (stageRef.current !== "ask") return
-      stageRef.current = "confirm"
-      stopTicker()
-      setTimerStopped(true)
-      setStage("confirm")
+  const pick = (lang: Language) => {
+    if (closing.current) return
+    closing.current = true
 
-      const data = new FormData()
-      data.set("lang", lang)
-      startTransition(async () => {
-        // If the cookie doesn't stick, the card shows again next visit. Nothing to tell the visitor now.
-        if (inPlace) {
-          // A page served from Vercel's cache shows the pick from here.
-          if (await storeLanguage(lang)) chooseLanguage(lang)
-          return
-        }
-        try {
-          await setLanguage(data)
-        } catch {
-          return
-        }
-        chooseLanguage(lang)
-      })
-
-      const swap = () => {
-        setCardLang(lang)
-        setPicked(lang)
-        later(() => setRunning(true), 20)
-        later(finish, CONFIRM_MS)
+    const data = new FormData()
+    data.set("lang", lang)
+    startTransition(async () => {
+      // If the cookie doesn't stick, the card shows again next visit. Nothing to tell the visitor now.
+      if (inPlace) {
+        // A page served from Vercel's cache shows the pick from here.
+        const shown = await storeLanguage(lang)
+        if (shown) chooseLanguage(shown)
+        return
       }
-      const el = inner.current
-      if (prefersReducedMotion() || !canAnimate(el)) return swap()
-      const fade = el.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 140, fill: "forwards" })
-      fade.onfinish = () => {
-        swap()
-        fade.cancel()
-        el.animate([{ opacity: 0, transform: "translateY(4px)" }, { opacity: 1, transform: "none" }], { duration: 220, easing: "ease-out" })
+      try {
+        await setLanguage(data)
+      } catch {
+        return
       }
-    },
-    [finish, chooseLanguage, inPlace],
-  )
+      chooseLanguage(lang)
+    })
+    finish()
+  }
 
-  // Grow out of the menu button, then start the 5 seconds.
+  // Grow out of the menu button.
   useLayoutEffect(() => {
     if (!open) return
     const root = document.documentElement
@@ -166,25 +122,13 @@ export function LanguagePrompt({ show, menuButtonRef, inPlace = false }: Languag
     // Measured and placed this frame; the backdrop fades in from the next one.
     const reveal = requestAnimationFrame(() => setVisible(true))
     firstPick.current?.focus({ preventScroll: true })
-    const startTimer = () => {
-      window.clearInterval(ticker.current)
-      ticker.current = window.setInterval(() => {
-        if (stageRef.current !== "ask") return stopTicker()
-        if (!hover.current && !held.current) left.current -= TICK_MS
-        if (timerBar.current) timerBar.current.style.transform = `scaleX(${Math.max(0, left.current / ASK_MS)})`
-        if (left.current <= 0) confirm("sw")
-      }, TICK_MS)
-    }
     const el = card.current
-    if (!canAnimate(el)) {
-      startTimer()
-    } else {
-      let enter: Animation
+    if (canAnimate(el)) {
       if (prefersReducedMotion()) {
-        enter = el.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 200 })
+        el.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 200 })
       } else {
         const { dx, dy } = towardButton(el, menuButtonRef.current)
-        enter = el.animate(
+        el.animate(
           [
             { transform: `translate(${dx}px, ${dy}px) scale(0.06)`, borderRadius: "50%", opacity: 0 },
             { transform: `translate(${dx * 0.55}px, ${dy * 0.55}px) scale(0.28)`, borderRadius: "50%", opacity: 1, offset: 0.3 },
@@ -196,36 +140,23 @@ export function LanguagePrompt({ show, menuButtonRef, inPlace = false }: Languag
         )
         inner.current?.animate([{ opacity: 0, transform: "scale(0.9)" }, { opacity: 1, transform: "none" }], { duration: 320, delay: 420, easing: "ease-out", fill: "backwards" })
       }
-      enter.onfinish = startTimer
     }
-    const pending = timeouts.current
     return () => {
       cancelAnimationFrame(reveal)
-      window.clearInterval(ticker.current)
-      pending.forEach((t) => window.clearTimeout(t))
       root.style.overflow = ""
     }
-    // Runs once per opening; `confirm` and the ref are stable.
+    // Runs once per opening; the ref is stable.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
 
-  // The confirmation takes focus so a screen reader hears it.
-  useEffect(() => {
-    if (picked) status.current?.focus({ preventScroll: true })
-  }, [picked])
-
   if (!open) return null
 
-  const words = LANGUAGE_PROMPT_COPY[cardLang]
-  const stopTimer = () => {
-    held.current = true
-    setTimerStopped(true)
-  }
-  const dismiss = () => (stageRef.current === "ask" ? confirm("sw") : finish())
+  const words = LANGUAGE_PROMPT_COPY
 
   return (
     <div className={cn("gf-lp", visible && "gf-on", !visible && "pointer-events-none")}>
-      <div className="gf-lp-back" onClick={dismiss} aria-hidden="true" />
+      {/* A tap here does nothing: only a pick closes the card. */}
+      <div className="gf-lp-back" aria-hidden="true" />
       <div
         ref={card}
         className="gf-lp-card"
@@ -233,27 +164,13 @@ export function LanguagePrompt({ show, menuButtonRef, inPlace = false }: Languag
         aria-modal="true"
         aria-labelledby="gf-lp-h"
         aria-describedby="gf-lp-d"
-        lang={cardLang}
+        lang="sw"
         style={visible ? undefined : { opacity: 0 }}
-        onPointerEnter={(e) => {
-          if (e.pointerType === "mouse") hover.current = true
-        }}
-        onPointerLeave={(e) => {
-          if (e.pointerType === "mouse") hover.current = false
-        }}
-        onPointerDown={(e) => {
-          if (!(e.target as HTMLElement).closest("[data-pick]")) stopTimer()
-        }}
         onKeyDown={(e) => {
-          if (e.key === "Escape") {
-            e.preventDefault()
-            dismiss()
-            return
-          }
+          // Escape leaves the card open too.
+          if (e.key === "Escape") return e.preventDefault()
           if (e.key !== "Tab") return
           e.preventDefault()
-          if (stage !== "ask") return
-          stopTimer()
           const picks = [...(card.current?.querySelectorAll<HTMLElement>("[data-pick]") ?? [])]
           const i = picks.indexOf(document.activeElement as HTMLElement)
           picks[(i + (e.shiftKey ? -1 : 1) + picks.length) % picks.length]?.focus()
@@ -270,49 +187,29 @@ export function LanguagePrompt({ show, menuButtonRef, inPlace = false }: Languag
             {words.body}
           </p>
           <div className="gf-lp-act">
-            {stage === "ask" || !picked ? (
-              <div className="gf-lp-btns flex w-full flex-col gap-2.5">
-                {(["sw", "en"] as const).map((lang) => (
-                  <button
-                    key={lang}
-                    ref={lang === "sw" ? firstPick : undefined}
-                    type="button"
-                    lang={lang}
-                    data-pick={lang}
-                    onClick={() => confirm(lang)}
-                    className={cn(
-                      "inline-flex min-h-13 w-full items-center justify-center gap-2 rounded-full px-6 font-exo text-[17px] font-bold italic outline-none select-none focus-visible:ring-3 focus-visible:ring-(color:--gf-focus-ring)",
-                      lang === "sw" ? "gf-go bg-orange-500 text-white hover:bg-orange-600" : "border-[1.5px] border-blue-600/22 bg-transparent text-blue-600 hover:bg-blue-50 active:scale-[0.96]",
-                    )}
-                  >
-                    <span>{LANGUAGE_PROMPT_PICKS[lang]}</span>
-                    <Icon name="right" className="gf-chev" />
-                  </button>
-                ))}
-              </div>
-            ) : (
-              <div ref={status} role="status" tabIndex={-1} className="gf-lp-status flex flex-col gap-3 rounded-[18px] border-[1.5px] border-blue-600/22 bg-white px-3.5 py-4">
-                <p className="m-0 flex items-center justify-center gap-2.5 text-left text-[15px] leading-[1.35] font-semibold text-blue-600">
-                  <span className="grid flex-none" data-icon={picked === "en" ? "spinner" : "tick"}>
-                    {picked === "en" ? (
-                      <span className="gf-lp-spin" />
-                    ) : (
-                      <span className="gf-lp-ok">
-                        <Icon name="check" />
-                      </span>
-                    )}
-                  </span>
-                  <span>{words.status}</span>
-                </p>
-                <span className={cn("gf-lp-prog", running && "gf-run")}>
-                  <i />
-                </span>
-              </div>
-            )}
+            <div className="gf-lp-btns flex w-full flex-col gap-2.5">
+              {(["sw", "en"] as const).map((lang) => (
+                <button
+                  key={lang}
+                  ref={lang === "sw" ? firstPick : undefined}
+                  type="button"
+                  lang={lang}
+                  data-pick={lang}
+                  onClick={() => pick(lang)}
+                  className={cn(
+                    "inline-flex min-h-13 w-full items-center justify-center gap-2 rounded-full px-6 font-exo text-[17px] font-bold italic outline-none select-none focus-visible:ring-3 focus-visible:ring-(color:--gf-focus-ring)",
+                    lang === "sw" ? "gf-go bg-orange-500 text-white hover:bg-orange-600" : "border-[1.5px] border-blue-600/22 bg-transparent text-blue-600 hover:bg-blue-50 active:scale-[0.96]",
+                  )}
+                >
+                  <span>{LANGUAGE_PROMPT_PICKS[lang]}</span>
+                  <Icon name="right" className="gf-chev" />
+                </button>
+              ))}
+            </div>
           </div>
           <div className="gf-lp-hint">
             <p>{words.hint}</p>
-            <div className={cn("gf-ld", picked && "gf-go", picked && `gf-go-${picked}`)} aria-hidden="true">
+            <div className="gf-ld" aria-hidden="true">
               <span className="gf-ld-time">9:41</span>
               <span className="gf-ld-bat" />
               <div className="gf-ld-bar">
@@ -334,9 +231,6 @@ export function LanguagePrompt({ show, menuButtonRef, inPlace = false }: Languag
             </div>
           </div>
         </div>
-        <span className={cn("gf-lp-timer", timerStopped && "gf-stop")} aria-hidden="true">
-          <i ref={timerBar} />
-        </span>
       </div>
     </div>
   )

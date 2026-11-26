@@ -26,7 +26,7 @@
 -- writes an empty label.
 --
 -- Refusal codes: not_permitted, seat_mode_legacy, not_found, invalid,
--- label_taken, below_placed, not_empty.
+-- label_taken, below_placed, not_empty, busy (delete_stream: try again).
 --
 -- Rollback: a new migration giving every stream with no label a free letter,
 -- putting back the not-null label and the label_clash constraint, the
@@ -515,6 +515,8 @@ begin
         placed integer;
         actor record;
         later record;
+        held uuid[];
+        child uuid;
     begin
         if auth.role() is distinct from 'authenticated' or not public.has_permission('academic_years.manage') then
             raise exception 'not_permitted';
@@ -528,8 +530,18 @@ begin
             raise exception 'not_found';
         end if;
         -- Rows a key check touches come before the seat lock, as change_stream.
+        -- Letting go of a request audits a row naming its child, so the
+        -- children of the requests it answered are held here too: a payment
+        -- holds its child and then waits for the seat lock.
         perform 1 from public.fee_schedules f where f.enrollment_year = gone.enrollment_year for key share;
         perform 1 from public.staff_members s where s.id = public.current_staff_id() for key share;
+        select coalesce(array_agg(h.id), '{}') into held
+        from (
+            select l.id from public.leads l
+            where l.id in (select r.lead_id from public.stream_requests r where r.resolved_by_stream_id = gone.id)
+            order by l.id
+            for key share
+        ) h;
 
         perform public.seat_lock();
 
@@ -547,6 +559,19 @@ begin
         if actor.kind is null then
             raise exception 'no_audit_actor' using detail = 'streams';
         end if;
+
+        -- A request it answered while this waited names a child not held
+        -- yet. Waiting for that child under the seat lock could deadlock, so
+        -- a busy one refuses the delete; trying again holds it first.
+        for child in
+            select distinct r.lead_id from public.stream_requests r
+            where r.resolved_by_stream_id = gone.id and r.lead_id is not null and not (r.lead_id = any (held))
+        loop
+            perform 1 from public.leads l where l.id = child for key share skip locked;
+            if not found then
+                raise exception 'busy';
+            end if;
+        end loop;
 
         -- What points at it lets go first (each change audited).
         update public.stream_requests r set resolved_by_stream_id = null where r.resolved_by_stream_id = gone.id;
@@ -578,8 +603,9 @@ begin
     revoke execute on function public.delete_stream(uuid) from public, anon, authenticated, service_role;
     grant execute on function public.delete_stream(uuid) to authenticated;
 
-    -- The class, label and who it took of each deleted stream among `ids`,
-    -- from its delete row in the audit log, for a child's history. Staff who
+    -- The class, label, who it took and when it opened of each deleted
+    -- stream among `ids`, from its delete row in the audit log, for a
+    -- child's history. Staff who
     -- may read streams.
     create function public.deleted_stream_names(ids uuid[])
     returns jsonb
@@ -597,7 +623,8 @@ begin
                 'id', a.row_id,
                 'class_name', a.old_values ->> 'class_name',
                 'label', a.old_values ->> 'label',
-                'takes', a.old_values ->> 'takes'
+                'takes', a.old_values ->> 'takes',
+                'opened_at', a.old_values ->> 'opened_at'
             ))
             from public.audit_log a
             where a.table_name = 'streams' and a.action = 'delete' and a.row_id = any (ids)

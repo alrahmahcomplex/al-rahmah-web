@@ -206,13 +206,14 @@ describe("getLeadHistory", () => {
     const rpc = client.rpc as unknown as ReturnType<typeof vi.fn>
     rpc.mockImplementation(async (name: string) =>
       name === "deleted_stream_names"
-        ? { data: [{ id: placed, class_name: "STD 1", label: "B", takes: "Mixed" }], error: null }
+        ? { data: [{ id: placed, class_name: "STD 1", label: "B", takes: "Mixed", opened_at: "2026-02-01T09:00:00.123456+00:00" }], error: null }
         : { data: entries, error: null },
     )
 
     const result = await getLeadHistory(client, row.row_id)
 
     expect(result.ok && result.data.streamNames).toEqual({ [placed]: "STD 1 B (deleted)" })
+    expect(result.ok && result.data.streamOpenedAt).toEqual({ [placed]: "2026-02-01T09:00:00.123456+00:00" })
     expect(rpc).toHaveBeenCalledWith("deleted_stream_names", { ids: [placed] })
   })
 

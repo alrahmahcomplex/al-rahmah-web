@@ -169,10 +169,11 @@ export async function getLeadHistory(
       (row) => ({ name: streamName(row.class_name, row.label ?? "", row.takes), openedAt: row.opened_at }),
     ),
   ])
-  const streamNames = Object.fromEntries(Object.entries(streams).map(([id, stream]) => [id, stream.name]))
-  // A stream deleted since (owner 2026-11-26) keeps its name, marked deleted.
+  // A stream deleted since (owner 2026-11-26) keeps its name, marked deleted,
+  // and when it opened.
   const gone = [...streamIds].filter((id) => !(id in streams))
-  if (gone.length > 0) Object.assign(streamNames, await deletedStreamNames(supabase, gone))
+  if (gone.length > 0) Object.assign(streams, await deletedStreamNames(supabase, gone))
+  const streamNames = Object.fromEntries(Object.entries(streams).map(([id, stream]) => [id, stream.name]))
   const streamOpenedAt = Object.fromEntries(Object.entries(streams).map(([id, stream]) => [id, stream.openedAt]))
   return { ok: true, data: { entries, contactNames, leadNames, streamNames, streamOpenedAt } }
 }
@@ -182,21 +183,21 @@ export async function getLeadHistory(
 const NAMES_PER_REQUEST = 100
 
 /**
- * "STD 1 B (deleted)" for each deleted stream among `ids`, from its delete row
- * in the audit log. Missing on any failure: the history then shows the id, as
- * for any name it can't read.
+ * "STD 1 B (deleted)" and when it opened, for each deleted stream among `ids`,
+ * from its delete row in the audit log. Missing on any failure: the history
+ * then shows the id, as for any name it can't read.
  */
-async function deletedStreamNames(supabase: SupabaseClient, ids: string[]): Promise<Record<string, string>> {
-  const names: Record<string, string> = {}
+async function deletedStreamNames(supabase: SupabaseClient, ids: string[]): Promise<Record<string, { name: string; openedAt: string }>> {
+  const names: Record<string, { name: string; openedAt: string }> = {}
   for (let start = 0; start < ids.length; start += NAMES_PER_REQUEST) {
     const { data, error } = await supabase.rpc("deleted_stream_names", { ids: ids.slice(start, start + NAMES_PER_REQUEST) })
     if (error) {
       console.error("Could not read the names of deleted streams", error)
       return names
     }
-    for (const row of (data ?? []) as { id: string; class_name: LeadClass; label: string | null; takes: StreamTakes }[]) {
+    for (const row of (data ?? []) as { id: string; class_name: LeadClass; label: string | null; takes: StreamTakes; opened_at: string }[]) {
       if (!ids.includes(row.id) || typeof row.class_name !== "string") continue
-      names[row.id] = `${streamName(row.class_name, row.label ?? "", row.takes)} (deleted)`
+      names[row.id] = { name: `${streamName(row.class_name, row.label ?? "", row.takes)} (deleted)`, openedAt: row.opened_at }
     }
   }
   return names

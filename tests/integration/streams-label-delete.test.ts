@@ -7,10 +7,10 @@ vi.mock("server-only", () => ({}))
 
 import { saveFeeAmounts } from "@/lib/services/fees"
 
-import { actAsStaff, inRolledBackTransaction, signedIn } from "../support/db"
+import { actAsStaff, asSystem, inRolledBackTransaction, signedIn } from "../support/db"
 import { claimFeeYear, FEE_YEARS } from "../support/fee-years"
 import { ACCOUNTANT, ADMISSIONS, MANAGER } from "../support/fixtures"
-import { AMOUNTS, asOwner, holder, named, open, placements, refusal, streamYears } from "../support/streams"
+import { AMOUNTS, asOwner, child, holder, named, open, placements, refusal, removeStreams, streamYears } from "../support/streams"
 
 // An optional label and deleting an empty stream (owner 2026-11-26,
 // prototype 7p183225JMd529T29EHJBp v1): "no label" counts as a label in the
@@ -160,6 +160,7 @@ describe("delete_stream", () => {
       const b = await open(sql, year, c, "B", "Mixed", 5)
       const cc = await open(sql, year, c, "C", "Mixed", 5)
       expect(await refusal(sql, "select public.delete_stream($1)", [a.id])).toBe("not_empty")
+      const { rows: opened } = await sql.query<{ at: string }>("select to_jsonb(s) ->> 'opened_at' as at from public.streams s where s.id = $1", [b.id])
 
       const { rows } = await sql.query<{ d: { id: string; label: string } }>("select public.delete_stream($1) as d", [b.id])
       expect(rows[0].d).toMatchObject({ id: b.id, label: "B" })
@@ -179,7 +180,8 @@ describe("delete_stream", () => {
       expect(logged).toEqual([{ action: "delete", actor_staff_id: MANAGER.id }])
       await actAsStaff(sql, MANAGER.id)
       const { rows: names } = await sql.query<{ n: unknown }>("select public.deleted_stream_names($1) as n", [[b.id, a.id]])
-      expect(names[0].n).toEqual([{ id: b.id, class_name: c, label: "B", takes: "Mixed" }])
+      expect(opened[0].at).toEqual(expect.any(String))
+      expect(names[0].n).toEqual([{ id: b.id, class_name: c, label: "B", takes: "Mixed", opened_at: opened[0].at }])
 
       // Deleted twice: gone.
       expect(await refusal(sql, "select public.delete_stream($1)", [b.id])).toBe("not_found")
@@ -215,6 +217,59 @@ describe("delete_stream", () => {
         a.id,
       ])
       expect(requests[0].n).toBe(0)
+    })
+  })
+
+  // A payment holds its child and then waits for the seat lock. Letting go of
+  // a request audits a row naming its child, so delete_stream holds that
+  // child before the seat lock, or the two would deadlock.
+  test("waits for a busy child of a request it answered before taking the seat lock", async () => {
+    const {
+      year,
+      classes: [c],
+    } = await yearAndClasses(1)
+    const kid = await child(year, c, "Boy")
+    // Committed, so the delete below sees the stream without already holding
+    // the seat lock that opening it took.
+    onTestFinished(() => removeStreams([year]))
+    const a = await asSystem(async (sql) => {
+      await actAsStaff(sql, MANAGER.id)
+      const opened = await open(sql, year, c, "", "Mixed", 5)
+      await asOwner(sql)
+      await sql.query(
+        "insert into public.stream_requests (enrollment_year, class_name, lead_id, requested_by, resolved_at, resolved_by_stream_id) values ($1, $2, $3, $4, now(), $5)",
+        [year, c, kid, MANAGER.id, opened.id],
+      )
+      return opened
+    })
+    await inRolledBackTransaction(async (pay) => {
+      await pay.query("select 1 from public.leads where id = $1 for update", [kid])
+      const { rows: payer } = await pay.query<{ pid: number }>("select pg_backend_pid() as pid")
+      await inRolledBackTransaction(async (del) => {
+        const { rows: deleter } = await del.query<{ pid: number }>("select pg_backend_pid() as pid")
+        await named(del)
+        await del.query("set local lock_timeout = '3s'")
+        const deleting = del.query("select public.delete_stream($1)", [a.id]).then(
+          () => "deleted",
+          (error: { code?: string }) => error.code,
+        )
+
+        // Once the delete waits for the payment's child, it holds no seat lock.
+        for (let tries = 0; ; tries++) {
+          const { rows } = await pay.query<{ blocked: boolean }>("select $1::int = any (pg_blocking_pids($2)) as blocked", [payer[0].pid, deleter[0].pid])
+          if (rows[0].blocked) break
+          if (tries > 100) throw new Error("The delete never waited for the child")
+          await new Promise((resolve) => setTimeout(resolve, 20))
+        }
+        const { rows: held } = await pay.query<{ n: number }>(
+          "select count(*)::int as n from pg_locks where pid = $1 and locktype = 'advisory' and granted",
+          [deleter[0].pid],
+        )
+        expect(held[0].n).toBe(0)
+        await pay.query("select pg_cancel_backend($1)", [deleter[0].pid])
+        // 57014: query_canceled.
+        expect(await deleting).toBe("57014")
+      })
     })
   })
 

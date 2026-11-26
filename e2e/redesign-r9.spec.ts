@@ -26,7 +26,7 @@ async function overlayProblems(page: Page) {
 
 test("an Audit date that cannot be read stops the search and is never sent as an empty filter", async ({ page }) => {
   await open(page, "/staff/audit", "Audit")
-  const from = page.getByLabel("From")
+  const from = page.getByLabel("From", { exact: true })
   await from.fill("31/02/2026")
   await page.getByRole("button", { name: "Apply" }).click()
   await expect(page.getByText("Type the date as day/month/year, for example 25/09/2026.")).toBeVisible()

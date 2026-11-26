@@ -4,7 +4,7 @@ import { randomBytes } from "node:crypto"
 
 import { cookies, headers } from "next/headers"
 
-import { startNewAgentSelfConfirm, startSelfConfirm, type NewAgentStartOutcome, type StartOutcome } from "@/lib/services/agent-self-confirm"
+import { checkClaimNames, startNewAgentSelfConfirm, startSelfConfirm, type NewAgentStartOutcome, type StartOutcome } from "@/lib/services/agent-self-confirm"
 import { smsClient } from "@/utils/supabase/sms"
 
 // The browser token that binds a self-confirm attempt to this browser (#503),
@@ -33,6 +33,14 @@ export async function beginSelfConfirm(input: { code: string; names: string; pho
   if (!browser) return { kind: "unavailable" }
   const started = await startSelfConfirm(supabase, { ...input, browser, ip: (await headers()).get("x-real-ip") })
   return started.ok ? started.data : { kind: "unavailable" }
+}
+
+/** From registerAsAgent, before today's claim from the choice's email path (flow=claim). */
+export async function claimNamesCheck(input: { code: string; names: string }): Promise<"ok" | "locked" | "name_mismatch" | "unavailable"> {
+  const supabase = smsClient()
+  if (!supabase) return "unavailable"
+  const checked = await checkClaimNames(supabase, input)
+  return checked.ok ? checked.data : "unavailable"
 }
 
 /** From registerAsAgent, for a brand-new agent in self-confirm's order (#503 slice 4d-b). */

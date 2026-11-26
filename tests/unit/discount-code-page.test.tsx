@@ -1009,6 +1009,39 @@ describe("self-confirm's order", { timeout: 30_000 }, () => {
     expect(again.get("cf-turnstile-response")).toBe("fake-token")
   })
 
+  it("a new agent with self-confirm switched off since the page loaded signs up by email and sees today's finish", async () => {
+    stubs.selfConfirm = true
+    stubs.submit.mockResolvedValueOnce(officeEmail)
+    const user = userEvent.setup()
+    render(await DiscountCodePage())
+    await toReview(user, "no")
+    await send(user)
+    await user.click(await screen.findByRole("button", { name: WORDS.sw.next }))
+    await user.type(await screen.findByLabelText(WORDS.sw.email), "rehema@example.test")
+    stubs.submit.mockResolvedValueOnce({ status: "registered", code: "RAJ-124", link: "https://example.test/apply?ref=RAJ-124", email: "rehema@example.test", discount: null })
+    await user.click(screen.getByRole("button", { name: WORDS.sw.next }))
+    await screen.findByRole("heading", { level: 1, name: "Code yako ya Punguzo" })
+    const [, again] = stubs.submit.mock.calls[1] as [unknown, FormData]
+    expect(again.get("flow")).toBe("claim")
+    expect(again.get("has_code")).toBe("no")
+  })
+
+  it("an email the claim refuses keeps the email step, with its problem", async () => {
+    stubs.selfConfirm = true
+    stubs.submit.mockResolvedValueOnce(officeEmail)
+    const user = userEvent.setup()
+    render(await DiscountCodePage())
+    await toReview(user, "yes")
+    await send(user, "sw", true)
+    await user.click(await screen.findByRole("button", { name: WORDS.sw.next }))
+    await user.type(await screen.findByLabelText(WORDS.sw.email), "rehema@example.test")
+    stubs.submit.mockResolvedValueOnce({ status: "invalid", field: "email" })
+    await user.click(screen.getByRole("button", { name: WORDS.sw.next }))
+    expect(await screen.findByRole("alert")).toBeInTheDocument()
+    expect(screen.getByLabelText(WORDS.sw.email)).toHaveValue("rehema@example.test")
+    expect(stubs.reset).toHaveBeenCalled()
+  })
+
   it("a claim message about the answers goes back to the review, where it shows as before", async () => {
     stubs.selfConfirm = true
     stubs.submit.mockResolvedValueOnce(officeEmail)

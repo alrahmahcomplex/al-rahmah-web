@@ -70,6 +70,25 @@ async function call(supabase: SupabaseClient, fn: string, args: Record<string, u
   return { ok: true, data: (data as Row) ?? null }
 }
 
+/**
+ * Before today's claim from the choice's email path (flow=claim): a record
+ * with strong names and no mobile counts the claim's names against
+ * self-confirm's lock and misses (20270131120100). "ok" for any other record.
+ */
+export async function checkClaimNames(
+  supabase: SupabaseClient,
+  input: { code: string; names: string },
+): Promise<Result<"ok" | "locked" | "name_mismatch", SelfConfirmError>> {
+  const answer = await call(supabase, "check_agent_claim_names", { code: input.code, typed_names: input.names })
+  if (!answer.ok) return answer
+  const outcome = (["ok", "locked", "name_mismatch"] as const).find((k) => k === answer.data?.outcome)
+  if (!outcome) {
+    console.error("Self-confirm: unexpected claim names answer", answer.data)
+    return { ok: false, error: "unavailable" }
+  }
+  return { ok: true, data: outcome }
+}
+
 export async function startSelfConfirm(
   supabase: SupabaseClient,
   input: { code: string; names: string; phone: string | null; browser: string; ip: string | null },

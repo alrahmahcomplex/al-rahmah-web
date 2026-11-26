@@ -12,6 +12,7 @@ const stubs = vi.hoisted(() => ({
   // today's sign-up path answers as before.
   begin: vi.fn(),
   beginNew: vi.fn(),
+  claimNames: vi.fn(),
 }))
 
 vi.mock("server-only", () => ({}))
@@ -44,6 +45,7 @@ vi.mock("@/lib/services/referral", async (original) => ({
 vi.mock("@/app/discount-code/self-confirm-browser", () => ({
   beginSelfConfirm: (...args: unknown[]) => stubs.begin(...args),
   beginNewAgentSelfConfirm: (...args: unknown[]) => stubs.beginNew(...args),
+  claimNamesCheck: (...args: unknown[]) => stubs.claimNames(...args),
 }))
 
 import { registerAsAgent } from "@/app/discount-code/actions"
@@ -81,6 +83,7 @@ beforeEach(() => {
   stubs.estimate.mockReset().mockResolvedValue({ ok: true, data: { state: "pending", amount: 50000 } })
   stubs.begin.mockReset().mockResolvedValue({ kind: "unavailable" })
   stubs.beginNew.mockReset().mockResolvedValue({ kind: "unavailable" })
+  stubs.claimNames.mockReset().mockResolvedValue("ok")
 })
 
 describe("registering for a Discount code", () => {
@@ -306,7 +309,19 @@ describe("in self-confirm's order", () => {
     expect(state).toMatchObject({ status: "claimed", code: "RJ-407" })
     expect(stubs.begin).not.toHaveBeenCalled()
     expect(stubs.beginNew).not.toHaveBeenCalled()
+    expect(stubs.claimNames).toHaveBeenCalledWith({ code: "RJ-407", names: "REHEMA ALI JUMA" })
     expect(stubs.register).toHaveBeenCalled()
+  })
+
+  // Fable, #546: the claim skipped self-confirm's start, so its names lock is checked first.
+  it.each([
+    ["locked", { status: "self-confirm-locked" }],
+    ["name_mismatch", { status: "name-mismatch" }],
+    ["unavailable", { status: "unavailable" }],
+  ])("the choice's claim answering the names check %s sends nothing", async (named, state) => {
+    stubs.claimNames.mockResolvedValue(named)
+    expect(await send(posted({ flow: "claim", has_code: "yes", code: "RJ-407" }))).toEqual(state)
+    expect(stubs.register).not.toHaveBeenCalled()
   })
 
   it("the choice's email path still needs an email", async () => {

@@ -5,6 +5,7 @@ import { afterAll, beforeAll, describe, expect, test, vi } from "vitest"
 vi.mock("server-only", () => ({}))
 
 import {
+  checkClaimNames,
   checkConfirmationNumber,
   createPhoneLogin,
   digestOf,
@@ -188,6 +189,20 @@ describe("self-confirm by mobile", () => {
     expect(invite).not.toHaveBeenCalled()
     const email = await asSystem(async (sql) => (await sql.query<{ email: string | null }>("select email from public.marketing_agents where id = $1", [agent.id])).rows[0].email)
     expect(email).toBeNull()
+  })
+
+  // Fable, #546: the claim from the choice's email path skips the start.
+  test("a claim on a record whose names are the proof counts its misses and lock; other records pass", async () => {
+    const agent = await agentOnRecord({ phone: null })
+    const claim = (names: string) => checkClaimNames(secretClient(), { code: agent.code, names })
+    expect(await claim(agent.fullName)).toEqual({ ok: true, data: "ok" })
+    for (let i = 0; i < 5; i += 1) expect(await claim("Zawadi Mwanaisha Kombo")).toEqual({ ok: true, data: "name_mismatch" })
+    expect(await claim(agent.fullName)).toEqual({ ok: true, data: "locked" })
+    // The lock is self-confirm's own: its start is locked too.
+    expect(await start(agent, randomUUID())).toEqual({ kind: "locked" })
+
+    const withMobile = await agentOnRecord()
+    expect(await checkClaimNames(secretClient(), { code: withMobile.code, names: "Zawadi Mwanaisha Kombo" })).toEqual({ ok: true, data: "ok" })
   })
 
   test("short names with no mobile on record, or names that don't match, go to today's claim path without a miss", async () => {

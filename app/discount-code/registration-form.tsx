@@ -122,7 +122,7 @@ export function DiscountCodeForm({
   discount?: number | null
   showLanguagePrompt?: boolean
   // Self-confirm is on (#503 slice 4d-b): no email question before the send;
-  // it is asked on the email path, or when a send needs one.
+  // it is asked on the email path of the choice of how to sign in.
   selfConfirmOrder?: boolean
 }) {
   const copy = COPY[language]
@@ -333,7 +333,7 @@ export function DiscountCodeForm({
     data.set("phone", entries.phone)
     data.set("whatsapp", entries.whatsapp)
     data.set("email", askEmail ? entries.email : "")
-    // Self-confirm's order: the server asks for the email when it needs one.
+    // Self-confirm's order: the email is asked after the send, on the email path.
     data.set("flow", askEmail ? "" : "self-confirm")
     data.set("has_code", entries.hasCode ? "yes" : "no")
     data.set("code", entries.code)

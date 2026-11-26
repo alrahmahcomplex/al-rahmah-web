@@ -406,3 +406,48 @@ $$;
 
 revoke execute on function public.start_new_agent_self_confirm(text, text, text, text, text) from public, anon, authenticated;
 grant execute on function public.start_new_agent_self_confirm(text, text, text, text, text) to service_role;
+
+-- The choice's email path sends today's claim straight away (flow=claim),
+-- without start_agent_self_confirm. For a record with strong names and no
+-- mobile, those names are what self-confirm takes as proof (it texts the
+-- typed mobile), so the claim counts against the same 30-minute lock and
+-- records the same misses: otherwise a claim would test name guesses with no
+-- limit but Turnstile (Fable, #546). Any other record answers "ok": the
+-- claim's own checks (the phone, or the names for an import with no mobile)
+-- decide, as today.
+create function public.check_agent_claim_names(code text, typed_names text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+    agent record;
+begin
+    select m.* into agent from public.agent_for_code(check_agent_claim_names.code) m
+    where m.switched_off_at is null;
+    if agent.id is null or agent.phone is not null or not public.agent_names_strong(agent.full_name) then
+        return jsonb_build_object('outcome', 'ok');
+    end if;
+
+    perform 1 from public.marketing_agents m where m.id = agent.id for update;
+    -- Locked for 30 minutes from the fifth wrong names within 30 minutes, as
+    -- start_agent_self_confirm.
+    if exists (
+        select 1 from public.agent_confirm_misses x
+        where x.agent_id = agent.id and x.kind = 'names' and x.at > clock_timestamp() - interval '30 minutes'
+          and (select count(*) from public.agent_confirm_misses y
+               where y.agent_id = agent.id and y.kind = 'names' and y.at <= x.at and y.at > x.at - interval '30 minutes') >= 5
+    ) then
+        return jsonb_build_object('outcome', 'locked');
+    end if;
+    if not public.agent_names_match(agent.full_name, check_agent_claim_names.typed_names) then
+        insert into public.agent_confirm_misses (agent_id, kind) values (agent.id, 'names');
+        return jsonb_build_object('outcome', 'name_mismatch');
+    end if;
+    return jsonb_build_object('outcome', 'ok');
+end;
+$$;
+
+revoke execute on function public.check_agent_claim_names(text, text) from public, anon, authenticated;
+grant execute on function public.check_agent_claim_names(text, text) to service_role;

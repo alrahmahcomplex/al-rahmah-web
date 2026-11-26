@@ -11,7 +11,7 @@ import { verifyTurnstile } from "@/lib/turnstile"
 import { publicFormClient } from "@/utils/supabase/public-form"
 
 import type { DiscountCodeState } from "./outcome"
-import { beginNewAgentSelfConfirm, beginSelfConfirm } from "./self-confirm-browser"
+import { beginNewAgentSelfConfirm, beginSelfConfirm, claimNamesCheck } from "./self-confirm-browser"
 
 const MESSAGES: Record<Exclude<SignUpOutcome["kind"], "registered" | "claimed">, DiscountCodeState> = {
   code_needed: { status: "code-needed" },
@@ -172,6 +172,16 @@ export async function registerAsAgent(_previous: DiscountCodeState, formData: Fo
     // Self-confirm off, short names with no SMS possible, or email closed
     // with no mobile on record: today's claim, which needs the email.
     if (emailLater) return officeEmail
+  }
+
+  // The claim from the choice's email path skipped self-confirm's start, so
+  // its names lock is checked here: a record whose names are the proof can't
+  // be guessed at through claims (Fable, #546).
+  if (claimNow && parsed.data.hasCode && parsed.data.code) {
+    const named = await claimNamesCheck({ code: parsed.data.code, names: parsed.data.fullName })
+    if (named === "locked") return { status: "self-confirm-locked" }
+    if (named === "name_mismatch") return { status: "name-mismatch" }
+    if (named === "unavailable") return { status: "unavailable" }
   }
 
   let signedUp

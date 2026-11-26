@@ -12,6 +12,7 @@ type Copy = {
   byMobileHint: string // O-N32
   byEmail: string // O-N33
   byEmailHint: string // O-N34
+  byEmailOffice: string // W9, prototype v6: the email path is today's claim
   continue: string // O-N36
   smsTitle: string // O-N2
   smsSentTo: string // O-N3, then the masked mobile
@@ -66,6 +67,7 @@ export const SELF_CONFIRM_COPY: Record<Language, Copy> = {
     byMobileHint: "Tutakutumia SMS yenye namba ya kuthibitisha.",
     byEmail: "Kwa barua pepe",
     byEmailHint: "Tutakutumia kiungo cha kuweka nenosiri.",
+    byEmailOffice: "Ofisi ya Masoko italithibitisha kwanza, kisha tutakutumia kiungo cha kuweka nenosiri.",
     continue: "Endelea",
     smsTitle: "Angalia SMS yako",
     smsSentTo: "Tumetuma namba ya kuthibitisha yenye tarakimu 6 kwa",
@@ -118,6 +120,7 @@ export const SELF_CONFIRM_COPY: Record<Language, Copy> = {
     byMobileHint: "We'll text you a confirmation number.",
     byEmail: "With my email",
     byEmailHint: "We'll email you a link to set your password.",
+    byEmailOffice: "The Marketing Office checks it first, then we email you a link to set your password.",
     continue: "Continue",
     smsTitle: "Check your SMS",
     smsSentTo: "We've sent a 6-digit confirmation number to",

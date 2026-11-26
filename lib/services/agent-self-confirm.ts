@@ -19,7 +19,19 @@ import { fitsOneSms, sendSms, type SmsSender } from "./sms"
 export type StartOutcome =
   // `pendingCode`: the code the office hasn't approved yet; its attempt goes on
   // as a new agent's does (20270130120100). Null for an Approved code.
-  | { kind: "ready"; attempt: string; mobileOnRecord: boolean; typedMatches: boolean; canText: boolean; emailOnRecord: boolean; emailOpen: boolean; pendingCode: string | null }
+  // `emailClaim`: short names on the record (20270131120100): the mobile on
+  // record proves the person, and the email path is today's claim.
+  | {
+      kind: "ready"
+      attempt: string
+      mobileOnRecord: boolean
+      typedMatches: boolean
+      canText: boolean
+      emailOnRecord: boolean
+      emailOpen: boolean
+      emailClaim: boolean
+      pendingCode: string | null
+    }
   | { kind: "off" | "access_off" | "no_match" | "name_mismatch" | "weak_names" | "joined" | "locked" | "setups_limited" | "email_closed" }
 
 export type SendOutcome =
@@ -84,6 +96,7 @@ export async function startSelfConfirm(
         emailOnRecord: row.email_on_record === true,
         // Closed after Remove this sign-in with its tick (#503).
         emailOpen: row.email_open !== false,
+        emailClaim: row.email_claim === true,
         pendingCode: row.pending === true && typeof row.code === "string" ? row.code : null,
       },
     }

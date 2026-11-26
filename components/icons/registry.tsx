@@ -294,7 +294,13 @@ export const mail = icon({
 
 export const smscode = icon({
   outline: <path d="M4 6.5A2.5 2.5 0 0 1 6.5 4h11A2.5 2.5 0 0 1 20 6.5v8a2.5 2.5 0 0 1-2.5 2.5H10l-4.5 3.5V17A2.5 2.5 0 0 1 4 14.5z" />,
-  detail: <path strokeWidth={1.7} d="M8.4 8.75v3M7.1 9.5l2.6 1.5M7.1 11l2.6-1.5M12 8.75v3M10.7 9.5l2.6 1.5M10.7 11l2.6-1.5M15.6 8.75v3M14.3 9.5l2.6 1.5M14.3 11l2.6-1.5" />,
+  // Thin stars, spaced so they never touch (owner, prototype v7, 26 Nov 2026).
+  detail: (
+    <path
+      strokeWidth={0.75}
+      d="M7.6 8.5v3.5M6.084 9.375l3.032 1.75M6.084 11.125l3.032-1.75M12 8.5v3.5M10.484 9.375l3.032 1.75M10.484 11.125l3.032-1.75M16.4 8.5v3.5M14.884 9.375l3.032 1.75M14.884 11.125l3.032-1.75"
+    />
+  ),
 })
 
 export const ICONS = {

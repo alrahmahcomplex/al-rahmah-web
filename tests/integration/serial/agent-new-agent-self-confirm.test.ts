@@ -274,6 +274,19 @@ describe("a code the office hasn't approved yet", () => {
     expect(await record(held.code)).toMatchObject({ status: "Pending", email: null })
   })
 
+  // Owner, 26 Nov 2026 (prototype v6 item 3, 20270131120100).
+  test("with short names goes on by the mobile on record only; its email path is today's claim, shut here even when called directly", async () => {
+    const held = await pendingCode()
+    await asSystem((sql) => sql.query("update public.marketing_agents set full_name = 'NEEMA JUMA' where code = $1", [held.code]))
+    const browser = randomUUID()
+    const started = await startSelfConfirm(secretClient(), { code: held.code, names: "Neema Juma", phone: mobile(), browser, ip: null })
+    expect(started).toMatchObject({ ok: true, data: { kind: "ready", canText: true, typedMatches: false, emailOpen: false, emailClaim: true, pendingCode: held.code } })
+    if (!started.ok || started.data.kind !== "ready") return
+    const address = `short-${randomUUID().slice(0, 8)}@example.test`
+    expect(await setNewAgentEmail(secretClient(), { attempt: started.data.attempt, browser, email: address })).toEqual({ ok: true, data: { kind: "email_closed" } })
+    expect(await record(held.code)).toMatchObject({ status: "Pending", email: null })
+  })
+
   test("an email claim still waiting for the Manager keeps the email path shut, so the claim stays in the queue", async () => {
     const held = await pendingCode()
     const claimed = `claim-${randomUUID().slice(0, 8)}@example.test`

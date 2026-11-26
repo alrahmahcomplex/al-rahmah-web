@@ -967,45 +967,61 @@ describe("self-confirm's order", { timeout: 30_000 }, () => {
     expect(screen.getByRole("radio", { name: /Kwa barua pepe/ })).toBeInTheDocument()
   })
 
-  it("a code holder's review says the names are matched first (O-N1); when the send needs an email, the question comes back", async () => {
+  // No SMS possible: the choice offers only today's claim by email (owner, prototype v6 item 3).
+  const officeEmail = {
+    status: "self-confirm",
+    attempt: "",
+    mobileOnRecord: false,
+    typedMatches: false,
+    canText: false,
+    emailOnRecord: false,
+    emailOpen: false,
+    emailClaim: true,
+    email: "",
+    phone: "0712 345 678",
+  }
+
+  it("a code holder's review says the names are matched first (O-N1); a code the office checks goes on to the choice, by email only, then today's claim", async () => {
     stubs.selfConfirm = true
-    stubs.submit.mockResolvedValueOnce({ status: "email-needed" })
+    stubs.submit.mockResolvedValueOnce(officeEmail)
     const user = userEvent.setup()
     render(await DiscountCodePage())
     await toReview(user, "yes")
     expect(screen.getByText("Tunalinganisha code hii na majina yako. Kisha utachagua jinsi ya kuingia, na kuweka nenosiri mwenyewe.")).toBeInTheDocument()
 
     await send(user, "sw", true)
+    // No email question on the form: the choice first, by email only, already picked.
+    const byEmail = await screen.findByRole("radio", { name: /Kwa barua pepe/ })
+    expect(byEmail).toBeChecked()
+    expect(byEmail).toHaveAccessibleName(/Ofisi ya Masoko italithibitisha kwanza/)
+    expect(screen.queryByRole("radio", { name: /Kwa namba ya simu/ })).not.toBeInTheDocument()
+    await user.click(screen.getByRole("button", { name: WORDS.sw.next }))
+
     const email = await screen.findByLabelText(WORDS.sw.email)
-    expect(stubs.reset).toHaveBeenCalled()
     await user.type(email, "rehema@example.test")
-    await next(user)
-    stubs.submit.mockResolvedValueOnce({ status: "claim-waiting" })
-    await user.click(await screen.findByRole("button", { name: WORDS.sw.sendClaim }))
+    stubs.submit.mockResolvedValueOnce({ status: "claimed", code: "ABC-123", link: "https://example.test/apply?code=ABC-123", discount: null })
+    await user.click(screen.getByRole("button", { name: WORDS.sw.next }))
+    await screen.findByRole("heading", { name: "Ombi limepokelewa" })
     const [, again] = stubs.submit.mock.calls[1] as [unknown, FormData]
     expect(again.get("email")).toBe("rehema@example.test")
-    expect(again.get("flow")).toBe("")
+    expect(again.get("flow")).toBe("claim")
+    expect(again.get("has_code")).toBe("yes")
+    expect(again.get("cf-turnstile-response")).toBe("fake-token")
   })
 
-  it("Start over after an email-needed answer opens a form in self-confirm's order again", async () => {
+  it("a claim message about the answers goes back to the review, where it shows as before", async () => {
     stubs.selfConfirm = true
-    stubs.submit.mockResolvedValueOnce({ status: "email-needed" })
+    stubs.submit.mockResolvedValueOnce(officeEmail)
     const user = userEvent.setup()
     render(await DiscountCodePage())
     await toReview(user, "yes")
     await send(user, "sw", true)
-    await screen.findByLabelText(WORDS.sw.email)
-
-    await user.click(screen.getByRole("button", { name: "Menyu" }))
-    await user.click(screen.getByRole("button", { name: "Futa fomu yote" }))
-    await user.click(screen.getByRole("button", { name: "Ndiyo, futa" }))
-    await waitFor(() => expect(box("sw", "first")).toHaveValue(""))
-    // A fresh new agent: no email question before the send again, so the choice follows.
-    await toReview(user, "no")
-    stubs.submit.mockResolvedValueOnce({ status: "unavailable" })
-    await send(user)
-    const [, sent] = stubs.submit.mock.calls[1] as [unknown, FormData]
-    expect(sent.get("flow")).toBe("self-confirm")
+    await user.click(await screen.findByRole("button", { name: WORDS.sw.next }))
+    await user.type(await screen.findByLabelText(WORDS.sw.email), "rehema@example.test")
+    stubs.submit.mockResolvedValueOnce({ status: "claim-waiting" })
+    await user.click(screen.getByRole("button", { name: WORDS.sw.next }))
+    expect(await screen.findByText("Tumepokea ombi lako; Ofisi ya Masoko itathibitisha.")).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: WORDS.sw.sendClaim })).toBeInTheDocument()
   })
 
   it("keeps today's order, with the email question, while self-confirm is off", async () => {

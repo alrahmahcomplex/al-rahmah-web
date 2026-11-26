@@ -9,6 +9,7 @@ import {
   ConfirmationNumber,
   ContinuePill,
   FieldInput,
+  Hint,
   NoticeBox,
   QuestionTitle,
   StepIcon,
@@ -50,6 +51,8 @@ import {
 type Started = Extract<DiscountCodeState, { status: "self-confirm" }>
 type Step = SavedStep | { at: "email"; email: string } | { at: "mobile-used" }
 type Registered = Extract<DiscountCodeState, { status: "registered" }>
+/** Why today's claim (or sign-up) by email didn't go on; null: the form moved on. */
+export type ClaimProblem = "email" | "email-unusable" | "check-failed" | "rate-limited" | "unavailable"
 
 const RESEND_SECONDS = 60
 const TITLE = "font-exo text-[26px] leading-[1.18] font-extrabold tracking-[-0.01em] text-balance text-blue-600 italic outline-none"
@@ -63,6 +66,9 @@ const localMobile = (phone: string) => (phone.startsWith("+255") ? `0${phone.sli
 // none yet (self-confirm's order, #503 slice 4d-b). `onRegistered`: a new
 // agent's email went on their waiting code; the form shows today's finish.
 // `startedAt`, `initialStep` and `initialSmsOff` bring a reloaded flow back.
+// `onClaim`: with `started.emailClaim`, the email path sends the form again as
+// today's claim (or sign-up), with this email and a new security check token
+// (owner, prototype v6 item 3).
 export function SelfConfirmFlow({
   language,
   officePhone,
@@ -73,6 +79,7 @@ export function SelfConfirmFlow({
   onChangeEmail,
   onFinished,
   onRegistered,
+  onClaim,
 }: {
   language: Language
   officePhone: string
@@ -83,8 +90,11 @@ export function SelfConfirmFlow({
   onChangeEmail?: () => void
   onFinished?: () => void
   onRegistered?: (registered: Registered) => void
+  onClaim?: (email: string, token: string) => Promise<ClaimProblem | null>
 }) {
   const copy = SELF_CONFIRM_COPY[language]
+  // The email path is open: self-confirm's own, or today's claim.
+  const emailWay = started.emailOpen || started.emailClaim === true
   const [step, setStep] = useState<Step>(initialStep ?? { at: "choose" })
   const [problem, setProblem] = useState<string | null>(null)
   // No SMS could go to the mobile: the choice offers email only.
@@ -121,7 +131,7 @@ export function SelfConfirmFlow({
       if (sent.status === "no-sms") {
         // No SMS can go to this mobile now: the choice again, with email only.
         // With email closed on the code too, the mobile stays, to try later.
-        if (!started.emailOpen) return setProblem(copy.unavailable)
+        if (!emailWay) return setProblem(copy.unavailable)
         setSmsOff(true)
         setStep({ at: "choose" })
         setProblem(copy.unavailable)
@@ -136,13 +146,51 @@ export function SelfConfirmFlow({
 
   function emailInstead() {
     setProblem(null)
-    // Nothing on record and nothing typed yet: ask for it first.
-    if (!started.emailOnRecord && !email.trim()) return setStep({ at: "ask-email" })
+    // Nothing on record and nothing typed yet, or today's claim, which always
+    // takes the email typed here: ask for it first.
+    if (started.emailClaim || (!started.emailOnRecord && !email.trim())) return setStep({ at: "ask-email" })
     sendEmail(email)
   }
 
-  function sendEmail(address: string) {
+  // Today's claim needs a security check token, as the form's own send does:
+  // sent before the check has passed, it waits and goes on by itself.
+  const claimCheck = useQuietCheck()
+  const claimLater = useRef(() => {})
+  useEffect(() => {
+    claimLater.current = () => sendEmail(email)
+  })
+
+  // `field`: the token Cloudflare put in the form's hidden field, if any.
+  function sendClaim(address: string, field: string | null) {
+    const token = field || claimCheck.token()
+    if (!token) return claimCheck.begin(() => claimLater.current())
+    startWork(async () => {
+      let problem: ClaimProblem | null
+      try {
+        problem = onClaim ? await onClaim(address, token) : "unavailable"
+      } catch {
+        problem = "unavailable"
+      }
+      if (problem === null) return
+      // The token is spent once checked.
+      claimCheck.reset()
+      setProblem(
+        problem === "email"
+          ? COPY[language].problems.email
+          : problem === "email-unusable"
+            ? copy.emailUnusable
+            : problem === "check-failed"
+              ? COPY[language].checkFailed
+              : problem === "rate-limited"
+                ? COPY[language].rateLimited
+                : copy.unavailable,
+      )
+    })
+  }
+
+  function sendEmail(address: string, field: string | null = null) {
     setProblem(null)
+    if (started.emailClaim) return sendClaim(address, field)
     startWork(async () => {
       if (started.newAgent) {
         let set
@@ -196,7 +244,7 @@ export function SelfConfirmFlow({
             pending={pending}
             onResend={sendNumber}
             // Email is closed on the code after Remove this sign-in with its tick.
-            onEmail={started.emailOpen ? emailInstead : null}
+            onEmail={emailWay ? emailInstead : null}
             onRight={(phone) => setStep({ at: "password", phone })}
             onMobileUsed={() => setStep({ at: "mobile-used" })}
           />
@@ -208,7 +256,8 @@ export function SelfConfirmFlow({
           noValidate
           onSubmit={(event) => {
             event.preventDefault()
-            sendEmail(email)
+            const field = new FormData(event.currentTarget).get("cf-turnstile-response")
+            sendEmail(email, typeof field === "string" ? field : null)
           }}
         >
           <StepIcon name="mail" />
@@ -232,7 +281,9 @@ export function SelfConfirmFlow({
             onChange={(event) => setEmail(event.target.value)}
             aria-describedby="self-confirm-email-hint"
           />
-          <ContinuePill type="submit" pending={pending} disabled={pending}>
+          {/* Today's claim goes through the security check, out of sight unless it is slow or fails. */}
+          {started.emailClaim && <QuietCheck check={claimCheck} language={language} className="mt-1" />}
+          <ContinuePill type="submit" pending={pending || claimCheck.waiting} disabled={pending || claimCheck.waiting}>
             {copy.continue}
           </ContinuePill>
         </form>
@@ -261,7 +312,7 @@ export function SelfConfirmFlow({
           <NoticeBox role="alert" tone="info">
             {copy.mobileUsed}
           </NoticeBox>
-          {started.emailOpen && (
+          {emailWay && (
             <ContinuePill type="button" pending={pending} disabled={pending} onClick={emailInstead}>
               {copy.useEmail}
             </ContinuePill>
@@ -313,20 +364,33 @@ function Choose({
   onMobile: () => void
   onEmail: () => void
 }) {
-  // Email is closed on the code after Remove this sign-in with its tick.
-  const [choice, setChoice] = useState<string | null>(started.canText && started.emailOpen ? null : started.canText ? "mobile" : started.emailOpen ? "email" : null)
+  // Email is closed on the code after Remove this sign-in with its tick; with
+  // `emailClaim` it is today's claim, which the Marketing Office checks first.
+  const emailWay = started.emailOpen || started.emailClaim === true
+  const [choice, setChoice] = useState<string | null>(started.canText && emailWay ? null : started.canText ? "mobile" : emailWay ? "email" : null)
   const options = [
     ...(started.canText ? [{ value: "mobile", label: copy.byMobile, description: copy.byMobileHint }] : []),
-    ...(started.emailOpen ? [{ value: "email", label: copy.byEmail, description: copy.byEmailHint }] : []),
+    ...(emailWay ? [{ value: "email", label: copy.byEmail, description: started.emailClaim ? copy.byEmailOffice : copy.byEmailHint }] : []),
   ]
   return (
     <>
       <h1 ref={headingRef} tabIndex={-1} className="sr-only">
         {copy.chooseTitle}
       </h1>
-      <ChoiceTiles name="sign_in_with" legend={<QuestionTitle>{copy.chooseTitle}</QuestionTitle>} layout="rows" options={options} value={choice} onChange={setChoice}>
-        <p className="text-sm text-slate-600">{copy.chooseIntro}</p>
-      </ChoiceTiles>
+      {/* The title, the line under it, then the choices, as the approved prototype draws it (v5, v6). */}
+      <ChoiceTiles
+        name="sign_in_with"
+        legend={
+          <>
+            <QuestionTitle>{copy.chooseTitle}</QuestionTitle>
+            <Hint className="mt-2.5 mb-4 text-center">{copy.chooseIntro}</Hint>
+          </>
+        }
+        layout="rows"
+        options={options}
+        value={choice}
+        onChange={setChoice}
+      />
       <ContinuePill type="button" pending={pending} disabled={pending || !choice} onClick={() => (choice === "mobile" ? onMobile() : onEmail())}>
         {copy.continue}
       </ContinuePill>

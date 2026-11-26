@@ -10,7 +10,7 @@ const RECORD = "discount_requests"
 
 // Labels for this table's own fields only, so another table's `note` or
 // `state` keeps its own words.
-const LABELS: Readonly<Record<string, string>> = {
+export const DISCOUNT_LABELS: Readonly<Record<string, string>> = {
   kind: "Discount",
   note: "Note for the Manager",
   state: "Request",
@@ -55,7 +55,7 @@ const FEE_EDITS: Readonly<Record<string, string>> = {
 }
 
 export function discountLabel(record: string | null, field: string): string | null {
-  return record === RECORD ? (LABELS[field] ?? null) : null
+  return record === RECORD ? (DISCOUNT_LABELS[field] ?? null) : null
 }
 
 // A request's kind, state or Sibling fee edit in words; null for any other

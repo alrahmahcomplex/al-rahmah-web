@@ -9,7 +9,7 @@ const RECORD = "reopening_requests"
 
 // Labels for this table's own fields only, so another table's `reason` or
 // `state` keeps its own words.
-const LABELS: Readonly<Record<string, string>> = {
+export const REOPENING_LABELS: Readonly<Record<string, string>> = {
   source: "Raised from",
   reason: "Reason for reopening",
   state: "Request",
@@ -29,7 +29,7 @@ export const REOPENING_HIDDEN: ReadonlySet<string> = new Set([
 ])
 
 export function reopeningLabel(record: string | null, field: string): string | null {
-  return record === RECORD ? (LABELS[field] ?? null) : null
+  return record === RECORD ? (REOPENING_LABELS[field] ?? null) : null
 }
 
 // A request's source or state in words; null for any other field or record.

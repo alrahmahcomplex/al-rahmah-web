@@ -10,7 +10,7 @@ const RECORD = "whatsapp_group_invitations"
 // database, and the lead screen names them.
 export const GROUP_INVITATION_HIDDEN: ReadonlySet<string> = new Set(["lead_id", "sent_by", "sent_at", "sibling_lead_ids"])
 
-const LABELS: Readonly<Record<string, string>> = {
+export const GROUP_INVITATION_LABELS: Readonly<Record<string, string>> = {
   url: "Group link",
   template_version: "Message",
   channel: "Sent by",
@@ -34,7 +34,7 @@ export function groupInvitationSummary(entry: Pick<LeadHistoryEntry, "record" | 
 }
 
 export function groupInvitationLabel(record: string | null, field: string): string | null {
-  return record === RECORD ? (LABELS[field] ?? null) : null
+  return record === RECORD ? (GROUP_INVITATION_LABELS[field] ?? null) : null
 }
 
 export function groupInvitationValue(record: string | null, field: string, value: unknown): string | null {

@@ -9,7 +9,7 @@ const ACTION = "result_released"
 const CHANNELS: Readonly<Record<string, string>> = { whatsapp: "WhatsApp", sms: "SMS" }
 
 // Labels for this event's own details only.
-const LABELS: Readonly<Record<string, string>> = {
+export const RESULT_RELEASE_LABELS: Readonly<Record<string, string>> = {
   serial_number: "S/N",
   number_used: "Sent to",
   template_id: "Message",
@@ -36,7 +36,7 @@ export function isResultRelease(entry: Pick<LeadHistoryEntry, "record" | "action
 }
 
 export function resultReleaseLabel(action: string, field: string): string | null {
-  return action === ACTION ? (LABELS[field] ?? null) : null
+  return action === ACTION ? (RESULT_RELEASE_LABELS[field] ?? null) : null
 }
 
 export function resultReleaseValue(action: string, field: string, value: unknown): string | null {

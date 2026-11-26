@@ -89,7 +89,7 @@ export type DescribedEntry = {
   note?: string
 }
 
-const LABELS: Record<string, string> = {
+export const LEAD_HISTORY_LABELS: Record<string, string> = {
   // The lead.
   admission_number: "Admission Number",
   student_name: "Student name",
@@ -177,7 +177,7 @@ const LABELS: Record<string, string> = {
 // Kept on a row for the database's sake, and already shown by the entry
 // itself: who declined a lead and when; an interview's lead, and who
 // registered it when.
-const HIDDEN: Record<string, ReadonlySet<string>> = {
+export const LEAD_HISTORY_HIDDEN: Record<string, ReadonlySet<string>> = {
   // Read by nothing since each child holds the custodian’s relationship (#312).
   lead: new Set(["declined_at", "declined_by", "closed_at", "closed_by", "custodian_relationship_own", IMPORT_HIDDEN]),
   interviews: new Set(["lead", "registered_at", "registered_by", IMPORT_HIDDEN]),
@@ -238,6 +238,7 @@ const FATHER_SOURCES: Record<string, string> = {
   backfilled: "From the student’s name, when sibling groups began",
   edited: "Corrected by staff",
   typo_confirmed: "Typing mistake confirmed",
+  entered: "Typed in by staff",
 }
 
 const SCHOOL_TYPES: Record<string, string> = { private: "Private", public: "Public" }
@@ -287,7 +288,7 @@ function display(field: string, value: unknown, contactNames: Readonly<Record<st
       return typeof value === "number" ? `TZS ${value.toLocaleString("en-US")}` : raw(value)
     case "differing_fields":
       if (!Array.isArray(value)) return raw(value)
-      return value.length === 0 ? "Nothing" : value.map((f) => LABELS[String(f)] ?? String(f)).join(", ")
+      return value.length === 0 ? "Nothing" : value.map((f) => LEAD_HISTORY_LABELS[String(f)] ?? String(f)).join(", ")
     // The staff member who made a contact, by name: the history page adds
     // their names to the contacts' names.
     case "contacted_by":
@@ -464,7 +465,7 @@ function summarize(
 
 // Known fields in the order the lead screen shows them, then unknown ones as
 // they came. A sibling or seat table lists its own fields in its own order.
-const ORDER = [...Object.keys(LABELS), ...ENROLMENT_FIELDS]
+const ORDER = [...Object.keys(LEAD_HISTORY_LABELS), ...ENROLMENT_FIELDS]
 
 function rank(record: string | null, field: string) {
   const order = siblingOrder(record) ?? seatOrder(record) ?? ORDER
@@ -552,13 +553,11 @@ function withEarlierPlan(entry: LeadHistoryEntry, plans: ReturnType<typeof follo
   }
 }
 
-function describeEntry(
+function describeChanges(
   entry: LeadHistoryEntry,
   contactNames: Readonly<Record<string, string>>,
-  timeline: MatchTimeline,
-  causes: EnrolmentCauses,
   context: Context,
-): DescribedEntry {
+): (DescribedChange & { field: string })[] {
   // A Seat priority change reads from the old priority, even from none.
   const fromOld = (entry.record !== null && entry.action === "update") || isPriorityChange(entry)
   // A sibling's, a Sibling request's or a stream's value, in words.
@@ -566,51 +565,96 @@ function describeEntry(
     siblingOfValue(entry.record, field, value, context.leadNames) ??
     siblingValue(entry.record, field, value) ??
     seatValue(entry.record, field, value, context.streamNames)
+  return entry.changes
+    .filter((c) => !LEAD_HISTORY_HIDDEN[entry.record ?? ""]?.has(c.field))
+    .filter((c) => !siblingHidden(entry.record, c.field) && !seatHidden(entry.record, c.field))
+    .filter((c) => !unprovenOpening(entry, c.field, context.openings))
+    .filter((c) => !(isPriorityChange(entry) && PRIORITY_CHANGE_HIDDEN.has(c.field)))
+    .filter((c) => !(isResultRelease(entry) && RESULT_RELEASE_HIDDEN.has(c.field)))
+    .filter((c) => fromOld || !isEmpty(c.to) || seatKeepsEmpty(entry, c.field))
+    .sort((a, b) => rank(entry.record, a.field) - rank(entry.record, b.field))
+    .map((c) => ({
+      field: c.field,
+      label:
+        resultReleaseLabel(entry.action, c.field) ??
+        groupInvitationLabel(entry.record, c.field) ??
+        reopeningLabel(entry.record, c.field) ??
+        discountLabel(entry.record, c.field) ??
+        enrolmentLabel(entry.record, c.field) ??
+        adjustmentLabel(entry, c.field) ??
+        siblingLabel(entry.record, c.field) ??
+        seatLabel(entry.record, c.field) ??
+        LEAD_HISTORY_LABELS[c.field] ??
+        c.field,
+      // A creation has no old value, except a follow-up's earlier date and a
+      // fee edit's earlier result.
+      from:
+        (fromOld || c.from !== null) && !isBecause(entry.record, c.field)
+          ? (reopeningValue(entry.record, c.field, c.from) ??
+            discountValue(entry.record, c.field, c.from) ??
+            enrolmentValue(entry.record, c.field, c.from) ??
+            adjustmentValue(entry, c.field, c.from) ??
+            ownValue(c.field, c.from) ??
+            display(c.field, c.from, contactNames))
+          : null,
+      to:
+        resultReleaseValue(entry.action, c.field, c.to) ??
+        groupInvitationValue(entry.record, c.field, c.to) ??
+        reopeningValue(entry.record, c.field, c.to) ??
+        discountValue(entry.record, c.field, c.to) ??
+        enrolmentValue(entry.record, c.field, c.to) ??
+        adjustmentValue(entry, c.field, c.to) ??
+        ownValue(c.field, c.to) ??
+        display(c.field, c.to, contactNames),
+    }))
+}
+
+function describeEntry(
+  entry: LeadHistoryEntry,
+  contactNames: Readonly<Record<string, string>>,
+  timeline: MatchTimeline,
+  causes: EnrolmentCauses,
+  context: Context,
+): DescribedEntry {
   return {
     id: entry.id,
     at: entry.at,
     actor: entry.actor,
     summary: summarize(entry, contactNames, timeline, causes, context),
-    changes: entry.changes
-      .filter((c) => !HIDDEN[entry.record ?? ""]?.has(c.field))
-      .filter((c) => !siblingHidden(entry.record, c.field) && !seatHidden(entry.record, c.field))
-      .filter((c) => !unprovenOpening(entry, c.field, context.openings))
-      .filter((c) => !(isPriorityChange(entry) && PRIORITY_CHANGE_HIDDEN.has(c.field)))
-      .filter((c) => !(isResultRelease(entry) && RESULT_RELEASE_HIDDEN.has(c.field)))
-      .filter((c) => fromOld || !isEmpty(c.to) || seatKeepsEmpty(entry, c.field))
-      .sort((a, b) => rank(entry.record, a.field) - rank(entry.record, b.field))
-      .map((c) => ({
-        label:
-          resultReleaseLabel(entry.action, c.field) ??
-          groupInvitationLabel(entry.record, c.field) ??
-          reopeningLabel(entry.record, c.field) ??
-          discountLabel(entry.record, c.field) ??
-          enrolmentLabel(entry.record, c.field) ??
-          adjustmentLabel(entry, c.field) ??
-          siblingLabel(entry.record, c.field) ??
-          seatLabel(entry.record, c.field) ??
-          LABELS[c.field] ??
-          c.field,
-        // A creation has no old value, except a follow-up's earlier date and a
-        // fee edit's earlier result.
-        from:
-          (fromOld || c.from !== null) && !isBecause(entry.record, c.field)
-            ? (reopeningValue(entry.record, c.field, c.from) ??
-              discountValue(entry.record, c.field, c.from) ??
-              enrolmentValue(entry.record, c.field, c.from) ??
-              adjustmentValue(entry, c.field, c.from) ??
-              ownValue(c.field, c.from) ??
-              display(c.field, c.from, contactNames))
-            : null,
-        to:
-          resultReleaseValue(entry.action, c.field, c.to) ??
-          groupInvitationValue(entry.record, c.field, c.to) ??
-          reopeningValue(entry.record, c.field, c.to) ??
-          discountValue(entry.record, c.field, c.to) ??
-          enrolmentValue(entry.record, c.field, c.to) ??
-          adjustmentValue(entry, c.field, c.to) ??
-          ownValue(c.field, c.to) ??
-          display(c.field, c.to, contactNames),
-      })),
+    changes: describeChanges(entry, contactNames, context).map(({ label, from, to }) => ({ label, from, to })),
+  }
+}
+
+// Describes one lead-scoped entry for the system-wide Audit page (#504),
+// reusing every label, value word and sentence above. Unlike a lead's own
+// history, a single Audit page may not hold earlier entries for the same row,
+// so the caller passes any known discount request kind from the database and
+// receives each change with its raw field name so Audit can leave out columns
+// that have no words yet.
+export function describeLeadAuditEntry(
+  entry: LeadHistoryEntry,
+  options: {
+    contactNames: Readonly<Record<string, string>>
+    leadNames: Readonly<Record<string, string>>
+    streamNames: Readonly<Record<string, string>>
+    streamOpenedAt: Readonly<Record<string, string>>
+    discountKindById?: ReadonlyMap<string, unknown>
+  },
+): { summary: string; changes: (DescribedChange & { field: string })[] } {
+  const prepared = withoutAppliedReason(withEditResult(withEarlierPlan(entry, new Map())))
+  const kinds = new Map<string, unknown>(options.discountKindById)
+  if (prepared.record === "discount_requests" && prepared.action === "insert" && prepared.recordId) {
+    kinds.set(prepared.recordId, prepared.changes.find((c) => c.field === "kind")?.to)
+  }
+  const context: Context = {
+    kinds,
+    choices: { noGroup: new Set() },
+    openings: streamOpenings([prepared], options.streamOpenedAt),
+    leadNames: options.leadNames,
+    streamNames: options.streamNames,
+  }
+  return {
+    summary: summarize(prepared, options.contactNames, new Map(), [], context),
+    changes: describeChanges(prepared, options.contactNames, context),
   }
 }

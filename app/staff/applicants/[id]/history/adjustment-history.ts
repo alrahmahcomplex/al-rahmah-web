@@ -23,7 +23,7 @@ export const ADJUSTMENT_HIDDEN: ReadonlySet<string> = new Set([
 // What changed the priority is the entry's own summary.
 export const PRIORITY_CHANGE_HIDDEN: ReadonlySet<string> = new Set(["cause"])
 
-const LABELS: Readonly<Record<string, string>> = {
+export const ADJUSTMENT_LABELS: Readonly<Record<string, string>> = {
   reason: "Reason",
   voided: "Void",
 }
@@ -33,7 +33,7 @@ export function isPriorityChange(entry: LeadHistoryEntry) {
 }
 
 export function adjustmentLabel(entry: LeadHistoryEntry, field: string): string | null {
-  if (entry.record === RECORD) return LABELS[field] ?? null
+  if (entry.record === RECORD) return ADJUSTMENT_LABELS[field] ?? null
   if (isPriorityChange(entry) && field === "priority") return "Seat priority"
   return null
 }

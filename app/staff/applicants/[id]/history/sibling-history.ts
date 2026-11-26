@@ -15,7 +15,7 @@ const EDIT = "sibling_fee_edits"
 
 // Each table's fields in the order an entry lists them, with their labels.
 // Labels are per table, so another table's `result` or `cause` keeps its own.
-const LABELS: Readonly<Record<string, Readonly<Record<string, string>>>> = {
+export const SIBLING_LABELS: Readonly<Record<string, Readonly<Record<string, string>>>> = {
   [GROUP]: { sibling_of_lead_id: "Sibling of", basis: "Counts as a sibling", cause: "Because" },
   [RESULT]: { result: "Sibling discount", source: "Decided by", cause: "Because" },
   // `result` here is the edit's old and new result as one change.
@@ -25,7 +25,7 @@ const LABELS: Readonly<Record<string, Readonly<Record<string, string>>>> = {
 // What staff don't need: ids, the entry's own time, and what another line
 // already says. The group itself is an id; "Sibling of" says who it is with.
 // A Legacy member shows as "Decided by: The old family rule".
-const HIDDEN: Readonly<Record<string, ReadonlySet<string>>> = {
+export const SIBLING_HIDDEN: Readonly<Record<string, ReadonlySet<string>>> = {
   [GROUP]: new Set(["lead_id", "group_id", "legacy", "joined_at", "updated_at", "sibling_choice_made"]),
   [RESULT]: new Set(["lead_id", "locked_result", "locked_at", "updated_at"]),
   // Each sibling whose fee the edit changed shows it in their own history;
@@ -66,16 +66,16 @@ export function isSiblingRecord(record: string | null): boolean {
 }
 
 export function siblingLabel(record: string | null, field: string): string | null {
-  return LABELS[record ?? ""]?.[field] ?? null
+  return SIBLING_LABELS[record ?? ""]?.[field] ?? null
 }
 
 export function siblingHidden(record: string | null, field: string): boolean {
-  return HIDDEN[record ?? ""]?.has(field) ?? false
+  return SIBLING_HIDDEN[record ?? ""]?.has(field) ?? false
 }
 
 // The field's place in its entry; null for a record this file doesn't know.
 export function siblingOrder(record: string | null): readonly string[] | null {
-  const labels = LABELS[record ?? ""]
+  const labels = SIBLING_LABELS[record ?? ""]
   return labels ? Object.keys(labels) : null
 }
 

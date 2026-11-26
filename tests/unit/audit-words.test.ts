@@ -449,4 +449,94 @@ describe("getAuditLookups", () => {
       ],
     })
   })
+
+  it("loads start times for any number of invite batches in one audit_log read without calling RPCs", async () => {
+    const batchIds = [
+      "11111111-1111-4111-8111-111111111111",
+      "22222222-2222-4222-8222-222222222222",
+      "33333333-3333-4333-8333-333333333333",
+      "44444444-4444-4444-8444-444444444444",
+      "55555555-5555-4555-8555-555555555555",
+    ]
+    const auditLogCalls: { eqs: [string, unknown][]; in?: [string, unknown[]] }[] = []
+    const rpc = vi.fn()
+    const supabase = {
+      rpc,
+      from(table: string) {
+        const rec: { eqs: [string, unknown][]; in?: [string, unknown[]] } = { eqs: [] }
+        if (table === "audit_log") auditLogCalls.push(rec)
+        const response =
+          table === "audit_log"
+            ? {
+                data: batchIds.slice(1).map((id, i) => ({
+                  row_id: id,
+                  new_values: { started_at: `2026-11-22T06:0${i + 1}:00Z` },
+                })),
+                error: null,
+              }
+            : { data: [], error: null }
+        const builder = {
+          select: () => builder,
+          eq: (col: string, val: unknown) => {
+            rec.eqs.push([col, val])
+            return builder
+          },
+          in: (col: string, vals: unknown[]) => {
+            rec.in = [col, vals]
+            return builder
+          },
+          then: (resolve: (value: typeof response) => unknown) => Promise.resolve(response).then(resolve),
+        }
+        return builder
+      },
+    } as unknown as SupabaseClient
+
+    const lookups = await getAuditLookups(
+      supabase,
+      [
+        // Batch 0 already carries started_at on the page insert row.
+        entry({
+          id: 1,
+          area: "staff_admin",
+          table: "agent_invite_batches",
+          recordId: batchIds[0],
+          leadId: null,
+          admissionNumber: null,
+          action: "insert",
+          newValues: { started_at: "2026-11-22T06:00:00Z" },
+        }),
+        // Batches 1..4 are updates or agent_events that need their start time looked up.
+        ...batchIds.slice(1).map((id, i) =>
+          entry({
+            id: i + 2,
+            area: "staff_admin",
+            table: i % 2 === 0 ? "agent_invite_batches" : "agent_events",
+            recordId: i % 2 === 0 ? id : null,
+            leadId: null,
+            admissionNumber: null,
+            action: i % 2 === 0 ? "update" : "insert",
+            newValues: i % 2 === 0 ? { stop_reason: "done" } : { batch_id: id, kind: "invite", result: "sent" },
+          }),
+        ),
+      ],
+      [],
+    )
+
+    expect(rpc).not.toHaveBeenCalled()
+    expect(auditLogCalls).toHaveLength(1)
+    expect(auditLogCalls[0]).toEqual({
+      eqs: [
+        ["table_name", "agent_invite_batches"],
+        ["action", "insert"],
+      ],
+      in: ["row_id", batchIds.slice(1)],
+    })
+    expect(lookups.inviteBatches).toEqual({
+      [batchIds[0]]: { startedAt: "2026-11-22T06:00:00Z" },
+      [batchIds[1]]: { startedAt: "2026-11-22T06:01:00Z" },
+      [batchIds[2]]: { startedAt: "2026-11-22T06:02:00Z" },
+      [batchIds[3]]: { startedAt: "2026-11-22T06:03:00Z" },
+      [batchIds[4]]: { startedAt: "2026-11-22T06:04:00Z" },
+    })
+  })
 })

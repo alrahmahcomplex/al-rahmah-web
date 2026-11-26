@@ -2,7 +2,6 @@ import "server-only"
 
 import type { SupabaseClient } from "@supabase/supabase-js"
 
-import { getInviteBatchReport } from "./agent-invite-batches"
 import type { LeadClass } from "./leads"
 import { SUPER_ADMIN_ROLE_ID } from "./staff-admin"
 import { streamName, type StreamTakes } from "./streams"
@@ -106,6 +105,42 @@ async function readFamilyMatchTimeline(
     }
   }
   for (const list of Object.values(out)) list.sort((a, b) => a.id - b.id)
+  return out
+}
+
+// Each invite batch's start time from its own insert row in audit_log.
+// agent_invite_batches is read only through RPCs, while audit_log is already
+// readable under audit.view and indexed on (table_name, row_id), so one query
+// resolves every batch on the page without calling getInviteBatchReport per row.
+async function readInviteBatchStartTimes(
+  supabase: SupabaseClient,
+  batchIds: readonly string[],
+): Promise<Record<string, { startedAt: string }>> {
+  if (batchIds.length === 0) return {}
+  const batches: string[][] = []
+  for (let i = 0; i < batchIds.length; i += BATCH) batches.push(batchIds.slice(i, i + BATCH))
+  const results = await Promise.all(
+    batches.map((batch) =>
+      supabase
+        .from("audit_log")
+        .select("row_id, new_values")
+        .eq("table_name", "agent_invite_batches")
+        .eq("action", "insert")
+        .in("row_id", batch),
+    ),
+  )
+  const out: Record<string, { startedAt: string }> = {}
+  for (const { data, error } of results) {
+    if (error) {
+      console.error("Could not read agent_invite_batches start times for the audit page", error)
+      continue
+    }
+    for (const row of (data ?? []) as { row_id: string | null; new_values: Record<string, unknown> | null }[]) {
+      if (row.row_id && typeof row.new_values?.started_at === "string") {
+        out[row.row_id] = { startedAt: row.new_values.started_at }
+      }
+    }
+  }
   return out
 }
 
@@ -248,7 +283,7 @@ export async function getAuditLookups(
     groupLinks,
     siblingGroups,
     permissionsResult,
-    batchReports,
+    fetchedInviteBatches,
   ] = await Promise.all([
     readById<{ id: string; student_name: string; admission_number: string }, { name: string; admissionNumber: string }>(
       supabase,
@@ -352,13 +387,9 @@ export async function getAuditLookups(
       (r) => ({ fullPayerLeadId: r.full_payer_lead_id }),
     ),
     needPermissions ? supabase.from("permissions").select("name, label") : Promise.resolve({ data: [], error: null }),
-    Promise.all(
-      [...inviteBatchIds]
-        .filter((id) => !(id in pageInviteBatches))
-        .map(async (batchId) => {
-          const report = await getInviteBatchReport(supabase, { batchId })
-          return report.ok && report.data ? ([batchId, { startedAt: report.data.startedAt }] as const) : null
-        }),
+    readInviteBatchStartTimes(
+      supabase,
+      [...inviteBatchIds].filter((id) => !(id in pageInviteBatches)),
     ),
   ])
 
@@ -410,8 +441,7 @@ export async function getAuditLookups(
     for (const row of (permissionsResult.data ?? []) as { name: string; label: string }[]) permissions[row.name] = row.label
   }
 
-  const inviteBatches: Record<string, { startedAt: string }> = { ...pageInviteBatches }
-  for (const item of batchReports) if (item) inviteBatches[item[0]] = item[1]
+  const inviteBatches: Record<string, { startedAt: string }> = { ...fetchedInviteBatches, ...pageInviteBatches }
 
   return {
     leads: { ...leads, ...extraLeads },

@@ -185,6 +185,12 @@ describe("StreamsView", () => {
   })
 
   // Who a stream takes (owner 2026-11-26, prototype v4).
+  it("hides the pencils, not the page, when the children placed couldn’t be read", () => {
+    render(<StreamsView data={YEAR} previous={null} who={MANAGER} tabs={null} placed={null} />)
+    expect(screen.getByRole("list", { name: "FORM 1 streams" })).toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: /Change FORM 1/ })).not.toBeInTheDocument()
+  })
+
   async function changeToBoys() {
     view(MANAGER)
     await userEvent.click(screen.getByRole("button", { name: "Change FORM 1 A (Girls)" }))

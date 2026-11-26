@@ -25,9 +25,10 @@ export type Stream = {
   position: number
   placed: number
   // The boys and girls among them; the rest have no Boy or girl answer.
-  // Only year_streams counts them; a stream from any other read has 0.
-  boys: number
-  girls: number
+  // Only year_streams counts them; null from any other read, or from a
+  // database without the count yet.
+  boys: number | null
+  girls: number | null
   broughtUpFrom: string | null
 }
 
@@ -109,8 +110,8 @@ const toStream = (row: StreamRow): Stream => ({
   seats: row.seats,
   position: row.position,
   placed: Number(row.placed),
-  boys: Number(row.boys ?? 0),
-  girls: Number(row.girls ?? 0),
+  boys: row.boys == null ? null : Number(row.boys),
+  girls: row.girls == null ? null : Number(row.girls),
   broughtUpFrom: row.brought_up_from,
 })
 

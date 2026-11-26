@@ -50,7 +50,7 @@ export default async function SeatsPage({ searchParams }: { searchParams: Promis
       />
     ) : null
 
-  if (!schedules.ok || (streams !== null && !streams.ok) || (children !== null && !children.ok)) {
+  if (!schedules.ok || (streams !== null && !streams.ok)) {
     return (
       <>
         <PageHeader title="Seats" />
@@ -82,7 +82,8 @@ export default async function SeatsPage({ searchParams }: { searchParams: Promis
       previous={previous?.ok ? previous.data : null}
       who={{ manages, mayDecline: manages && staff.permissions.includes("leads.decline") }}
       tabs={tabs}
-      placed={children?.ok ? children.data : []}
+      // Without the children the Change sheet can’t say who moves, so the pencils hide; the page still shows.
+      placed={children?.ok ? children.data : null}
     />
   )
 }

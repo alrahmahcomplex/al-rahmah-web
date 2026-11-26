@@ -60,7 +60,7 @@ describe("changeStream", () => {
     expect(result).toMatchObject({
       ok: true,
       data: {
-        stream: { id: "s1", takes: "Boys", placed: 10, boys: 0, girls: 0 },
+        stream: { id: "s1", takes: "Boys", placed: 10, boys: null, girls: null },
         opened: { id: "s9", label: "C" },
         moved: [{ leadId: "l1", streamId: "s9" }, { leadId: "l2", streamId: null }],
         seatedFromWaiting: 1,

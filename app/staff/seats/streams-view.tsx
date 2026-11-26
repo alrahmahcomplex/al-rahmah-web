@@ -20,6 +20,7 @@ export type Who = { manages: boolean; mayDecline: boolean }
 
 /** "26 boys · 14 girls" under a stream’s name, with any child who has no Boy or girl answer. */
 export function mixLine(stream: Stream): string {
+  if (stream.boys === null || stream.girls === null) return ""
   const other = stream.placed - stream.boys - stream.girls
   return [
     stream.boys > 0 && `${stream.boys} ${stream.boys === 1 ? "boy" : "boys"}`,
@@ -121,8 +122,8 @@ function ClassCard({
   year: number
   entry: ClassStreams | undefined
   who: Who
-  // The children placed in the class’s streams, for the Change sheet; empty for staff who don’t manage streams.
-  placed: PlacedChild[]
+  // The children placed in the class’s streams, for the Change sheet; null when they couldn’t be read, which hides the pencils.
+  placed: PlacedChild[] | null
 }) {
   const streams = (entry?.streams ?? []).toSorted((a, b) => a.position - b.position)
   const add = who.manages ? <OpenStreamButton year={year} className={className} streams={streams} label="Add a stream" /> : null
@@ -165,7 +166,7 @@ function ClassCard({
                   {className} {stream.label}
                 </b>
                 <TakesTag takes={stream.takes} />
-                {stream.placed > 0 && <span className="st-mix st-num">{mixLine(stream)}</span>}
+                {mixLine(stream) && <span className="st-mix st-num">{mixLine(stream)}</span>}
               </span>
               <span className="st-meter" aria-hidden>
                 <i
@@ -180,7 +181,7 @@ function ClassCard({
                   {stream.placed} of {stream.seats}
                 </small>
               </span>
-              {who.manages && (
+              {who.manages && placed !== null && (
                 <ChangeStreamButton
                   year={year}
                   className={className}
@@ -241,14 +242,14 @@ export function StreamsView({
   previous,
   who,
   tabs,
-  placed = [],
+  placed = null,
 }: {
   data: YearStreams
   previous: YearStreams | null
   who: Who
   tabs: ReactNode
-  // Every child placed in a stream of the year; only read for staff who manage streams.
-  placed?: PlacedChild[]
+  // Every child placed in a stream of the year, read only for staff who manage streams; null hides the pencils.
+  placed?: PlacedChild[] | null
 }) {
   const year = data.year
   const byClass = new Map(data.classes.map((each) => [each.className, each]))
@@ -318,7 +319,7 @@ export function StreamsView({
               year={year}
               entry={byClass.get(className)}
               who={who}
-              placed={placed.filter((child) => child.className === className)}
+              placed={placed === null ? null : placed.filter((child) => child.className === className)}
             />
           ))}
         </div>

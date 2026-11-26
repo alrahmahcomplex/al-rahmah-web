@@ -67,6 +67,8 @@ export function SyncPageLanguage({ language }: { language: Language }) {
 // an earlier request is slow (the first-visit card, then the Menu, on a slow line).
 let saving: Promise<unknown> = Promise.resolve()
 let latestSave = 0
+// The language the cookie took from the saves since the page last followed it.
+let savedSinceShown: Language | null = null
 
 async function postLanguage(language: Language): Promise<boolean> {
   const data = new FormData()
@@ -82,14 +84,20 @@ async function postLanguage(language: Language): Promise<boolean> {
  * Sets the `lang` cookie without rendering the page again (app/api/language).
  * The switch's Server Action would make Next.js render the page again, and
  * here that render is the copy for the cookie the request carried, so the
- * form would remount. False when the cookie couldn't be set, or when a later
- * pick replaced this one: only the latest pick changes the page.
+ * form would remount. Answers with the language the page should now show:
+ * the one the cookie holds once the latest pick's save is done. That is this
+ * pick, or an earlier one when this save failed after it. Null when the
+ * cookie didn't change, or when a later pick will answer instead.
  */
-export async function storeLanguage(language: Language): Promise<boolean> {
+export async function storeLanguage(language: Language): Promise<Language | null> {
   const turn = ++latestSave
   const save = saving.then(() => postLanguage(language))
   saving = save
-  return (await save) && turn === latestSave
+  if (await save) savedSinceShown = language
+  if (turn !== latestSave) return null
+  const shown = savedSinceShown
+  savedSinceShown = null
+  return shown
 }
 
 /**
@@ -108,8 +116,8 @@ export function useSwitchInPlace(): (event: FormEvent<HTMLFormElement>) => void 
     event.preventDefault()
     startTransition(async () => {
       // The cookie didn't change, and neither does the page.
-      if (!(await storeLanguage(lang))) return
-      choose(lang)
+      const shown = await storeLanguage(lang)
+      if (shown) choose(shown)
     })
   }
 }
@@ -135,8 +143,9 @@ export function useSwitchAndRefresh(): (event: FormEvent<HTMLFormElement>) => vo
     if (!isLanguage(lang)) return
     event.preventDefault()
     startTransition(async () => {
-      if (!(await storeLanguage(lang))) return
-      choose(lang)
+      const shown = await storeLanguage(lang)
+      if (!shown) return
+      choose(shown)
       router.refresh()
     })
   }

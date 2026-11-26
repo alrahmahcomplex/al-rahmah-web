@@ -100,7 +100,8 @@ export function LanguagePrompt({ show, menuButtonRef, inPlace = false }: Languag
       // If the cookie doesn't stick, the card shows again next visit. Nothing to tell the visitor now.
       if (inPlace) {
         // A page served from Vercel's cache shows the pick from here.
-        if (await storeLanguage(lang)) chooseLanguage(lang)
+        const shown = await storeLanguage(lang)
+        if (shown) chooseLanguage(shown)
         return
       }
       try {

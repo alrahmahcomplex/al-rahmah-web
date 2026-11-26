@@ -36,6 +36,9 @@
 --     brand-new applicant whose name has an initial ("Rehema A Juma") opens
 --     their attempt with start_new_agent_self_confirm, unmarked, and keeps
 --     their email path as before (Sol, #546).
+--   - A record_only attempt never lets start_new_agent_self_confirm adopt the
+--     record as this browser's own sign-up, so typing the code and then
+--     sending as a new agent can't swap it for an unmarked attempt (Sol, #546).
 --   - Every other rule of start_agent_self_confirm stays as in
 --     20270130120100_pending_code_self_confirm.sql.
 
@@ -299,3 +302,103 @@ $$;
 
 revoke execute on function public.set_new_agent_email(uuid, text, text) from public, anon, authenticated;
 grant execute on function public.set_new_agent_email(uuid, text, text) to service_role;
+
+-- The new agent's start of 20270128110100_new_agent_self_confirm.sql. The
+-- same browser sending again goes on with the Pending record it opened, which
+-- it proves with an earlier new-agent attempt on that record. An attempt that
+-- start_agent_self_confirm opened on a short-name code (record_only) no
+-- longer counts: otherwise typing the code, then sending as a new agent with
+-- the record's name and mobile, would swap the record_only attempt for one
+-- whose email path is open (Sol, #546). Nothing else changes.
+create or replace function public.start_new_agent_self_confirm(full_name text, phone text, whatsapp text, browser text, ip text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+    draft record;
+    by_phone public.marketing_agents;
+    agent public.marketing_agents;
+    made record;
+    attempt_id uuid;
+begin
+    if auth.role() is distinct from 'service_role' then
+        raise exception 'not_permitted';
+    end if;
+    if not (select a.enabled from public.agent_access() a) then
+        return jsonb_build_object('outcome', 'access_off');
+    end if;
+    if not public.agent_self_confirm_on() then
+        return jsonb_build_object('outcome', 'off');
+    end if;
+    -- Each RPC is its own transaction, so the actor is set here.
+    perform public.set_audit_actor('public_form', null);
+
+    select * into draft
+    from public.agent_draft(start_new_agent_self_confirm.full_name, start_new_agent_self_confirm.phone, start_new_agent_self_confirm.whatsapp, null, null);
+
+    -- One start at a time per browser, taken before the phone's lock (always
+    -- in that order), so parallel sends with different phones can't all pass
+    -- the browser's daily limit before any of them is written (Greptile, #538).
+    perform pg_advisory_xact_lock(hashtextextended('self-confirm-browser:' || start_new_agent_self_confirm.browser, 0));
+
+    -- The lock sign_up_marketing_agent and create_agent_record take, so two
+    -- sends with one phone wait for each other.
+    perform pg_advisory_xact_lock(hashtextextended('agent-phone:' || draft.agent_phone, 0));
+    select * into by_phone from public.marketing_agents a where a.phone = draft.agent_phone and a.retired_at is null;
+
+    if by_phone.id is not null then
+        -- The same person sending again from the same browser before they
+        -- finished: the Pending record this browser opened goes on. A name and
+        -- a mobile alone never adopt a record (Sol, #538): from any other
+        -- browser, the mobile has a code already. An attempt opened on the
+        -- typed code of a record with short names (record_only) isn't one this
+        -- browser's own sign-up opened, so it never adopts the record: it would
+        -- hand out an attempt whose email path is open (Sol, #546).
+        if by_phone.status = 'Pending' and by_phone.switched_off_at is null and by_phone.full_name = draft.agent_name
+           and by_phone.email is null and (by_phone.user_id is null or not public.agent_joined(by_phone.user_id))
+           and exists (
+               select 1 from public.agent_confirm_attempts a
+               where a.agent_id = by_phone.id and a.new_agent and a.browser_digest = start_new_agent_self_confirm.browser
+                 and not a.record_only
+           ) then
+            agent := by_phone;
+        elsif by_phone.user_id is not null and public.agent_joined(by_phone.user_id) then
+            return jsonb_build_object('outcome', 'joined');
+        else
+            return jsonb_build_object('outcome', 'code_needed');
+        end if;
+    end if;
+
+    -- The attempt limits, as start_agent_self_confirm's: 3 a day per browser,
+    -- 20 a day per IP, before anything is written.
+    if (select count(*) from public.agent_confirm_attempts a where a.browser_digest = start_new_agent_self_confirm.browser and a.created_at > clock_timestamp() - interval '1 day') >= 3
+       or (start_new_agent_self_confirm.ip is not null
+           and (select count(*) from public.agent_confirm_attempts a where a.ip_digest = start_new_agent_self_confirm.ip and a.created_at > clock_timestamp() - interval '1 day') >= 20) then
+        return jsonb_build_object('outcome', 'setups_limited');
+    end if;
+
+    if agent.id is null then
+        select * into made
+        from public.create_agent_record(draft.agent_name, draft.agent_phone, draft.agent_whatsapp, null, null, 'Pending', null);
+        select * into agent from public.marketing_agents a where a.id = made.agent_id;
+    end if;
+
+    perform 1 from public.marketing_agents m where m.id = agent.id for update;
+    update public.agent_confirm_attempts a set state = 'void'
+    where a.agent_id = agent.id and a.state in ('matched', 'sent', 'proven');
+    insert into public.agent_confirm_attempts (agent_id, browser_digest, ip_digest, shown_mobile, new_agent)
+    values (agent.id, start_new_agent_self_confirm.browser, start_new_agent_self_confirm.ip, agent.phone, true)
+    returning id into attempt_id;
+
+    return jsonb_build_object(
+        'outcome', 'ready',
+        'attempt', attempt_id,
+        'code', agent.code,
+        'mobile_on_record', true,
+        'typed_matches', true,
+        'can_text', coalesce(agent.phone, '') ~ '^\+255[67][0-9]{8}$',
+
+revoke execute on function public.start_new_agent_self_confirm(text, text, text, text, text) from public, anon, authenticated;
+grant execute on function public.start_new_agent_self_confirm(text, text, text, text, text) to service_role;

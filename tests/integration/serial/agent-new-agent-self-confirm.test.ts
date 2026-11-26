@@ -287,6 +287,26 @@ describe("a code the office hasn't approved yet", () => {
     expect(await record(held.code)).toMatchObject({ status: "Pending", email: null })
   })
 
+  // Sol, #546: the code's record_only attempt must not count as this browser's own sign-up.
+  test("with short names, typing the code then sending as a new agent from that browser can't open the email path", async () => {
+    const held = await pendingCode()
+    const last = held.fullName.split(" ").at(-1)!
+    await asSystem((sql) => sql.query("update public.marketing_agents set full_name = $2 where code = $1", [held.code, `REHEMA A ${last.toUpperCase()}`]))
+    const browser = randomUUID()
+    const started = await startSelfConfirm(secretClient(), { code: held.code, names: `Rehema A ${last}`, phone: held.phone, browser, ip: null })
+    expect(started).toMatchObject({ ok: true, data: { kind: "ready", emailClaim: true } })
+    expect(await startNew(`Rehema A ${last}`, held.phone, browser)).toEqual({ kind: "code_needed" })
+    expect(await record(held.code)).toMatchObject({ status: "Pending", email: null })
+
+    // A code with strong names, the same two sends: the browser goes on with
+    // the record, as before, since its email path was open already.
+    const strong = await pendingCode()
+    const other = randomUUID()
+    const opened = await startSelfConfirm(secretClient(), { code: strong.code, names: strong.fullName, phone: strong.phone, browser: other, ip: null })
+    expect(opened).toMatchObject({ ok: true, data: { kind: "ready", emailOpen: true } })
+    expect(await startNew(strong.fullName, strong.phone, other)).toMatchObject({ kind: "ready", code: strong.code })
+  })
+
   test("an email claim still waiting for the Manager keeps the email path shut, so the claim stays in the queue", async () => {
     const held = await pendingCode()
     const claimed = `claim-${randomUUID().slice(0, 8)}@example.test`

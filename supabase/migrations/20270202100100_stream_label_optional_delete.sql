@@ -515,7 +515,6 @@ begin
         placed integer;
         actor record;
         later record;
-        held uuid[];
         child uuid;
     begin
         if auth.role() is distinct from 'authenticated' or not public.has_permission('academic_years.manage') then
@@ -530,18 +529,8 @@ begin
             raise exception 'not_found';
         end if;
         -- Rows a key check touches come before the seat lock, as change_stream.
-        -- Letting go of a request audits a row naming its child, so the
-        -- children of the requests it answered are held here too: a payment
-        -- holds its child and then waits for the seat lock.
         perform 1 from public.fee_schedules f where f.enrollment_year = gone.enrollment_year for key share;
         perform 1 from public.staff_members s where s.id = public.current_staff_id() for key share;
-        select coalesce(array_agg(h.id), '{}') into held
-        from (
-            select l.id from public.leads l
-            where l.id in (select r.lead_id from public.stream_requests r where r.resolved_by_stream_id = gone.id)
-            order by l.id
-            for key share
-        ) h;
 
         perform public.seat_lock();
 
@@ -560,12 +549,13 @@ begin
             raise exception 'no_audit_actor' using detail = 'streams';
         end if;
 
-        -- A request it answered while this waited names a child not held
-        -- yet. Waiting for that child under the seat lock could deadlock, so
-        -- a busy one refuses the delete; trying again holds it first.
+        -- Letting go of a request audits a row naming its child. A payment
+        -- holds its child and then waits for the seat lock, and a family's
+        -- recompute holds one sibling and waits for another, so this never
+        -- waits for a child: a busy one refuses the delete, to try again.
         for child in
             select distinct r.lead_id from public.stream_requests r
-            where r.resolved_by_stream_id = gone.id and r.lead_id is not null and not (r.lead_id = any (held))
+            where r.resolved_by_stream_id = gone.id and r.lead_id is not null
         loop
             perform 1 from public.leads l where l.id = child for key share skip locked;
             if not found then

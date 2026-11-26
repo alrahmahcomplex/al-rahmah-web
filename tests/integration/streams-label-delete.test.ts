@@ -221,16 +221,16 @@ describe("delete_stream", () => {
   })
 
   // A payment holds its child and then waits for the seat lock. Letting go of
-  // a request audits a row naming its child, so delete_stream holds that
-  // child before the seat lock, or the two would deadlock.
-  test("waits for a busy child of a request it answered before taking the seat lock", async () => {
+  // a request audits a row naming its child, so delete_stream never waits for
+  // that child, or the two would deadlock.
+  test("refuses as busy, without waiting, while a child of a request it answered is held", async () => {
     const {
       year,
       classes: [c],
     } = await yearAndClasses(1)
     const kid = await child(year, c, "Boy")
-    // Committed, so the delete below sees the stream without already holding
-    // the seat lock that opening it took.
+    // Committed: a request written in the delete's own transaction would hold
+    // its child until that transaction ends.
     onTestFinished(() => removeStreams([year]))
     const a = await asSystem(async (sql) => {
       await actAsStaff(sql, MANAGER.id)
@@ -244,32 +244,19 @@ describe("delete_stream", () => {
     })
     await inRolledBackTransaction(async (pay) => {
       await pay.query("select 1 from public.leads where id = $1 for update", [kid])
-      const { rows: payer } = await pay.query<{ pid: number }>("select pg_backend_pid() as pid")
       await inRolledBackTransaction(async (del) => {
-        const { rows: deleter } = await del.query<{ pid: number }>("select pg_backend_pid() as pid")
         await named(del)
-        await del.query("set local lock_timeout = '3s'")
-        const deleting = del.query("select public.delete_stream($1)", [a.id]).then(
-          () => "deleted",
-          (error: { code?: string }) => error.code,
-        )
-
-        // Once the delete waits for the payment's child, it holds no seat lock.
-        for (let tries = 0; ; tries++) {
-          const { rows } = await pay.query<{ blocked: boolean }>("select $1::int = any (pg_blocking_pids($2)) as blocked", [payer[0].pid, deleter[0].pid])
-          if (rows[0].blocked) break
-          if (tries > 100) throw new Error("The delete never waited for the child")
-          await new Promise((resolve) => setTimeout(resolve, 20))
-        }
-        const { rows: held } = await pay.query<{ n: number }>(
-          "select count(*)::int as n from pg_locks where pid = $1 and locktype = 'advisory' and granted",
-          [deleter[0].pid],
-        )
-        expect(held[0].n).toBe(0)
-        await pay.query("select pg_cancel_backend($1)", [deleter[0].pid])
-        // 57014: query_canceled.
-        expect(await deleting).toBe("57014")
+        // A wait would run out here and read as a lock timeout, not busy.
+        await del.query("set local lock_timeout = '2s'")
+        expect(await refusal(del, "select public.delete_stream($1)", [a.id])).toBe("busy")
       })
+    })
+    // Free again, it deletes.
+    await inRolledBackTransaction(async (del) => {
+      await named(del)
+      await del.query("select public.delete_stream($1)", [a.id])
+      await asOwner(del)
+      expect(await streamsOf(del, year, c)).toEqual([])
     })
   })
 

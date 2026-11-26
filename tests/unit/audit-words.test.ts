@@ -1,11 +1,16 @@
-import { describe, expect, it } from "vitest"
+import type { SupabaseClient } from "@supabase/supabase-js"
+import { describe, expect, it, vi } from "vitest"
 
-import { EMPTY_AUDIT_LOOKUPS, describeAuditEntry, type AuditLookups } from "@/app/staff/_audit-words"
+vi.mock("server-only", () => ({}))
+
+import { EMPTY_AUDIT_LOOKUPS, describeAuditEntries, describeAuditEntry, type AuditLookups } from "@/app/staff/_audit-words"
 import { SUPER_ADMIN_ROLE_ID } from "@/lib/services/staff-admin"
 import type { AuditEntry } from "@/lib/services/system-audit"
+import { getAuditLookups } from "@/lib/services/system-audit-lookups"
 
 const LEAD_ID = "7c1e4b2a-93d0-4f1e-a8c5-2b6d1e0f9a41"
 const CONTACT_ID = "d40a77c3-1b52-4e8a-9f60-55c2a1b3e7d0"
+const OTHER_CONTACT_ID = "9b2f5a1c-4e6d-47a2-8c1e-3f0b9d4a6e21"
 const AGENT_ID = "e5c3a1f7-9b2d-4e06-8a14-7f0b2d6c9e31"
 const STAFF_ID = "8c4f2a6e-0b3d-4e19-95a7-1d6c3e0b8f22"
 const ROLE_A = "b9e1c370-4a2f-4d8b-a6c5-2e0f7d1b3a94"
@@ -289,5 +294,159 @@ describe("describeAuditEntry", () => {
       { label: "Children waiting", from: null, to: "2" },
     ])
     expect(activated.unknownCount).toBe(0)
+  })
+
+  it("reads confirmed Family matches and unconfirmed Family joins the same way Application history does", () => {
+    const contacts = { [CONTACT_ID]: "Mariamu Juma", [OTHER_CONTACT_ID]: "Mariamu J. Copy" }
+
+    // Confirmed Family match via server-loaded familyMatchTimeline (whether the
+    // contact's pending match was cleared before or after moving the lead).
+    for (const clearedFirst of [true, false]) {
+      const leadMove = clearedFirst ? 10 : 9
+      const confirmed = describeAuditEntry(
+        entry({
+          id: leadMove,
+          oldValues: { guardian_contact_id: OTHER_CONTACT_ID },
+          newValues: { guardian_contact_id: CONTACT_ID },
+        }),
+        {
+          ...LOOKUPS,
+          contacts,
+          familyMatchTimeline: {
+            [OTHER_CONTACT_ID]: [
+              { id: 5, match: CONTACT_ID },
+              { id: clearedFirst ? 9 : 10, match: null },
+            ],
+          },
+        },
+      )
+      expect(confirmed.event).toBe("Confirmed the Family match")
+      expect(confirmed.changes).toEqual([{ label: "Parent or guardian", from: "Mariamu J. Copy", to: "Mariamu Juma" }])
+    }
+
+    // Moving onto a contact the old contact was never matched to is still a separation.
+    const separated = describeAuditEntry(
+      entry({
+        id: 12,
+        oldValues: { guardian_contact_id: CONTACT_ID },
+        newValues: { guardian_contact_id: OTHER_CONTACT_ID },
+      }),
+      { ...LOOKUPS, contacts },
+    )
+    expect(separated.event).toBe("Separated the applicant from their Family")
+
+    // Lead created with returning_family_joined reads unconfirmed when the
+    // contact had a pending match before the insert, and joined once cleared.
+    const unconfirmedJoin = describeAuditEntry(
+      entry({
+        id: 6,
+        action: "insert",
+        newValues: { guardian_contact_id: OTHER_CONTACT_ID, returning_family_joined: true },
+      }),
+      {
+        ...LOOKUPS,
+        contacts,
+        familyMatchTimeline: { [OTHER_CONTACT_ID]: [{ id: 5, match: CONTACT_ID }] },
+      },
+    )
+    expect(unconfirmedJoin.event).toBe("Created the application, matched to a known Family but not yet confirmed")
+
+    const confirmedJoin = describeAuditEntry(
+      entry({
+        id: 8,
+        action: "insert",
+        newValues: { guardian_contact_id: OTHER_CONTACT_ID, returning_family_joined: true },
+      }),
+      {
+        ...LOOKUPS,
+        contacts,
+        familyMatchTimeline: {
+          [OTHER_CONTACT_ID]: [
+            { id: 5, match: CONTACT_ID },
+            { id: 7, match: null },
+          ],
+        },
+      },
+    )
+    expect(confirmedJoin.event).toBe("Created the application and joined a Family")
+
+    // On-page guardian_contacts match entries are merged automatically too.
+    const [moveRow] = describeAuditEntries(
+      [
+        entry({ id: 10, oldValues: { guardian_contact_id: OTHER_CONTACT_ID }, newValues: { guardian_contact_id: CONTACT_ID } }),
+        entry({
+          id: 5,
+          table: "guardian_contacts",
+          recordId: OTHER_CONTACT_ID,
+          leadId: null,
+          admissionNumber: null,
+          action: "insert",
+          newValues: { full_name: "Mariamu J. Copy", pending_family_match_id: CONTACT_ID },
+        }),
+      ],
+      { ...LOOKUPS, contacts },
+    )
+    expect(moveRow.event).toBe("Confirmed the Family match")
+  })
+})
+
+describe("getAuditLookups", () => {
+  it("loads guardian_contacts pending_family_match_id history from audit_log for lead guardian moves", async () => {
+    const queries: { table: string; eq?: [string, unknown]; in?: [string, unknown[]] }[] = []
+    const supabase = {
+      from(table: string) {
+        const rec: { table: string; eq?: [string, unknown]; in?: [string, unknown[]] } = { table }
+        queries.push(rec)
+        const response =
+          table === "audit_log"
+            ? {
+                data: [
+                  { id: 5, row_id: OTHER_CONTACT_ID, new_values: { full_name: "Mariamu J. Copy", pending_family_match_id: CONTACT_ID } },
+                  { id: 6, row_id: OTHER_CONTACT_ID, new_values: { phone: "+255712345678" } },
+                  { id: 9, row_id: OTHER_CONTACT_ID, new_values: { pending_family_match_id: null } },
+                ],
+                error: null,
+              }
+            : { data: [], error: null }
+        const builder = {
+          select: () => builder,
+          eq: (col: string, val: unknown) => {
+            rec.eq = [col, val]
+            return builder
+          },
+          in: (col: string, vals: unknown[]) => {
+            rec.in = [col, vals]
+            return builder
+          },
+          order: () => Promise.resolve(response),
+          then: (resolve: (value: typeof response) => unknown) => Promise.resolve(response).then(resolve),
+        }
+        return builder
+      },
+    } as unknown as SupabaseClient
+
+    const lookups = await getAuditLookups(
+      supabase,
+      [
+        entry({
+          id: 10,
+          oldValues: { guardian_contact_id: OTHER_CONTACT_ID },
+          newValues: { guardian_contact_id: CONTACT_ID },
+        }),
+      ],
+      [],
+    )
+
+    expect(queries).toContainEqual({
+      table: "audit_log",
+      eq: ["table_name", "guardian_contacts"],
+      in: ["row_id", [OTHER_CONTACT_ID]],
+    })
+    expect(lookups.familyMatchTimeline).toEqual({
+      [OTHER_CONTACT_ID]: [
+        { id: 5, match: CONTACT_ID },
+        { id: 9, match: null },
+      ],
+    })
   })
 })

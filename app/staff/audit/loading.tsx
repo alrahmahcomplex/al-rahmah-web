@@ -15,12 +15,12 @@ export default function Loading() {
         {FIELDS.map((cls, index) => (
           <div key={index} className={cls}>
             <SkeletonBlock width={48} height={14} />
-            <SkeletonBlock height={40} shape="pill" />
+            <SkeletonBlock height={44} shape="pill" />
           </div>
         ))}
         <div className="au-actions">
-          <SkeletonBlock width={80} height={40} shape="pill" />
-          <SkeletonBlock width={40} height={40} shape="pill" />
+          <SkeletonBlock width={88} height={44} shape="pill" />
+          <SkeletonBlock width={44} height={44} shape="pill" />
         </div>
       </div>
       <SkeletonBlock height={480} shape="card" />

@@ -317,7 +317,8 @@ function article(word: string) {
 // Each contact's unconfirmed Family match over time, from the contact's own
 // entries in the history, oldest first. Audit ids only grow, so an entry's id
 // places it in that sequence.
-type MatchTimeline = ReadonlyMap<string, readonly { id: number; match: unknown }[]>
+export type MatchStep = { id: number; match: unknown }
+export type MatchTimeline = ReadonlyMap<string, readonly MatchStep[]>
 
 function matchTimeline(entries: readonly LeadHistoryEntry[]): MatchTimeline {
   const timeline = new Map<string, { id: number; match: unknown }[]>()
@@ -639,6 +640,7 @@ export function describeLeadAuditEntry(
     streamNames: Readonly<Record<string, string>>
     streamOpenedAt: Readonly<Record<string, string>>
     discountKindById?: ReadonlyMap<string, unknown>
+    matchTimeline?: MatchTimeline
   },
 ): { summary: string; changes: (DescribedChange & { field: string })[] } {
   const prepared = withoutAppliedReason(withEditResult(withEarlierPlan(entry, new Map())))
@@ -654,7 +656,7 @@ export function describeLeadAuditEntry(
     streamNames: options.streamNames,
   }
   return {
-    summary: summarize(prepared, options.contactNames, new Map(), [], context),
+    summary: summarize(prepared, options.contactNames, options.matchTimeline ?? new Map(), [], context),
     changes: describeChanges(prepared, options.contactNames, context),
   }
 }

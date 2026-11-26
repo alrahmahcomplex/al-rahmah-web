@@ -7,7 +7,7 @@ import type { AuditLookups } from "@/lib/services/system-audit-lookups"
 import { BATCH_STOP_SHORT_LABELS } from "../agents/invite-batch-outcome"
 import { agentRecordHref } from "../agents/outcome"
 import { becauseText } from "../applicants/[id]/history/because"
-import { LEAD_HISTORY_LABELS, describeLeadAuditEntry } from "../applicants/[id]/history/describe"
+import { LEAD_HISTORY_LABELS, describeLeadAuditEntry, type MatchStep, type MatchTimeline } from "../applicants/[id]/history/describe"
 import { capitalize, formatAuditDate, formatAuditTime, formatOnOff, formatPercent, formatRawScalar, formatTzs, formatYesNo } from "./format"
 import { AUDIT_ACTION_FIELDS, AUDIT_TABLE_FIELDS, type FieldSpec } from "./schema"
 
@@ -21,6 +21,7 @@ export const EMPTY_AUDIT_LOOKUPS: AuditLookups = {
   leads: {},
   contacts: {},
   contactLeads: {},
+  familyMatchTimeline: {},
   streams: {},
   streamRequests: {},
   agents: {},
@@ -863,6 +864,41 @@ function buildStaffAdminLookup(lookups: AuditLookups): HistoryLookup {
   }
 }
 
+function buildMatchTimeline(lookups: AuditLookups): MatchTimeline {
+  return new Map(Object.entries(lookups.familyMatchTimeline))
+}
+
+function mergePageMatchTimeline(entries: readonly AuditEntry[], lookups: AuditLookups): AuditLookups {
+  const merged = new Map<string, Map<number, unknown>>()
+  for (const [contactId, steps] of Object.entries(lookups.familyMatchTimeline)) {
+    const byId = new Map<number, unknown>()
+    for (const step of steps) byId.set(step.id, step.match)
+    merged.set(contactId, byId)
+  }
+  let added = false
+  for (const entry of entries) {
+    if (entry.table !== "guardian_contacts" || !entry.recordId || !entry.newValues) continue
+    if (!("pending_family_match_id" in entry.newValues)) continue
+    let byId = merged.get(entry.recordId)
+    if (!byId) {
+      byId = new Map<number, unknown>()
+      merged.set(entry.recordId, byId)
+    }
+    if (!byId.has(entry.id)) {
+      byId.set(entry.id, entry.newValues.pending_family_match_id ?? null)
+      added = true
+    }
+  }
+  if (!added) return lookups
+  const familyMatchTimeline: Record<string, MatchStep[]> = {}
+  for (const [contactId, byId] of merged) {
+    familyMatchTimeline[contactId] = [...byId.entries()]
+      .sort((a, b) => a[0] - b[0])
+      .map(([id, match]) => ({ id, match }))
+  }
+  return { ...lookups, familyMatchTimeline }
+}
+
 export function describeAuditEntry(entry: AuditEntry, lookups: AuditLookups = EMPTY_AUDIT_LOOKUPS): DescribedAuditEntry {
   const newValues = entry.newValues ?? {}
   const oldValues = entry.oldValues ?? {}
@@ -904,6 +940,7 @@ export function describeAuditEntry(entry: AuditEntry, lookups: AuditLookups = EM
       streamNames,
       streamOpenedAt,
       discountKindById,
+      matchTimeline: buildMatchTimeline(lookups),
     })
     return {
       id: entry.id,
@@ -1036,5 +1073,6 @@ export function describeAuditEntry(entry: AuditEntry, lookups: AuditLookups = EM
 }
 
 export function describeAuditEntries(entries: readonly AuditEntry[], lookups: AuditLookups = EMPTY_AUDIT_LOOKUPS): DescribedAuditEntry[] {
-  return entries.map((entry) => describeAuditEntry(entry, lookups))
+  const combined = mergePageMatchTimeline(entries, lookups)
+  return entries.map((entry) => describeAuditEntry(entry, combined))
 }

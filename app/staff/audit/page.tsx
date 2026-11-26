@@ -50,7 +50,7 @@ export default async function AuditPage({ searchParams }: { searchParams: Promis
             : "The audit could not be loaded. Try again in a moment."}
         </Note>
       ) : (
-        <Card className="au-card">
+        <Card>
           {page.data.total === 0 ? (
             <EmptyState title="Nothing matches." />
           ) : (

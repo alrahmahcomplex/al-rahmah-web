@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useEffect, useRef, useState } from "react"
+import { useState } from "react"
 
 import { Button, DateField, Field, RoundButton, Select } from "@/components/kit"
 import { AUDIT_AREAS, SYSTEM_ACTORS, auditHref, type AuditActor, type AuditFilters } from "@/lib/services/system-audit"
@@ -15,30 +15,16 @@ export function AuditFiltersForm({ filters, actors }: { filters: AuditFilters; a
   const [seenKey, setSeenKey] = useState(filtersKey)
   const [cleared, setCleared] = useState(false)
   const [resetNonce, setResetNonce] = useState(0)
-  const [spinning, setSpinning] = useState(false)
-  const spinTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   if (seenKey !== filtersKey) {
     setSeenKey(filtersKey)
     setCleared(false)
   }
 
-  useEffect(() => {
-    return () => {
-      if (spinTimer.current) clearTimeout(spinTimer.current)
-    }
-  }, [])
-
   const shown = cleared ? {} : filters
   const fieldsKey = `${filtersKey}:${resetNonce}`
 
   function handleClear() {
-    if (spinTimer.current) clearTimeout(spinTimer.current)
-    setSpinning(false)
-    requestAnimationFrame(() => {
-      setSpinning(true)
-      spinTimer.current = setTimeout(() => setSpinning(false), 560)
-    })
     setCleared(true)
     setResetNonce((n) => n + 1)
     if (filtersKey !== "/staff/audit") router.push("/staff/audit")
@@ -90,16 +76,8 @@ export function AuditFiltersForm({ filters, actors }: { filters: AuditFilters; a
         </div>
       </div>
       <div className="au-actions">
-        <Button type="submit" size="small" className="au-apply">
-          Apply
-        </Button>
-        <RoundButton
-          icon="reset"
-          label="Clear filters"
-          size={40}
-          className={spinning ? "au-reset au-spin" : "au-reset"}
-          onClick={handleClear}
-        />
+        <Button type="submit">Apply</Button>
+        <RoundButton icon="reset" label="Clear filters" onClick={handleClear} />
       </div>
     </form>
   )

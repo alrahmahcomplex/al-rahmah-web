@@ -120,7 +120,6 @@ export function AuditTable({ entries }: { entries: readonly DescribedAuditEntry[
 
             <Section title="Details">
               <KeyValueList
-                className="au-details"
                 items={[
                   { key: "Action", value: selected.details.action, numeric: true },
                   { key: "Table", value: selected.details.table ?? "—", numeric: true },

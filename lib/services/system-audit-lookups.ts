@@ -13,10 +13,13 @@ import type { AuditActor, AuditEntry } from "./system-audit"
 // Every lookup is optional decoration: a batch that fails leaves those entries
 // unnamed rather than hiding the audit page.
 
+export type FamilyMatchStep = { id: number; match: unknown }
+
 export type AuditLookups = {
   leads: Readonly<Record<string, { name: string; admissionNumber: string }>>
   contacts: Readonly<Record<string, string>>
   contactLeads: Readonly<Record<string, { id: string; name: string; admissionNumber: string }>>
+  familyMatchTimeline: Readonly<Record<string, readonly FamilyMatchStep[]>>
   streams: Readonly<Record<string, { name: string; year: number; openedAt: string }>>
   streamRequests: Readonly<Record<string, { leadId: string | null; className: string; year: number }>>
   agents: Readonly<Record<string, { name: string; code: string; retired: boolean }>>
@@ -69,6 +72,43 @@ async function readById<Row extends { id: string }, Out>(
   return out
 }
 
+// Each contact's unconfirmed Family match over time, from its own audit_log
+// rows (oldest first). Uses the caller's existing audit.view permission on
+// audit_log so the Audit page reads Family confirmations the same way
+// Application history does.
+async function readFamilyMatchTimeline(
+  supabase: SupabaseClient,
+  contactIds: readonly string[],
+): Promise<Record<string, FamilyMatchStep[]>> {
+  if (contactIds.length === 0) return {}
+  const batches: string[][] = []
+  for (let i = 0; i < contactIds.length; i += BATCH) batches.push(contactIds.slice(i, i + BATCH))
+  const results = await Promise.all(
+    batches.map((batch) =>
+      supabase
+        .from("audit_log")
+        .select("id, row_id, new_values")
+        .eq("table_name", "guardian_contacts")
+        .in("row_id", batch)
+        .order("id", { ascending: true }),
+    ),
+  )
+  const out: Record<string, FamilyMatchStep[]> = {}
+  for (const { data, error } of results) {
+    if (error) {
+      console.error("Could not read guardian_contacts match history for the audit page", error)
+      continue
+    }
+    for (const row of (data ?? []) as { id: number; row_id: string | null; new_values: Record<string, unknown> | null }[]) {
+      if (!row.row_id || !row.new_values || !("pending_family_match_id" in row.new_values)) continue
+      const list = (out[row.row_id] ??= [])
+      list.push({ id: Number(row.id), match: row.new_values.pending_family_match_id ?? null })
+    }
+  }
+  for (const list of Object.values(out)) list.sort((a, b) => a.id - b.id)
+  return out
+}
+
 export async function getAuditLookups(
   supabase: SupabaseClient,
   entries: readonly AuditEntry[],
@@ -77,6 +117,7 @@ export async function getAuditLookups(
   const leadIds = new Set<string>()
   const contactIds = new Set<string>()
   const contactForLeadIds = new Set<string>()
+  const matchContactIds = new Set<string>()
   const streamIds = new Set<string>()
   const streamRequestIds = new Set<string>()
   const agentIds = new Set<string>()
@@ -105,6 +146,11 @@ export async function getAuditLookups(
       addUuid(leadIds, entry.recordId)
       addFrom(contactIds, entry, "guardian_contact_id")
       addFrom(importBatchIds, entry, "import_batch_id")
+      if (entry.action === "insert" && newValues.returning_family_joined === true) {
+        addUuid(matchContactIds, newValues.guardian_contact_id)
+      } else if (entry.action === "update" && "guardian_contact_id" in newValues) {
+        addUuid(matchContactIds, oldValues.guardian_contact_id)
+      }
     } else if (table === "guardian_contacts") {
       addUuid(contactIds, entry.recordId)
       if (!entry.leadId) addUuid(contactForLeadIds, entry.recordId)
@@ -187,6 +233,7 @@ export async function getAuditLookups(
     leads,
     contacts,
     contactLeadsRaw,
+    familyMatchTimeline,
     streams,
     streamRequests,
     agents,
@@ -214,6 +261,7 @@ export async function getAuditLookups(
     contactForLeadIds.size > 0
       ? supabase.from("leads").select("id, student_name, admission_number, guardian_contact_id").in("guardian_contact_id", [...contactForLeadIds])
       : Promise.resolve({ data: [], error: null }),
+    readFamilyMatchTimeline(supabase, [...matchContactIds]),
     readById<
       { id: string; class_name: LeadClass; label: string; takes: StreamTakes; enrollment_year: number; opened_at: string },
       { name: string; year: number; openedAt: string }
@@ -369,6 +417,7 @@ export async function getAuditLookups(
     leads: { ...leads, ...extraLeads },
     contacts,
     contactLeads,
+    familyMatchTimeline,
     streams,
     streamRequests,
     agents,

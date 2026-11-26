@@ -65,3 +65,26 @@ export function FieldError({ id, message, alignStart }: { id: string; message?: 
     </div>
   )
 }
+
+export type NamedFieldProps = Omit<FieldProps, "icon" | "alignStart" | "size" | "id"> & {
+  id: string
+  /** One short word, shown inside the box on the left and used as the field's label. */
+  name: string
+  icon: IconName
+}
+
+/**
+ * The named field (DESIGN.md, Inputs; owner 26 Nov 2026): the pill field
+ * with its icon and name inside the box, on the left, so the name stays when
+ * the box holds a value. What is typed stays centred. Pair it with a hint or
+ * FieldError under the box, linked by aria-describedby.
+ */
+export function NamedField({ id, name, icon, invalid, className, ref, ...props }: NamedFieldProps) {
+  return (
+    <div className="kit-named">
+      <Icon name={icon} />
+      <label htmlFor={id}>{name}</label>
+      <input ref={ref} {...props} id={id} aria-invalid={invalid || props["aria-invalid"] || undefined} className={cn("kit-field", className)} />
+    </div>
+  )
+}

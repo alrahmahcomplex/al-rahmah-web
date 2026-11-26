@@ -1,4 +1,4 @@
-import { LEAD_CLASSES, type LeadClass } from "@/lib/services/leads"
+import { LEAD_CLASSES, type LeadClass, type StudentGender } from "@/lib/services/leads"
 import type { ClassStreams, Stream, StreamRequest, StreamTakes, WaitingChild } from "@/lib/services/streams"
 
 // The Seats screen's own reading of a year's streams (#449, prototype v42).
@@ -215,4 +215,110 @@ const TIME = new Intl.DateTimeFormat("en-GB", {
 /** A moment as Tanzania's clock shows it: "09:40". */
 export function tanzaniaTime(iso: string): string {
   return TIME.format(new Date(iso))
+}
+
+// ---------------------------------------------------------------------------
+// Changing who a stream takes (owner 2026-11-26, prototype v4): what the
+// Change sheet shows before saving. The database's change_stream decides on
+// save; this follows reconcile_class_seats so the sheet can say who moves
+// where. It can disagree only when a payment or a retry changes the class
+// while the sheet is open.
+// ---------------------------------------------------------------------------
+
+/** A child in the class with a seat or waiting for one. `rank` is their place in the class's order (null: last). */
+export type SeatChild = { leadId: string; studentName: string; gender: StudentGender | null; rank: number | null }
+
+/** The id the preview gives the stream the sheet would open. */
+export const NEW_STREAM = "new"
+
+export type TakesExtra = { kind: "open"; takes: StreamTakes; label: string; seats: number } | { kind: "raise"; streamId: string; seats: number }
+
+export type TakesPlan = {
+  // The class's streams, as they are now.
+  streams: readonly Stream[]
+  // The children placed in them, with their stream.
+  placed: readonly (SeatChild & { streamId: string })[]
+  // The children waiting for a seat in the class.
+  waiting: readonly SeatChild[]
+  change: { streamId: string; takes: StreamTakes; seats: number }
+  extra?: TakesExtra | null
+}
+
+export type TakesPreview = {
+  // Children who stay in the stream.
+  staying: number
+  // The children the stream no longer takes, in rank order, and where each goes (null: waits).
+  leaving: { child: SeatChild; to: string | null }[]
+  // Children waiting now who would take a seat, and where.
+  fromWaiting: { child: SeatChild; to: string }[]
+  // How many of `leaving` would have no seat.
+  stranded: number
+}
+
+const byRank = (a: SeatChild, b: SeatChild) => (a.rank ?? Infinity) - (b.rank ?? Infinity) || a.leadId.localeCompare(b.leadId)
+
+/**
+ * Who moves where if the stream took `change.takes`: children who still fit
+ * stay; the others give their seat back; then the children already waiting,
+ * and after them those moving, each in rank order, take the first stream by
+ * position that takes them and has a seat.
+ */
+export function previewTakes(plan: TakesPlan): TakesPreview {
+  const { change, extra } = plan
+  const streams = plan.streams.map((s) => {
+    if (s.id === change.streamId) return { ...s, takes: change.takes, seats: change.seats }
+    if (extra?.kind === "raise" && s.id === extra.streamId) return { ...s, seats: extra.seats }
+    return s
+  })
+  if (extra?.kind === "open") {
+    const last = Math.max(0, ...streams.map((s) => s.position))
+    streams.push({ id: NEW_STREAM, label: extra.label, takes: extra.takes, seats: extra.seats, position: last + 1, placed: 0, boys: 0, girls: 0, broughtUpFrom: null })
+  }
+  const ordered = streams.toSorted((a, b) => a.position - b.position)
+  const free = new Map(ordered.map((s) => [s.id, s.seats]))
+  const takesOf = new Map(ordered.map((s) => [s.id, s.takes]))
+  const leavers: SeatChild[] = []
+  let staying = 0
+  for (const child of plan.placed) {
+    const takes = takesOf.get(child.streamId)
+    if (takes !== undefined && takesChild(takes, child.gender)) {
+      free.set(child.streamId, (free.get(child.streamId) ?? 0) - 1)
+      if (child.streamId === change.streamId) staying++
+    } else if (child.streamId === change.streamId) leavers.push(child)
+  }
+  const seat = (child: SeatChild): string | null => {
+    const found = ordered.find((s) => takesChild(s.takes, child.gender) && (free.get(s.id) ?? 0) > 0)
+    if (!found) return null
+    free.set(found.id, (free.get(found.id) ?? 0) - 1)
+    return found.id
+  }
+  const fromWaiting: TakesPreview["fromWaiting"] = []
+  for (const child of plan.waiting.toSorted(byRank)) {
+    const to = seat(child)
+    if (to) fromWaiting.push({ child, to })
+  }
+  const leaving = leavers.toSorted(byRank).map((child) => ({ child, to: seat(child) }))
+  return { staying, leaving, fromWaiting, stranded: leaving.filter((m) => m.to === null).length }
+}
+
+/**
+ * The fewest seats for the stream the sheet opens, or the stream it raises,
+ * so nobody moving is left waiting. The children already waiting count, as
+ * they take their seats first. Null when no number is enough: a child no
+ * stream of that kind takes (no Boy or girl answer, outside a Mixed stream).
+ */
+export function seatsSoNobodyWaits(plan: TakesPlan & { extra: TakesExtra }): number | null {
+  const least = plan.extra.kind === "open" ? 1 : (plan.streams.find((s) => s.id === (plan.extra as { streamId: string }).streamId)?.placed ?? 0)
+  const most = least + plan.placed.length + plan.waiting.length
+  for (let seats = least; seats <= most; seats++) {
+    if (previewTakes({ ...plan, extra: { ...plan.extra, seats } }).stranded === 0) return seats
+  }
+  return null
+}
+
+/** The one Boy or girl answer every child moving shares, or null when they differ or one has none. */
+export function movingGender(leaving: TakesPreview["leaving"]): StudentGender | null {
+  const genders = new Set(leaving.map((m) => m.child.gender))
+  if (genders.size !== 1) return null
+  return leaving[0]?.child.gender ?? null
 }

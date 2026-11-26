@@ -23,7 +23,7 @@ A staff screen uses only the kit. The old parts are left only for the public pag
 | `Button` (`variant`, `size`, `pending`), `ButtonLink` | `ui/button`, `staff/pending-button`; `variant="bad"` for `ui/button`'s `destructive` |
 | `RoundButton` | `ui/button` with `size="icon"` |
 | `TextLink` | an underlined `ui/button` `variant="link"` |
-| `Field`, `FieldError` | `ui/input`, `auth-fields` |
+| `Field`, `NamedField` (name inside the box, for filled Change sheets), `FieldError` | `ui/input`, `auth-fields`, a label above the box |
 | `ChoiceTiles`, `DefaultTile`, `ChipButtons` | `ui/radio-group`, `ui/select` for a few short options |
 | `Select` | a native `<select>`, `ui/select` |
 | `DateField`, `DateTimeField`, `Calendar` | `<input type="date">`, `datetime-local`, `ui/calendar` |

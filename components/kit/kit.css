@@ -103,6 +103,11 @@ html .gf-row .gf-d { color: var(--kit-quiet, var(--gf-quiet)); }
 .kit-fieldwrap > .kit-field { padding-inline: 48px; }
 .kit-fieldwrap > .kit-field[data-size="search"] { padding: 0 20px 0 40px; }
 .kit-fieldwrap:has(> .kit-field[data-size="search"]) > .gf-ic { left: 14px; width: 17px; height: 17px; }
+/* The named field (owner 26 Nov 2026): icon and name inside the box on the left; the value stays centred. */
+.kit-named { position: relative; }
+.kit-named > .gf-ic { position: absolute; left: 20px; top: 50%; width: 18px; height: 18px; transform: translateY(-50%); color: var(--kit-quiet, var(--gf-quiet)); pointer-events: none; }
+.kit-named > label { position: absolute; left: 46px; top: 50%; transform: translateY(-50%); font: 600 13.5px var(--font-sans), system-ui, sans-serif; color: var(--kit-quiet, var(--gf-quiet)); white-space: nowrap; pointer-events: none; }
+.kit-named > .kit-field { padding-inline: 100px; }
 
 .kit-err { display: grid; grid-template-rows: 0fr; margin-top: -8px; transition: grid-template-rows var(--gf-t-med) var(--gf-ease-out), margin var(--gf-t-med) var(--gf-ease-out); }
 .kit-err > div { overflow: hidden; min-height: 0; }

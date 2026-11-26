@@ -2,7 +2,7 @@ import { render, screen, within } from "@testing-library/react"
 import { describe, expect, it, vi } from "vitest"
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }), useSearchParams: () => new URLSearchParams(), usePathname: () => "/staff/reports" }))
-vi.mock("@/app/staff/seats/stream-actions", () => ({ openStreamAction: vi.fn(), editStreamAction: vi.fn(), bringUpAction: vi.fn(), requestStreamAction: vi.fn() }))
+vi.mock("@/app/staff/seats/stream-actions", () => ({ openStreamAction: vi.fn(), changeStreamAction: vi.fn(), bringUpAction: vi.fn(), requestStreamAction: vi.fn() }))
 
 import { SeatsByClassPanel } from "@/app/staff/reports/_dashboard/seats-by-class"
 import type { ClassStreamFigures, SeatFiguresByClass } from "@/lib/services/dashboard"

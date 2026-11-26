@@ -1121,6 +1121,32 @@ export const FUNCTIONS: Record<string, FunctionEntry> = {
     args: { stream_id: "'5a5a0000-0000-4000-8000-000000000450'", label: "'Y'", seats: "2" },
     agent: { refused: "not_permitted" },
   },
+  // Who a stream takes (owner 2026-11-26): academic_years.manage changes it
+  // and reads the children placed in each stream.
+  "public.change_stream(stream_id uuid, label text, seats integer, takes stream_takes, open_takes stream_takes, open_label text, open_seats integer, open_request uuid, raise_stream uuid, raise_seats integer)":
+    {
+      roles: ["authenticated"],
+      setup:
+        "insert into public.streams (id, enrollment_year, class_name, label, takes, seats, position) values ('5a5a0000-0000-4000-8000-000000000451', 2027, 'FORM 1', 'Z', 'Mixed', 1, 99)",
+      args: {
+        stream_id: "'5a5a0000-0000-4000-8000-000000000451'",
+        label: "'Z'",
+        seats: "2",
+        takes: "'Boys'",
+        open_takes: "null",
+        open_label: "null",
+        open_seats: "null",
+        open_request: "null",
+        raise_stream: "null",
+        raise_seats: "null",
+      },
+      agent: { refused: "not_permitted" },
+    },
+  "public.year_stream_children(schedule_year integer)": {
+    roles: ["authenticated"],
+    args: { schedule_year: "2027" },
+    agent: { refused: "not_permitted" },
+  },
   // Streams, slice 4b (#449): payments.view reads; a request for a child
   // also needs leads.view; the outlook needs both.
   "public.year_streams(schedule_year integer)": {

@@ -1,6 +1,20 @@
 import { describe, expect, test } from "vitest"
 
-import { afterQueue, bringUpPlan, clashingStream, labelAt, nextLabel, placeholderSeats, seatNeeds, tanzaniaTime } from "@/app/staff/seats/stream-rules"
+import {
+  afterQueue,
+  bringUpPlan,
+  clashingStream,
+  labelAt,
+  movingGender,
+  NEW_STREAM,
+  nextLabel,
+  placeholderSeats,
+  previewTakes,
+  seatNeeds,
+  seatsSoNobodyWaits,
+  tanzaniaTime,
+  type TakesPlan,
+} from "@/app/staff/seats/stream-rules"
 import type { LeadClass } from "@/lib/services/leads"
 import type { ClassStreams, Stream, StreamRequest, StreamTakes, WaitingChild } from "@/lib/services/streams"
 
@@ -17,6 +31,8 @@ function stream(label: string, takes: StreamTakes, seats = 10, placed = 0, extra
     seats,
     position: ids,
     placed,
+    boys: 0,
+    girls: 0,
     broughtUpFrom: null,
     ...extra,
   }
@@ -228,5 +244,67 @@ describe("seatNeeds and requests from a child's page", () => {
     const std6 = cls("STD 6", [stream("A", "Mixed", 1, 1)], { freeForAny: false, freeForBoy: false, freeForGirl: false })
     const fromChild = { ...request("STD 6", "Girls", "2027-01-11T06:40:00Z"), studentName: "Rehema Saidi Bakari" }
     expect(seatNeeds([std6], [fromChild])[0].request?.studentName).toBe("Rehema Saidi Bakari")
+  })
+})
+
+// Changing who a stream takes (owner 2026-11-26): the Change sheet's preview
+// follows reconcile_class_seats.
+describe("previewTakes", () => {
+  const seat = (leadId: string, gender: WaitingChild["gender"], rank: number, streamId: string) => ({ leadId, studentName: leadId, gender, rank, streamId })
+
+  function form1(): TakesPlan {
+    const a = stream("A", "Mixed", 4, 4)
+    const b = stream("B", "Girls", 3, 1)
+    return {
+      streams: [a, b],
+      placed: [seat("boy1", "Boy", 1, a.id), seat("girl1", "Girl", 2, a.id), seat("none1", null, 3, a.id), seat("girl2", "Girl", 4, a.id), seat("girlB", "Girl", 5, b.id)],
+      waiting: [child("boyW", "Boy", 6), child("girlW", "Girl", 7)],
+      change: { streamId: a.id, takes: "Boys", seats: 4 },
+    }
+  }
+
+  test("keeps who still fits; the waiting go first, then those moving in rank order, each to the first stream with room", () => {
+    const plan = form1()
+    const preview = previewTakes(plan)
+    expect(preview.staying).toBe(1)
+    // B had 2 free seats: the waiting girl takes one, then girl1 (rank 2) the other; girl2 and the child with no answer wait.
+    expect(preview.fromWaiting.map((m) => [m.child.leadId, m.to])).toEqual([
+      ["boyW", plan.streams[0].id],
+      ["girlW", plan.streams[1].id],
+    ])
+    expect(preview.leaving.map((m) => [m.child.leadId, m.to])).toEqual([
+      ["girl1", plan.streams[1].id],
+      ["none1", null],
+      ["girl2", null],
+    ])
+    expect(preview.stranded).toBe(2)
+    expect(movingGender(preview.leaving)).toBeNull()
+  })
+
+  test("a new stream comes last in the order; raising a stream gives its new seats", () => {
+    const plan = form1()
+    const opened = previewTakes({ ...plan, extra: { kind: "open", takes: "Girls", label: "C", seats: 5 } })
+    expect(opened.leaving.map((m) => m.to)).toEqual([plan.streams[1].id, null, NEW_STREAM])
+    const raised = previewTakes({ ...plan, extra: { kind: "raise", streamId: plan.streams[1].id, seats: 9 } })
+    expect(raised.leaving.map((m) => m.to)).toEqual([plan.streams[1].id, null, plan.streams[1].id])
+  })
+
+  test("the fewest seats so nobody moving waits counts the waiting first, and is null when no stream of that kind can take everyone", () => {
+    const girlsOnly = form1()
+    girlsOnly.placed = girlsOnly.placed.filter((c) => c.leadId !== "none1")
+    // B: 1 placed, then the waiting girl, girl1 and girl2: 4 seats.
+    expect(seatsSoNobodyWaits({ ...girlsOnly, extra: { kind: "raise", streamId: girlsOnly.streams[1].id, seats: 0 } })).toBe(4)
+    // A new stream after B (2 free): only girl2 needs it.
+    expect(seatsSoNobodyWaits({ ...girlsOnly, extra: { kind: "open", takes: "Girls", label: "C", seats: 0 } })).toBe(1)
+    // The child with no answer fits only a Mixed stream.
+    expect(seatsSoNobodyWaits({ ...form1(), extra: { kind: "open", takes: "Girls", label: "C", seats: 0 } })).toBeNull()
+    expect(seatsSoNobodyWaits({ ...form1(), extra: { kind: "open", takes: "Mixed", label: "C", seats: 0 } })).toBe(2)
+  })
+
+  test("nobody moves when the stream widens to Mixed", () => {
+    const plan = form1()
+    const preview = previewTakes({ ...plan, change: { ...plan.change, takes: "Mixed" } })
+    expect(preview.leaving).toEqual([])
+    expect(preview.staying).toBe(4)
   })
 })

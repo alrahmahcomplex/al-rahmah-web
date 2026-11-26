@@ -4,19 +4,19 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 
 const actions = vi.hoisted(() => ({
   open: vi.fn(),
-  edit: vi.fn(),
+  change: vi.fn(),
   bringUp: vi.fn(),
   request: vi.fn(),
 }))
 vi.mock("@/app/staff/seats/stream-actions", () => ({
   openStreamAction: actions.open,
-  editStreamAction: actions.edit,
+  changeStreamAction: actions.change,
   bringUpAction: actions.bringUp,
   requestStreamAction: actions.request,
 }))
 
 import { StreamsView, type Who } from "@/app/staff/seats/streams-view"
-import type { ClassStreams, Stream, YearStreams } from "@/lib/services/streams"
+import type { ClassStreams, PlacedChild, Stream, YearStreams } from "@/lib/services/streams"
 
 // Seats once streams are on (#449, v42), with the actions stubbed: who sees
 // which notice and button, and what the open sheet sends.
@@ -31,6 +31,8 @@ const stream = (id: string, label: string, takes: Stream["takes"], seats: number
   seats,
   position,
   placed,
+  boys: 0,
+  girls: 0,
   broughtUpFrom: null,
 })
 
@@ -59,8 +61,18 @@ const YEAR: YearStreams = {
   requests: [],
 }
 
+// The 12 girls placed in FORM 1 A (Girls), ranked after the waiting boy.
+const PLACED: PlacedChild[] = Array.from({ length: 12 }, (_, i) => ({
+  leadId: `girl-${i + 1}`,
+  studentName: `Girl ${i + 1}`,
+  gender: "Girl",
+  className: "FORM 1",
+  streamId: "g",
+  rank: i + 2,
+}))
+
 function view(who: Who, data: YearStreams = YEAR) {
-  return render(<StreamsView data={data} previous={null} who={who} tabs={null} />)
+  return render(<StreamsView data={data} previous={null} who={who} tabs={null} placed={who.manages ? PLACED : []} />)
 }
 
 beforeEach(() => vi.clearAllMocks())
@@ -164,12 +176,62 @@ describe("StreamsView", () => {
     const sheet = await screen.findByRole("dialog", {
       name: "Change FORM 1 A (Girls)",
     })
-    const seats = within(sheet).getByLabelText("Seats for new students")
+    const seats = within(sheet).getByLabelText("Seats")
     await userEvent.clear(seats)
     await userEvent.type(seats, "10")
     await userEvent.click(screen.getByRole("button", { name: "Save the changes" }))
-    expect(await screen.findByRole("alert")).toHaveTextContent("FORM 1 A (Girls) has 12 children placed. The seats can’t go below 12.")
-    expect(actions.edit).not.toHaveBeenCalled()
+    expect(await screen.findByRole("alert")).toHaveTextContent("12 children stay in FORM 1 A, so the seats can’t go below 12.")
+    expect(actions.change).not.toHaveBeenCalled()
+  })
+
+  // Who a stream takes (owner 2026-11-26, prototype v4).
+  async function changeToBoys() {
+    view(MANAGER)
+    await userEvent.click(screen.getByRole("button", { name: "Change FORM 1 A (Girls)" }))
+    const sheet = await screen.findByRole("dialog", { name: "Change FORM 1 A (Girls)" })
+    await userEvent.click(within(sheet).getByRole("radio", { name: "Boys" }))
+    return sheet
+  }
+
+  it("says the girls must move, that no stream takes them, and asks where they go before saving", async () => {
+    const sheet = await changeToBoys()
+    expect(within(sheet).getByRole("heading", { name: "12 girls have to move" })).toBeInTheDocument()
+    expect(sheet).toHaveTextContent("No other FORM 1 stream takes girls. Choose where they go before saving.")
+    // The waiting boy takes one of the places the girls leave.
+    expect(sheet).toHaveTextContent("1 boy waiting for a FORM 1 seat takes a place in FORM 1 A in the places the girls leave.")
+    await userEvent.click(screen.getByRole("button", { name: "Save: 12 girls will wait" }))
+    expect(await screen.findByRole("alert")).toHaveTextContent("Choose where the 12 girls go.")
+    expect(actions.change).not.toHaveBeenCalled()
+  })
+
+  it("saves with the girls left waiting when the Manager lets them wait", async () => {
+    actions.change.mockResolvedValue({
+      status: "done",
+      stream: { label: "A", takes: "Boys", seats: 20 },
+      opened: null,
+      moved: PLACED.map((child) => ({ leadId: child.leadId, streamId: null })),
+      seatedFromWaiting: 1,
+    })
+    const sheet = await changeToBoys()
+    await userEvent.click(within(sheet).getByRole("radio", { name: /Let them wait/ }))
+    expect(sheet).toHaveTextContent("12 girls will have no seat.")
+    await userEvent.click(screen.getByRole("button", { name: "Save: 12 girls will wait" }))
+    await waitFor(() => expect(actions.change).toHaveBeenCalledTimes(1))
+    expect(actions.change.mock.calls[0][0]).toMatchObject({ streamId: "g", label: "A", seats: 20, takes: "Boys", open: undefined, raise: undefined })
+  })
+
+  it("opens a girls stream in the same save, says how many seats keep everyone placed, and warns when fewer will wait", async () => {
+    actions.change.mockResolvedValue({ status: "done", stream: { label: "A", takes: "Boys", seats: 20 }, opened: null, moved: [], seatedFromWaiting: 0 })
+    const sheet = await changeToBoys()
+    await userEvent.click(within(sheet).getByRole("radio", { name: /Open a new stream for girls/ }))
+    // A girls' A doesn't clash with the boys' A.
+    expect(within(sheet).getAllByLabelText("Label")[1]).toHaveValue("A")
+    expect(sheet).toHaveTextContent("12 or more so nobody waits: the 12 girls moving.")
+    await userEvent.type(within(sheet).getAllByLabelText("Seats")[1], "10")
+    expect(sheet).toHaveTextContent("2 girls will have no seat.")
+    await userEvent.click(screen.getByRole("button", { name: "Save: 10 move, 2 wait" }))
+    await waitFor(() => expect(actions.change).toHaveBeenCalledTimes(1))
+    expect(actions.change.mock.calls[0][0]).toMatchObject({ takes: "Boys", open: { takes: "Girls", label: "A", seats: 10 }, raise: undefined })
   })
 })
 

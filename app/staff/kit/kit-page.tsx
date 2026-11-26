@@ -17,6 +17,7 @@ import {
   DefaultTile,
   EmptyState,
   Field,
+  NamedField,
   FieldError,
   FilterPills,
   FinishedState,
@@ -232,6 +233,9 @@ function DesignSystem({ tab, today }: { tab: string; today: string }) {
           <Field icon="phone" placeholder="0712 345 678" aria-label="Example phone field" />
           <Field defaultValue="Not a name" invalid aria-label="Example field with an error" aria-describedby="kp-field-error" />
           <FieldError id="kp-field-error" alignStart message="Type the full name, at least two names." />
+          <NamedField id="kp-named-empty" name="Label" icon="tag" placeholder="C" />
+          <NamedField id="kp-named-filled" name="Seats" icon="seats" inputMode="numeric" defaultValue="40" />
+          <p className="kp-spec">The named field keeps its name inside the box when it holds a value, for Change sheets whose boxes start filled.</p>
         </Card>
 
         <Card title="Selectors">

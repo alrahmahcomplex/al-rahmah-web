@@ -5,10 +5,10 @@ import { Card, Note, PageHeader, Tag } from "@/components/kit"
 import { formatDate } from "@/lib/school-calendar"
 import { SEAT_RELEASE_REASON } from "@/lib/services/lead-closure"
 import { LEAD_CLASSES, type LeadClass } from "@/lib/services/leads"
-import { streamName, type ClassStreams, type Stream, type YearStreams } from "@/lib/services/streams"
+import { streamName, type ClassStreams, type PlacedChild, type Stream, type YearStreams } from "@/lib/services/streams"
 
 import { declineHref } from "../applicants/decline-link"
-import { BringUpButton, EditStreamButton, OpenStreamButton, RequestStreamButton, TakesTag } from "./stream-sheets"
+import { BringUpButton, ChangeStreamButton, OpenStreamButton, RequestStreamButton, TakesTag } from "./stream-sheets"
 import { bringUpPlan, seatNeeds, tanzaniaTime, type SeatNeed } from "./stream-rules"
 
 // Seats once streams are on (#449, prototype v42): the notices, the children
@@ -17,6 +17,18 @@ import { bringUpPlan, seatNeeds, tanzaniaTime, type SeatNeed } from "./stream-ru
 // other staff who may view payments see the same and can ask for a stream.
 
 export type Who = { manages: boolean; mayDecline: boolean }
+
+/** "26 boys · 14 girls" under a stream’s name, with any child who has no Boy or girl answer. */
+export function mixLine(stream: Stream): string {
+  const other = stream.placed - stream.boys - stream.girls
+  return [
+    stream.boys > 0 && `${stream.boys} ${stream.boys === 1 ? "boy" : "boys"}`,
+    stream.girls > 0 && `${stream.girls} ${stream.girls === 1 ? "girl" : "girls"}`,
+    other > 0 && `${other} with no Boy or girl answer`,
+  ]
+    .filter(Boolean)
+    .join(" · ")
+}
 
 const needWord = (need: "Boys" | "Girls") => (need === "Boys" ? "boys" : "girls")
 
@@ -98,7 +110,20 @@ function NeedNotice({ need, year, classStreams, who }: { need: SeatNeed; year: n
   )
 }
 
-function ClassCard({ className, year, entry, who }: { className: LeadClass; year: number; entry: ClassStreams | undefined; who: Who }) {
+function ClassCard({
+  className,
+  year,
+  entry,
+  who,
+  placed,
+}: {
+  className: LeadClass
+  year: number
+  entry: ClassStreams | undefined
+  who: Who
+  // The children placed in the class’s streams, for the Change sheet; empty for staff who don’t manage streams.
+  placed: PlacedChild[]
+}) {
   const streams = (entry?.streams ?? []).toSorted((a, b) => a.position - b.position)
   const add = who.manages ? <OpenStreamButton year={year} className={className} streams={streams} label="Add a stream" /> : null
   if (streams.length === 0) {
@@ -140,6 +165,7 @@ function ClassCard({ className, year, entry, who }: { className: LeadClass; year
                   {className} {stream.label}
                 </b>
                 <TakesTag takes={stream.takes} />
+                {stream.placed > 0 && <span className="st-mix st-num">{mixLine(stream)}</span>}
               </span>
               <span className="st-meter" aria-hidden>
                 <i
@@ -154,7 +180,16 @@ function ClassCard({ className, year, entry, who }: { className: LeadClass; year
                   {stream.placed} of {stream.seats}
                 </small>
               </span>
-              {who.manages && <EditStreamButton year={year} className={className} stream={stream} of={streams.length} />}
+              {who.manages && (
+                <ChangeStreamButton
+                  year={year}
+                  className={className}
+                  stream={stream}
+                  streams={streams}
+                  placed={placed}
+                  waiting={entry?.waiting ?? []}
+                />
+              )}
             </li>
           )
         })}
@@ -201,7 +236,20 @@ function WaitingCard({ classes, who }: { classes: ClassStreams[]; who: Who }) {
   )
 }
 
-export function StreamsView({ data, previous, who, tabs }: { data: YearStreams; previous: YearStreams | null; who: Who; tabs: ReactNode }) {
+export function StreamsView({
+  data,
+  previous,
+  who,
+  tabs,
+  placed = [],
+}: {
+  data: YearStreams
+  previous: YearStreams | null
+  who: Who
+  tabs: ReactNode
+  // Every child placed in a stream of the year; only read for staff who manage streams.
+  placed?: PlacedChild[]
+}) {
   const year = data.year
   const byClass = new Map(data.classes.map((each) => [each.className, each]))
   const needs = seatNeeds(data.classes, data.requests)
@@ -264,7 +312,14 @@ export function StreamsView({ data, previous, who, tabs }: { data: YearStreams; 
 
         <div className="st-grid">
           {LEAD_CLASSES.map((className) => (
-            <ClassCard key={className} className={className} year={year} entry={byClass.get(className)} who={who} />
+            <ClassCard
+              key={className}
+              className={className}
+              year={year}
+              entry={byClass.get(className)}
+              who={who}
+              placed={placed.filter((child) => child.className === className)}
+            />
           ))}
         </div>
       </div>

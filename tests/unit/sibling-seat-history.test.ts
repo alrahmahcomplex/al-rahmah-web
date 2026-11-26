@@ -334,6 +334,12 @@ describe("a seat entry", () => {
     })
   })
 
+  it("says when the stream stopped taking the child", () => {
+    expect(read([entry("seat_placements", "update", [change("cause", "payment", "stream_takes"), change("stream_id", BOYS, GIRLS), change("changed_at", AT, AT)])])).toEqual([
+      { summary: "moved the applicant from KG 2 A (Boys) to KG 2 A (Girls)", lines: ["Because: Who the stream takes was changed"] },
+    ])
+  })
+
   it("shows a stream it couldn't name by its id", () => {
     const [placed] = describeLeadHistory([entry("seat_placements", "insert", created({ stream_id: "unknown-stream", cause: "migration" }))], {})
     expect(placed.summary).toBe("placed the applicant in unknown-stream")

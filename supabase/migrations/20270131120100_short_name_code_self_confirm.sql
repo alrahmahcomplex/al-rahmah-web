@@ -441,7 +441,12 @@ begin
     ) then
         return jsonb_build_object('outcome', 'locked');
     end if;
-    if not public.agent_names_match(agent.full_name, check_agent_claim_names.typed_names) then
+    -- A miss only when both rules refuse: self-confirm's, and the claim's own
+    -- exact one (20261229100200), which also covers a record of more than six
+    -- names that agent_names_match never accepts (Greptile, #546).
+    if not public.agent_names_match(agent.full_name, check_agent_claim_names.typed_names)
+       and lower(regexp_replace(btrim(agent.full_name), '\s+', ' ', 'g'))
+           <> lower(regexp_replace(btrim(coalesce(check_agent_claim_names.typed_names, '')), '\s+', ' ', 'g')) then
         insert into public.agent_confirm_misses (agent_id, kind) values (agent.id, 'names');
         return jsonb_build_object('outcome', 'name_mismatch');
     end if;

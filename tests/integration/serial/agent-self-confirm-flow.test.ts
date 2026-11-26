@@ -203,6 +203,10 @@ describe("self-confirm by mobile", () => {
 
     const withMobile = await agentOnRecord()
     expect(await checkClaimNames(secretClient(), { code: withMobile.code, names: "Zawadi Mwanaisha Kombo" })).toEqual({ ok: true, data: "ok" })
+
+    // More than six names: only the claim's exact rule can accept them (Greptile, #546).
+    const long = await agentOnRecord({ phone: null, names: "Neema Simu Juma Ali Hassan Omari Bakari" })
+    expect(await checkClaimNames(secretClient(), { code: long.code, names: long.fullName })).toEqual({ ok: true, data: "ok" })
   })
 
   test("short names with no mobile on record, or names that don't match, go to today's claim path without a miss", async () => {

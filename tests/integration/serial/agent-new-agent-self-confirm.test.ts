@@ -318,6 +318,19 @@ describe("a code the office hasn't approved yet", () => {
 })
 
 describe("a new agent by email", () => {
+  // Their own attempt is never record_only, whatever their names (Sol, #546).
+  test("with an initial in their name still puts the email on their Pending record", async () => {
+    const browser = randomUUID()
+    const started = await startNew(`Rehema A ${names().split(" ").at(-1)}`, mobile(), browser)
+    if (started.kind !== "ready") throw new Error(`not ready: ${JSON.stringify(started)}`)
+    const address = `initial-${randomUUID().slice(0, 8)}@example.test`
+    expect(await setNewAgentEmail(secretClient(), { attempt: started.attempt, browser, email: address })).toEqual({
+      ok: true,
+      data: { kind: "registered", code: started.code, email: address },
+    })
+    expect(await record(started.code)).toMatchObject({ status: "Pending", email: address })
+  })
+
   test("puts the email on the Pending record and sends nothing now", async () => {
     const browser = randomUUID()
     const started = await startNew(names(), mobile(), browser)

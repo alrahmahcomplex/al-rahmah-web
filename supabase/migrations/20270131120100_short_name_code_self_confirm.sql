@@ -27,12 +27,21 @@
 --   - The page never learns the record's email for such a record
 --     (email_on_record false), and email_open is false, so the page offers
 --     the claim (email_claim) instead of the self-confirm email.
---   - prepare_self_confirm_invite and set_new_agent_email refuse a record with
---     short names themselves, so hiding the email choice on the page isn't
---     the only guard: a direct call with the attempt can't put a typed email
---     on the record or send the record's email an invite.
+--   - Such an attempt is marked record_only. prepare_self_confirm_invite and
+--     set_new_agent_email refuse a record_only attempt themselves, so hiding
+--     the email choice on the page isn't the only guard: a direct call with
+--     the attempt can't put a typed email on the record or send the record's
+--     email an invite.
+--   - Only start_agent_self_confirm (a code typed on the form) marks it. A
+--     brand-new applicant whose name has an initial ("Rehema A Juma") opens
+--     their attempt with start_new_agent_self_confirm, unmarked, and keeps
+--     their email path as before (Sol, #546).
 --   - Every other rule of start_agent_self_confirm stays as in
 --     20270130120100_pending_code_self_confirm.sql.
+
+-- An attempt opened on a code whose record has short names: proved by the
+-- mobile on record alone, never by email.
+alter table public.agent_confirm_attempts add column record_only boolean not null default false;
 
 create or replace function public.start_agent_self_confirm(code text, typed_names text, typed_phone text, browser text, ip text)
 returns jsonb
@@ -112,9 +121,9 @@ begin
     update public.agent_confirm_attempts a set state = 'void'
     where a.agent_id = agent.id and a.state in ('matched', 'sent', 'proven');
 
-    insert into public.agent_confirm_attempts (agent_id, browser_digest, ip_digest, typed_phone, shown_mobile, new_agent)
+    insert into public.agent_confirm_attempts (agent_id, browser_digest, ip_digest, typed_phone, shown_mobile, new_agent, record_only)
     values (agent.id, start_agent_self_confirm.browser, start_agent_self_confirm.ip,
-            case when agent.phone is null and not closed and not pending and not weak then phone end, phone, pending)
+            case when agent.phone is null and not closed and not pending and not weak then phone end, phone, pending, weak)
     returning id into attempt_id;
 
     return jsonb_build_object(
@@ -139,9 +148,9 @@ revoke execute on function public.start_agent_self_confirm(text, text, text, tex
 grant execute on function public.start_agent_self_confirm(text, text, text, text, text) to service_role;
 
 -- The self-confirm email of 20270126120100_agent_remove_sign_in.sql, now shut
--- ("email_closed") for a record with short names: its email path is today's
--- claim, so a direct call can neither put a typed email on it nor invite the
--- record's email.
+-- ("email_closed") for an attempt on a code with short names (record_only):
+-- its email path is today's claim, so a direct call can neither put a typed
+-- email on the record nor invite the record's email.
 create or replace function public.prepare_self_confirm_invite(attempt uuid, browser text, typed_email text, hourly_budget integer)
 returns jsonb
 language plpgsql
@@ -160,7 +169,7 @@ begin
     if a.id is null then return jsonb_build_object('outcome', 'expired'); end if;
     if not public.agent_can_self_confirm(a.agent_id) then return jsonb_build_object('outcome', 'off'); end if;
     select m.* into agent from public.marketing_agents m where m.id = a.agent_id for update;
-    if public.agent_email_self_confirm_closed(agent.id) or not public.agent_names_strong(agent.full_name) then
+    if public.agent_email_self_confirm_closed(agent.id) or a.record_only then
         return jsonb_build_object('outcome', 'email_closed');
     end if;
     -- No staff member is behind a self-confirm write.
@@ -236,8 +245,9 @@ grant execute on function public.prepare_self_confirm_invite(uuid, text, text, i
 
 -- The email path of a new agent's or a Pending code's attempt, as in
 -- 20270130120100_pending_code_self_confirm.sql, now also shut
--- ("email_closed") for a Pending record with short names: its email path is
--- today's claim too.
+-- ("email_closed") for an attempt on a Pending code with short names
+-- (record_only): its email path is today's claim too. A brand-new applicant's
+-- own attempt is never record_only, whatever their names.
 create or replace function public.set_new_agent_email(attempt uuid, browser text, typed_email text)
 returns jsonb
 language plpgsql
@@ -258,7 +268,7 @@ begin
     select m.* into agent from public.marketing_agents m where m.id = a.agent_id for update;
     if agent.status <> 'Pending' then return jsonb_build_object('outcome', 'off'); end if;
     if public.agent_email_self_confirm_closed(agent.id) or exists (select 1 from public.agent_open_claims(agent.id))
-       or not public.agent_names_strong(agent.full_name) then
+       or a.record_only then
         return jsonb_build_object('outcome', 'email_closed');
     end if;
     perform public.set_audit_actor('public_form', null);

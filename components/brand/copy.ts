@@ -60,25 +60,14 @@ export type LanguagePromptCopy = {
   heading: string
   body: string
   hint: string
-  /** The 3-second confirmation once this language is picked. */
-  status: string
 }
 
-// The card speaks Swahili until the visitor picks English. Only the
-// "Continue in English" button is in English from the start.
-export const LANGUAGE_PROMPT_COPY: Record<Language, LanguagePromptCopy> = {
-  sw: {
-    heading: "Karibu!",
-    body: "Chagua lugha ya fomu hii.",
-    hint: "Unaweza kubadilisha lugha baadaye kwenye Menyu.",
-    status: "Fomu imewekwa kwa Kiswahili.",
-  },
-  en: {
-    heading: "Welcome!",
-    body: "Choose the language for this form.",
-    hint: "You can change the language later in the Menu.",
-    status: "Changing the language to English. Please wait a moment…",
-  },
+// The card speaks Swahili. Only the "Continue in English" button is in English.
+// A pick folds the card straight back into the menu button, so it never changes language.
+export const LANGUAGE_PROMPT_COPY: LanguagePromptCopy = {
+  heading: "Karibu!",
+  body: "Chagua lugha ya fomu hii.",
+  hint: "Unaweza kubadilisha lugha baadaye kwenye Menyu.",
 }
 
 export const LANGUAGE_PROMPT_PICKS: Record<Language, string> = {

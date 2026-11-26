@@ -52,80 +52,70 @@ describe("LanguagePrompt", () => {
     expect(document.documentElement.style.overflow).toBe("hidden")
   })
 
-  it("on English, sets the cookie to en and turns the card English with a spinner", async () => {
-    render(<LanguagePrompt show language="sw" menuButtonRef={menuButton()} />)
-
-    fireEvent.click(screen.getByRole("button", { name: "Continue in English" }))
-    await flush()
-
-    expect(sentLanguages()).toEqual(["en"])
-    const status = screen.getByRole("status")
-    expect(status).toHaveTextContent("Changing the language to English. Please wait a moment…")
-    expect(status.querySelector('[data-icon="spinner"]')).not.toBeNull()
-    expect(screen.getByRole("dialog")).toHaveAttribute("lang", "en")
-    expect(screen.queryByRole("button", { name: "Continue in English" })).toBeNull()
-  })
-
-  it("on Kiswahili, sets the cookie to sw, shows the tick, then shrinks into the menu button after 3 seconds", async () => {
+  it.each([
+    ["Endelea kwa Kiswahili", "sw"],
+    ["Continue in English", "en"],
+  ])("on %s, sets the cookie to %s and shrinks straight into the menu button, with no confirmation", async (name, lang) => {
     const ref = menuButton()
     render(<LanguagePrompt show language="sw" menuButtonRef={ref} />)
 
-    fireEvent.click(screen.getByRole("button", { name: "Endelea kwa Kiswahili" }))
+    fireEvent.click(screen.getByRole("button", { name }))
     await flush()
 
-    expect(sentLanguages()).toEqual(["sw"])
-    const status = screen.getByRole("status")
-    expect(status).toHaveTextContent("Fomu imewekwa kwa Kiswahili.")
-    expect(status.querySelector('[data-icon="tick"]')).not.toBeNull()
-
-    await wait(3100)
+    expect(sentLanguages()).toEqual([lang])
+    expect(screen.queryByRole("status")).toBeNull()
+    // jsdom has no Element.animate, so the shrink finishes at once.
     expect(screen.queryByRole("dialog")).toBeNull()
     expect(ref.current).toHaveClass("gf-catch")
     expect(document.documentElement.style.overflow).toBe("")
   })
 
-  it("after 5 seconds untouched, takes the Kiswahili path", async () => {
-    render(<LanguagePrompt show language="sw" menuButtonRef={menuButton()} />)
+  it("sends only the first pick while the card is still shrinking", async () => {
+    // A shrink that never ends, so the second button is still there to press.
+    const animate = vi.fn(() => ({ onfinish: null, cancel: () => {} }) as unknown as Animation)
+    Object.defineProperty(HTMLElement.prototype, "animate", { value: animate, configurable: true })
+    try {
+      render(<LanguagePrompt show language="sw" menuButtonRef={menuButton()} />)
 
-    await wait(4900)
-    expect(stubs.setLanguage).not.toHaveBeenCalled()
+      fireEvent.click(screen.getByRole("button", { name: "Continue in English" }))
+      fireEvent.click(screen.getByRole("button", { name: "Endelea kwa Kiswahili" }))
+      await flush()
 
-    await wait(200)
-    expect(sentLanguages()).toEqual(["sw"])
-    expect(screen.getByRole("status")).toHaveTextContent("Fomu imewekwa kwa Kiswahili.")
+      expect(sentLanguages()).toEqual(["en"])
+    } finally {
+      delete (HTMLElement.prototype as { animate?: unknown }).animate
+    }
   })
 
-  it("stops the 5 seconds once the keyboard is used in the card", async () => {
+  it("waits for a pick however long the card sits untouched", async () => {
     render(<LanguagePrompt show language="sw" menuButtonRef={menuButton()} />)
 
-    fireEvent.keyDown(screen.getByRole("dialog"), { key: "Tab" })
-    expect(screen.getByRole("button", { name: "Continue in English" })).toHaveFocus()
-    await wait(8000)
+    await wait(10 * 60 * 1000)
 
     expect(stubs.setLanguage).not.toHaveBeenCalled()
+    expect(screen.getByRole("dialog")).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Endelea kwa Kiswahili" })).toBeInTheDocument()
   })
 
-  it("pauses the 5 seconds while a mouse is over the card", async () => {
+  it("keeps focus on the two buttons with Tab", () => {
     render(<LanguagePrompt show language="sw" menuButtonRef={menuButton()} />)
     const dialog = screen.getByRole("dialog")
 
-    fireEvent.pointerEnter(dialog, { pointerType: "mouse" })
-    await wait(8000)
-    expect(stubs.setLanguage).not.toHaveBeenCalled()
-
-    fireEvent.pointerLeave(dialog, { pointerType: "mouse" })
-    await wait(5100)
-    expect(sentLanguages()).toEqual(["sw"])
+    fireEvent.keyDown(dialog, { key: "Tab" })
+    expect(screen.getByRole("button", { name: "Continue in English" })).toHaveFocus()
+    fireEvent.keyDown(dialog, { key: "Tab" })
+    expect(screen.getByRole("button", { name: "Endelea kwa Kiswahili" })).toHaveFocus()
   })
 
-  it("treats Escape as Kiswahili", async () => {
-    render(<LanguagePrompt show language="sw" menuButtonRef={menuButton()} />)
+  it("stays open on Escape or a tap outside the card", async () => {
+    const { container } = render(<LanguagePrompt show language="sw" menuButtonRef={menuButton()} />)
 
     fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" })
-    await flush()
+    fireEvent.click(container.querySelector(".gf-lp-back")!)
+    await wait(1000)
 
-    expect(sentLanguages()).toEqual(["sw"])
+    expect(stubs.setLanguage).not.toHaveBeenCalled()
+    expect(screen.getByRole("dialog")).toBeInTheDocument()
   })
 
   it("finishes even when the page re-renders without the prompt", async () => {
@@ -136,6 +126,8 @@ describe("LanguagePrompt", () => {
     rerender(<LanguagePrompt show={false} language="en" menuButtonRef={ref} />)
     await flush()
 
-    expect(screen.getByRole("status")).toHaveTextContent("Changing the language to English.")
+    expect(sentLanguages()).toEqual(["en"])
+    expect(screen.queryByRole("dialog")).toBeNull()
+    expect(ref.current).toHaveClass("gf-catch")
   })
 })

@@ -91,3 +91,42 @@ test("a child no stream can take can't pay until the Manager opens a stream, and
   await review.getByRole("button", { name: "Confirm payment" }).click()
   await expect(section.getByRole("status")).toHaveText(`Deposit recorded. Placed automatically in ${className} B (Boys).`)
 })
+
+// Who a stream takes (owner 2026-11-26, prototype v4): the Manager turns a
+// Mixed stream into a boys' stream and opens a girls' stream in the same save.
+test("the Manager changes a Mixed stream to Boys and opens a girls' stream for the girl in it", async ({ page }) => {
+  const fixture = await streamYear()
+  years.push(fixture)
+  const { year, className } = fixture
+
+  await open(year, className, "A", "Mixed", 2)
+  const boy = await pupil(year, className, "Boy")
+  await payDeposit(boy.id, yesterday)
+  const girl = await pupil(year, className, "Girl")
+  await payDeposit(girl.id, yesterday)
+
+  await signIn(page, MANAGER)
+  await page.goto(`/staff/seats?year=${year}`)
+  const streams = page.getByRole("list", { name: `${className} streams` }).getByRole("listitem")
+  await expect(streams.first()).toContainText("1 boy · 1 girl")
+
+  await page.getByRole("button", { name: `Change ${className} A` }).click()
+  const sheet = page.getByRole("dialog", { name: `Change ${className} A` })
+  const choose = (name: string | RegExp) => sheet.locator("label").filter({ has: page.getByRole("radio", { name, exact: typeof name === "string" }) }).click()
+  await choose("Boys")
+  await expect(sheet.getByRole("heading", { name: "1 girl has to move" })).toBeVisible()
+  await choose(/Open a new stream for girl/)
+  // The girls may have an A of their own: it doesn't clash with the boys' A.
+  await expect(sheet.getByLabel("Label", { exact: true }).nth(1)).toHaveValue("A")
+  await sheet.getByLabel("Seats", { exact: true }).nth(1).fill("1")
+  await sheet.getByRole("button", { name: "Save and move 1 girl" }).click()
+
+  await expect(
+    page.getByRole("status").filter({ hasText: `${className} A (Boys) now takes boys. 1 girl moved to ${className} A (Girls). ${className} A (Girls) is open.` }),
+  ).toBeVisible()
+  await expect(streams).toHaveCount(2)
+  await expect(streams.first()).toContainText("1 boy")
+  await expect(streams.first()).not.toContainText("girl")
+  await expect(streams.nth(1)).toContainText("Girls")
+  await expect(streams.nth(1)).toContainText("1 girl")
+})

@@ -3,14 +3,27 @@
 import { useId, useState, useTransition } from "react"
 
 import { Icon } from "@/components/icons"
-import { Button, ChoiceTiles, Field, Note, Sheet, Tag, toast } from "@/components/kit"
+import { Button, ChoiceTiles, Disclosure, Field, FieldError, NamedField, Note, Sheet, Tag, toast } from "@/components/kit"
 import type { LeadClass } from "@/lib/services/leads"
 import { streamName, STREAM_TAKES, type Stream, type StreamTakes } from "@/lib/services/streams"
 
 import "./seats.css"
 
-import { bringUpAction, editStreamAction, openStreamAction, requestStreamAction } from "./stream-actions"
-import { clashingStream, nextLabel, placeholderSeats, type BringUpRow } from "./stream-rules"
+import { bringUpAction, changeStreamAction, openStreamAction, requestStreamAction, type ChangeOutcome } from "./stream-actions"
+import {
+  clashingStream,
+  movingGender,
+  NEW_STREAM,
+  nextLabel,
+  placeholderSeats,
+  previewTakes,
+  seatsSoNobodyWaits,
+  type BringUpRow,
+  type SeatChild,
+  type TakesExtra,
+  type TakesPlan,
+  type TakesPreview,
+} from "./stream-rules"
 
 // The Seats screen's sheets and buttons once streams are on (#449,
 // prototype v42). Words are v42's.
@@ -183,53 +196,147 @@ export function OpenStreamButton({
   )
 }
 
-/** The pencil on a stream: change its label or seats. */
-export function EditStreamButton({ year, className, stream, of }: { year: number; className: LeadClass; stream: Stream; of: number }) {
+/** The pencil on a stream: change who it takes, its label or its seats (owner 2026-11-26, prototype v4). */
+export function ChangeStreamButton({
+  year,
+  className,
+  stream,
+  streams,
+  placed,
+  waiting,
+}: {
+  year: number
+  className: LeadClass
+  stream: Stream
+  // The class's streams, the children placed in them and the children waiting for one.
+  streams: Stream[]
+  placed: (SeatChild & { streamId: string })[]
+  waiting: SeatChild[]
+}) {
   const [open, setOpen] = useState(false)
+  const [takes, setTakes] = useState<StreamTakes>(stream.takes)
   const [name, setName] = useState(stream.label)
   const [seats, setSeats] = useState(String(stream.seats))
+  // Where the children who must move go: "open", "raise:<stream id>" or "wait".
+  const [pick, setPick] = useState<string | null>(null)
+  const [newLabel, setNewLabel] = useState("")
+  const [newSeats, setNewSeats] = useState("")
+  const [raiseSeats, setRaiseSeats] = useState<Record<string, string>>({})
   const [problem, setProblem] = useState<string | null>(null)
+  const [requestId, setRequestId] = useState(() => crypto.randomUUID())
   const [pending, startTransition] = useTransition()
   const id = useId()
   const full = streamName(className, stream.label, stream.takes)
+  const others = streams.filter((s) => s.id !== stream.id)
 
   function changeOpen(next: boolean) {
     if (pending) return
     setOpen(next)
     if (next) {
+      setTakes(stream.takes)
       setName(stream.label)
       setSeats(String(stream.seats))
+      setPick(null)
+      setNewLabel("")
+      setNewSeats("")
+      setRaiseSeats({})
       setProblem(null)
+      setRequestId(crypto.randomUUID())
     }
   }
 
+  const changed = takes !== stream.takes
+  const label = name.trim()
+  const seatCount = isCount(seats) ? Number(seats) : stream.seats
+  const plan: TakesPlan = { streams, placed, waiting, change: { streamId: stream.id, takes, seats: seatCount } }
+  const base = previewTakes(plan)
+  // With who it takes unchanged everyone stays; the count is the stream’s own, which needs no list of children.
+  const staying = changed ? base.staying : stream.placed
+  const n = base.leaving.length
+  const gender = movingGender(base.leaving)
+  const word = movingWord(gender, n)
+  const needTakes: StreamTakes = gender === "Girl" ? "Girls" : gender === "Boy" ? "Boys" : "Mixed"
+  const mustChoose = changed && n > 0 && base.stranded > 0
+  const after = streams.map((s) => (s.id === stream.id ? { ...s, takes, label: label || s.label } : s))
+  const suggested = nextLabel(after, needTakes)
+  const shownNew = newLabel.trim() || suggested
+  // Streams that take at least one of the children moving, for "Add seats to".
+  const raisable = others.filter((s) => base.leaving.some((m) => takesChild(s.takes, m.child.gender))).toSorted((a, b) => a.position - b.position)
+
+  const extra: TakesExtra | null =
+    !mustChoose || pick === null || pick === "wait"
+      ? null
+      : pick === "open"
+        ? { kind: "open", takes: needTakes, label: shownNew, seats: isCount(newSeats) ? Number(newSeats) : 0 }
+        : { kind: "raise", streamId: pick.slice(6), seats: isCount(raiseSeats[pick.slice(6)] ?? "") ? Number(raiseSeats[pick.slice(6)]) : (others.find((s) => s.id === pick.slice(6))?.seats ?? 0) }
+  const preview = extra ? previewTakes({ ...plan, extra }) : base
+  const least = extra ? seatsSoNobodyWaits({ ...plan, extra }) : null
+  const ahead = waiting.filter((w) => takesChild(needTakes, w.gender)).length
+  const why = `the ${n} ${word} moving${ahead ? ` and the ${ahead} already waiting, who go first` : ""}`
+  const nameOf = (streamId: string | null) => {
+    if (streamId === NEW_STREAM) return streamName(className, shownNew, needTakes)
+    const s = after.find((each) => each.id === streamId)
+    return s ? streamName(className, s.label, s.takes) : ""
+  }
+  const labelClash = label ? clashingStream(others, label, takes) : null
+  const raising = pick?.startsWith("raise:") ? others.find((s) => s.id === pick.slice(6)) : undefined
+
   function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    const clean = name.trim()
-    if (!clean) return setProblem("Type a label, for example A.")
-    if (!/^\d+$/.test(seats.trim())) return setProblem("Type the number of seats.")
-    const count = Number(seats)
-    if (count < stream.placed)
-      return setProblem(`${full} has ${stream.placed} ${stream.placed === 1 ? "child" : "children"} placed. The seats can’t go below ${stream.placed}.`)
+    const issue = (() => {
+      if (!label) return "Type a label, for example A."
+      if (labelClash) return `${streamName(className, labelClash.label, labelClash.takes)} already has the label ${labelClash.label}. Choose another label.`
+      if (!isCount(seats)) return "Type the number of seats."
+      if (Number(seats) < staying)
+        return `${staying} ${staying === 1 ? "child stays" : "children stay"} in ${className} ${label}, so the seats can’t go below ${staying}.`
+      if (!mustChoose) return null
+      if (pick === null) return `Choose where the ${n} ${word} go.`
+      if (pick === "open") {
+        if (!newLabel.trim()) return "Type a label for the new stream."
+        const clash = clashingStream(after, newLabel, needTakes)
+        if (clash) return `${streamName(className, clash.label, clash.takes)} already has the label ${clash.label}. Choose another label for the new stream.`
+        if (!isCount(newSeats) || Number(newSeats) < 1) return "Type the seats for the new stream, 1 or more."
+      }
+      if (raising) {
+        const typed = raiseSeats[raising.id] ?? String(raising.seats)
+        if (!isCount(typed)) return "Type the number of seats."
+        if (Number(typed) < raising.placed)
+          return `${streamName(className, raising.label, raising.takes)} has ${raising.placed} ${raising.placed === 1 ? "child" : "children"} placed. The seats can’t go below ${raising.placed}.`
+      }
+      return null
+    })()
+    if (issue) return setProblem(issue)
     setProblem(null)
+    const savedName = streamName(className, label, takes)
     startTransition(async () => {
-      let outcome
+      let outcome: ChangeOutcome
       try {
-        outcome = await editStreamAction({
+        outcome = await changeStreamAction({
           streamId: stream.id,
-          label: clean,
-          seats: count,
-          name: streamName(className, clean, stream.takes),
-          placed: stream.placed,
+          label,
+          seats: Number(seats),
+          takes,
+          name: savedName,
+          raiseName: raising ? streamName(className, raising.label, raising.takes) : undefined,
+          open: mustChoose && pick === "open" ? { takes: needTakes, label: newLabel.trim(), seats: Number(newSeats), requestId } : undefined,
+          raise: mustChoose && raising ? { streamId: raising.id, seats: Number(raiseSeats[raising.id] ?? raising.seats) } : undefined,
         })
       } catch {
-        outcome = { status: "refused" as const, message: LOST }
+        outcome = { status: "refused", message: LOST }
       }
       if (outcome.status === "refused") return setProblem(outcome.message)
       setOpen(false)
-      toast(outcome.message)
+      toast(changeMessage(className, outcome, { streams: after, before: stream, gender }))
     })
   }
+
+  const foot = !(changed && n > 0)
+    ? "Save the changes"
+    : preview.stranded === n
+      ? `Save: ${n} ${word} will wait`
+      : preview.stranded > 0
+        ? `Save: ${n - preview.stranded} move, ${preview.stranded} wait`
+        : `Save and move ${n} ${word}`
 
   return (
     <>
@@ -240,46 +347,221 @@ export function EditStreamButton({ year, className, stream, of }: { year: number
         open={open}
         onOpenChange={changeOpen}
         title={`Change ${full}`}
-        hint={`${className} · Enrollment year ${year}`}
+        hint={`${className} · Enrollment year ${year} · position ${stream.position} of ${streams.length}`}
         closeLabel="Close"
         foot={
           <Button type="submit" form={`${id}-form`} size="wide" disabled={pending}>
-            {pending ? "Saving…" : "Save the changes"}
+            {pending ? "Saving…" : foot}
           </Button>
         }
       >
         <form id={`${id}-form`} className="st-form" onSubmit={submit} noValidate>
+          <ChoiceTiles
+            name={`${id}-takes`}
+            legend={<span className="st-q">Who does it take?</span>}
+            layout="three"
+            big
+            options={STREAM_TAKES.map((value) => ({ value, label: value }))}
+            value={takes}
+            onChange={(value) => {
+              setTakes(value as StreamTakes)
+              setPick(null)
+              setProblem(null)
+            }}
+          />
           <div className="st-field">
-            <label htmlFor={`${id}-label`} className="st-label">
-              Label
-            </label>
-            <Field id={`${id}-label`} value={name} maxLength={20} autoComplete="off" onChange={(e) => setName(e.target.value)} />
+            <NamedField
+              id={`${id}-label`}
+              name="Label"
+              icon="tag"
+              value={name}
+              maxLength={20}
+              autoComplete="off"
+              placeholder="For example A"
+              invalid={labelClash !== null}
+              aria-describedby={labelClash ? `${id}-label-error` : `${id}-label-hint`}
+              onChange={(e) => setName(e.target.value)}
+            />
+            {labelClash ? (
+              <FieldError
+                id={`${id}-label-error`}
+                alignStart
+                message={`${streamName(className, labelClash.label, labelClash.takes)} already has the label ${labelClash.label}. Choose another label, for example ${nextLabel(others, takes)}.`}
+              />
+            ) : (
+              <p id={`${id}-label-hint`} className="st-hint">
+                Shown as “{streamName(className, label || "…", takes)}”.
+              </p>
+            )}
           </div>
           <div className="st-field">
-            <label htmlFor={`${id}-seats`} className="st-label">
-              Seats for new students
-            </label>
-            <Field
+            <NamedField
               id={`${id}-seats`}
+              name="Seats"
+              icon="seats"
               inputMode="numeric"
               value={seats}
               autoComplete="off"
+              placeholder="For example 40"
               aria-describedby={`${id}-seats-hint`}
               onChange={(e) => setSeats(e.target.value)}
             />
             <p id={`${id}-seats-hint`} className="st-hint">
-              {stream.placed
-                ? `${stream.placed} ${stream.placed === 1 ? "child is" : "children are"} placed in it, so the seats can’t go below ${stream.placed}.`
-                : "Nobody is placed in it yet."}{" "}
+              Places for new students.{" "}
+              {staying
+                ? `${staying} ${staying === 1 ? "child stays" : "children stay"} in it, so the seats can’t go below ${staying}.`
+                : "Nobody stays placed in it."}{" "}
               Raising the seats places children who are waiting.
             </p>
           </div>
-          <div className="st-field">
-            <span className="st-label">Who it takes</span>
-            <p className="st-hint">
-              {stream.takes} · position {stream.position} of {of}. These don’t change.
-            </p>
-          </div>
+
+          {changed && (
+            <div className="st-out">
+              {stream.placed === 0 && n === 0 ? (
+                <Note>Nobody is placed in {className} {stream.label} yet, so nobody moves.</Note>
+              ) : n === 0 ? (
+                <Note tone="good">
+                  Nobody moves: every child in {className} {stream.label} can stay in a stream that takes {takesWord(takes)}.
+                </Note>
+              ) : (
+                <>
+                  <div>
+                    <h3 className="kit-sec-title">
+                      {n} {word} {n === 1 ? "has" : "have"} to move
+                    </h3>
+                    <p className="st-hint">
+                      A {takes.toLowerCase()} stream can’t keep the {word} placed in {className} {stream.label}. They take seats in the first {className} stream, in
+                      order, that takes them and has room.
+                    </p>
+                  </div>
+                  {!mustChoose ? (
+                    <Note tone="good">{whereTheyGo(base.leaving, nameOf, streams)}</Note>
+                  ) : (
+                    <>
+                      <Note tone="wait">
+                        {raisable.length
+                          ? `${raisable.map((s) => streamName(className, s.label, s.takes)).join(" and ")} ${raisable.length === 1 ? "doesn’t" : "don’t"} have room for all ${n}`
+                          : `No other ${className} stream takes ${word}`}
+                        {ahead ? `, and ${ahead} already waiting for a ${className} seat go first` : ""}. Choose where they go before saving.
+                      </Note>
+                      <ChoiceTiles
+                        name={`${id}-where`}
+                        legend={<span className="st-q">Where do the {word} go?</span>}
+                        options={[
+                          {
+                            value: "open",
+                            label: `Open a new stream for ${word}`,
+                            description: `${streamName(className, shownNew, needTakes)}, after the streams already open`,
+                          },
+                          ...raisable.map((s) => {
+                            const free = s.seats - s.placed
+                            return {
+                              value: `raise:${s.id}`,
+                              label: `Add seats to ${streamName(className, s.label, s.takes)}`,
+                              description: `${free > 0 ? free : "No"} free ${free === 1 ? "seat" : "seats"} now`,
+                            }
+                          }),
+                          { value: "wait", label: "Let them wait", description: "They go to Waiting for a stream and take the first seat that frees" },
+                        ]}
+                        value={pick}
+                        onChange={(value) => {
+                          setPick(value)
+                          setProblem(null)
+                          if (value === "open" && !newLabel) setNewLabel(suggested)
+                        }}
+                      />
+                      {pick === "open" && (
+                        <div className="kit-inline">
+                          <h3 className="kit-sec-title">The new stream</h3>
+                          <div className="st-field">
+                            <NamedField
+                              id={`${id}-new-label`}
+                              name="Label"
+                              icon="tag"
+                              value={newLabel}
+                              maxLength={20}
+                              autoComplete="off"
+                              aria-describedby={`${id}-new-label-hint`}
+                              onChange={(e) => setNewLabel(e.target.value)}
+                            />
+                            <p id={`${id}-new-label-hint`} className="st-hint">
+                              Shown as “{streamName(className, newLabel.trim() || "…", needTakes)}”. It takes {takesWord(needTakes)} and comes last in the order.
+                            </p>
+                          </div>
+                          <div className="st-field">
+                            <NamedField
+                              id={`${id}-new-seats`}
+                              name="Seats"
+                              icon="seats"
+                              inputMode="numeric"
+                              value={newSeats}
+                              autoComplete="off"
+                              placeholder={least === null ? undefined : String(least)}
+                              aria-describedby={`${id}-new-seats-hint`}
+                              onChange={(e) => setNewSeats(e.target.value)}
+                            />
+                            <p id={`${id}-new-seats-hint`} className="st-hint">
+                              {least === null ? "Places for new students." : `${least} or more so nobody waits: ${why}.`}
+                            </p>
+                          </div>
+                        </div>
+                      )}
+                      {raising && (
+                        <div className="kit-inline">
+                          <h3 className="kit-sec-title">{streamName(className, raising.label, raising.takes)}</h3>
+                          <div className="st-field">
+                            <NamedField
+                              id={`${id}-raise-seats`}
+                              name="Seats"
+                              icon="seats"
+                              inputMode="numeric"
+                              value={raiseSeats[raising.id] ?? String(raising.seats)}
+                              autoComplete="off"
+                              aria-describedby={`${id}-raise-seats-hint`}
+                              onChange={(e) => setRaiseSeats((was) => ({ ...was, [raising.id]: e.target.value }))}
+                            />
+                            <p id={`${id}-raise-seats-hint`} className="st-hint">
+                              Now {raising.seats}, with {raising.placed} placed.
+                              {least === null ? "" : ` ${least} or more so nobody waits: room for ${why}.`}
+                            </p>
+                          </div>
+                        </div>
+                      )}
+                      {pick !== null && preview.stranded > 0 && (
+                        <Note tone="wait">
+                          {preview.stranded} {movingWord(gender, preview.stranded)} will have no seat. They go to Waiting for a stream and take the first seat that
+                          frees, in their order.
+                        </Note>
+                      )}
+                    </>
+                  )}
+                </>
+              )}
+              {preview.fromWaiting.length > 0 && <Note>{seatedText(preview.fromWaiting, stream.id, className, label || stream.label, nameOf, n > 0 ? word : null)}</Note>}
+              {n > 0 && (
+                <Disclosure label={`See the ${n} ${word} and where they go`}>
+                  <ol className="st-moves">
+                    {preview.leaving.map(({ child, to }) => (
+                      <li key={child.leadId}>
+                        <span className="st-no">{child.rank ?? "–"}.</span>
+                        <span className="st-name">{child.studentName}</span>
+                        <span className="st-dest" data-none={to === null || undefined}>
+                          {to === null ? (
+                            "No seat yet"
+                          ) : (
+                            <>
+                              <Icon name="right" size={16} />
+                              {nameOf(to)}
+                            </>
+                          )}
+                        </span>
+                      </li>
+                    ))}
+                  </ol>
+                </Disclosure>
+              )}
+            </div>
+          )}
           {problem && (
             <Note tone="bad" role="alert">
               {problem}
@@ -289,6 +571,86 @@ export function EditStreamButton({ year, className, stream, of }: { year: number
       </Sheet>
     </>
   )
+}
+
+const isCount = (value: string) => /^\d+$/.test(value.trim())
+const takesWord = (takes: StreamTakes) => (takes === "Mixed" ? "boys and girls" : takes.toLowerCase())
+const takesChild = (takes: StreamTakes, gender: SeatChild["gender"]) =>
+  takes === "Mixed" || (takes === "Boys" && gender === "Boy") || (takes === "Girls" && gender === "Girl")
+
+/** "girls", "boy", or "children" when the children moving differ or one has no Boy or girl answer. */
+function movingWord(gender: SeatChild["gender"], n: number): string {
+  if (gender === "Girl") return n === 1 ? "girl" : "girls"
+  if (gender === "Boy") return n === 1 ? "boy" : "boys"
+  return n === 1 ? "child" : "children"
+}
+
+/** Where the children moving go when there is room for all of them. */
+function whereTheyGo(leaving: TakesPreview["leaving"], nameOf: (id: string | null) => string, streams: Stream[]): string {
+  const counts = new Map<string, number>()
+  for (const m of leaving) if (m.to) counts.set(m.to, (counts.get(m.to) ?? 0) + 1)
+  if (counts.size > 1) return `They move: ${[...counts].map(([to, c]) => `${c} to ${nameOf(to)}`).join(", ")}.`
+  const [to] = [...counts.keys()]
+  const target = streams.find((s) => s.id === to)
+  const free = target ? target.seats - target.placed : 0
+  const who = leaving.length === 1 ? `${leaving[0].child.studentName} moves` : `All ${leaving.length} move`
+  return `${who} to ${nameOf(to)}. It has ${free} free ${free === 1 ? "seat" : "seats"}, so nothing else is needed.`
+}
+
+/** The waiting children who take a seat with the change. */
+function seatedText(
+  seated: TakesPreview["fromWaiting"],
+  streamId: string,
+  className: LeadClass,
+  label: string,
+  nameOf: (id: string | null) => string,
+  leavingWord: string | null,
+): string {
+  const here = seated.filter((m) => m.to === streamId)
+  const elsewhere = seated.filter((m) => m.to !== streamId)
+  const parts: string[] = []
+  if (here.length) {
+    const boys = here.filter((m) => m.child.gender === "Boy").length
+    const girls = here.filter((m) => m.child.gender === "Girl").length
+    const rest = here.length - boys - girls
+    const who = [boys && `${boys} ${movingWord("Boy", boys)}`, girls && `${girls} ${movingWord("Girl", girls)}`, rest && `${rest} ${movingWord(null, rest)}`].filter(Boolean).join(" and ")
+    parts.push(
+      `${who} waiting for a ${className} seat ${here.length === 1 ? "takes a place" : "take places"} in ${className} ${label}${leavingWord ? ` in the places the ${leavingWord} leave` : ""}`,
+    )
+  }
+  if (elsewhere.length) {
+    const c = elsewhere.length
+    parts.push(`${c} ${c === 1 ? "child" : "children"} waiting ${c === 1 ? "takes a place" : "take places"} in ${[...new Set(elsewhere.map((m) => nameOf(m.to)))].join(" and ")}`)
+  }
+  return `${parts.join(". ")}.`
+}
+
+/** The toast after a saved change. */
+function changeMessage(
+  className: LeadClass,
+  outcome: Extract<ChangeOutcome, { status: "done" }>,
+  context: { streams: Stream[]; before: Stream; gender: SeatChild["gender"] },
+): string {
+  const saved = outcome.stream
+  const name = streamName(className, saved.label, saved.takes)
+  const nameOf = (id: string) => {
+    if (outcome.opened?.id === id) return streamName(className, outcome.opened.label, outcome.opened.takes)
+    const s = context.streams.find((each) => each.id === id)
+    return s ? streamName(className, s.label, s.takes) : "another stream"
+  }
+  const parts = [saved.takes !== context.before.takes ? `${name} now takes ${takesWord(saved.takes)}.` : `${name} saved: ${saved.seats} seats.`]
+  const counts = new Map<string, number>()
+  let left = 0
+  for (const m of outcome.moved) {
+    if (m.streamId) counts.set(m.streamId, (counts.get(m.streamId) ?? 0) + 1)
+    else left++
+  }
+  if (counts.size) parts.push(`${[...counts].map(([to, c]) => `${c} ${movingWord(context.gender, c)} moved to ${nameOf(to)}`).join(", ")}.`)
+  if (left) parts.push(`${left} ${movingWord(context.gender, left)} ${left === 1 ? "is" : "are"} waiting for a stream.`)
+  if (outcome.opened) parts.push(`${nameOf(outcome.opened.id)} is open.`)
+  const w = outcome.seatedFromWaiting
+  if (w) parts.push(`${w} waiting ${w === 1 ? "child took a seat" : "children took seats"}.`)
+  return parts.join(" ")
 }
 
 /** "Bring up 2027’s streams": the list to check, then one save. */

@@ -24,6 +24,11 @@ export type Stream = {
   // The order the class's streams fill in, from 1.
   position: number
   placed: number
+  // The boys and girls among them; the rest have no Boy or girl answer.
+  // Only year_streams counts them; null from any other read, or from a
+  // database without the count yet.
+  boys: number | null
+  girls: number | null
   broughtUpFrom: string | null
 }
 
@@ -93,6 +98,8 @@ type StreamRow = {
   seats: number
   position: number
   placed: number
+  boys?: number
+  girls?: number
   brought_up_from: string | null
 }
 
@@ -103,6 +110,8 @@ const toStream = (row: StreamRow): Stream => ({
   seats: row.seats,
   position: row.position,
   placed: Number(row.placed),
+  boys: row.boys == null ? null : Number(row.boys),
+  girls: row.girls == null ? null : Number(row.girls),
   broughtUpFrom: row.brought_up_from,
 })
 
@@ -205,37 +214,123 @@ export async function openStream(supabase: SupabaseClient, stream: NewStream): P
   return { ok: true, data: toStream(data as StreamRow) }
 }
 
-/** The database's count when it refuses seats below the children placed, read from the refusal's detail; null when absent. */
-function placedFromDetail(details: unknown): number | null {
-  if (typeof details !== "string") return null
+/** A refusal's detail as an object; empty when absent or unreadable. */
+function detailOf(error: unknown): Record<string, unknown> {
+  const details = (error as { details?: unknown }).details
+  if (typeof details !== "string") return {}
   try {
-    const placed = (JSON.parse(details) as { placed?: unknown }).placed
-    return typeof placed === "number" && Number.isInteger(placed) && placed >= 0 ? placed : null
+    const parsed: unknown = JSON.parse(details)
+    return parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>) : {}
   } catch {
-    return null
+    return {}
   }
 }
 
+/** The database's count when it refuses seats below the children placed, read from the refusal's detail; null when absent. */
+function placedFromDetail(detail: Record<string, unknown>): number | null {
+  const placed = detail.placed
+  return typeof placed === "number" && Number.isInteger(placed) && placed >= 0 ? placed : null
+}
+
+export type StreamChange = {
+  streamId: string
+  label: string
+  seats: number
+  takes: StreamTakes
+  // In the same save, for the children the stream no longer takes: open one
+  // new stream in the class, or raise another stream's seats. Never both.
+  open?: { takes: StreamTakes; label: string; seats: number; requestId: string }
+  raise?: { streamId: string; seats: number }
+}
+
+export type StreamChanged = {
+  stream: Stream
+  opened: Stream | null
+  // Each child the stream no longer takes, and the stream they sit in now (null: they wait).
+  moved: { leadId: string; streamId: string | null }[]
+  // Children who were waiting for a seat in the class and now have one.
+  seatedFromWaiting: number
+}
+
+export type StreamChangeRefusal =
+  | { ok: false; error: Exclude<StreamError, "below_placed" | "label_taken"> }
+  // `placed`: the database's count at that moment, which may be higher than
+  // the screen showed. `raised`: the refusal is about the stream being raised.
+  | { ok: false; error: "below_placed"; placed: number | null; raised: boolean }
+  // `opening`: the clash is the new stream's label.
+  | { ok: false; error: "label_taken"; opening: boolean }
+
 /**
- * Corrects a stream's label and seats, never below the children placed. Needs
- * academic_years.manage. A `below_placed` refusal carries the database's count
- * at that moment, which may be higher than the screen showed.
+ * Changes a stream's label, seats and who it takes, and in the same save opens
+ * one new stream or raises another's seats (change_stream). Children the
+ * stream no longer takes move to the first stream that takes them and has a
+ * seat, after the children already waiting; with none, they wait. The seats
+ * never go below the children who stay. Needs academic_years.manage.
  */
-export async function editStream(
-  supabase: SupabaseClient,
-  change: { streamId: string; label: string; seats: number },
-): Promise<Result<Stream, StreamError> | { ok: false; error: "below_placed"; placed: number | null }> {
-  const { data, error } = await supabase.rpc("edit_stream", {
+export async function changeStream(supabase: SupabaseClient, change: StreamChange): Promise<{ ok: true; data: StreamChanged } | StreamChangeRefusal> {
+  const { data, error } = await supabase.rpc("change_stream", {
     stream_id: change.streamId,
     label: change.label,
     seats: change.seats,
+    takes: change.takes,
+    open_takes: change.open?.takes ?? null,
+    open_label: change.open?.label ?? null,
+    open_seats: change.open?.seats ?? null,
+    open_request: change.open?.requestId ?? null,
+    raise_stream: change.raise?.streamId ?? null,
+    raise_seats: change.raise?.seats ?? null,
   })
   if (error) {
     const code = streamError(error, "change a stream")
-    if (code === "below_placed") return { ok: false, error: code, placed: placedFromDetail((error as { details?: unknown }).details) }
+    const detail = detailOf(error)
+    if (code === "below_placed") return { ok: false, error: code, placed: placedFromDetail(detail), raised: detail.stream === "raise" }
+    if (code === "label_taken") return { ok: false, error: code, opening: detail.field === "open_label" }
     return { ok: false, error: code }
   }
-  return { ok: true, data: toStream(data as StreamRow) }
+  const row = data as {
+    stream: StreamRow
+    opened: StreamRow | null
+    moved: { lead_id: string; stream_id: string | null }[]
+    seated_from_waiting: number
+  }
+  return {
+    ok: true,
+    data: {
+      stream: toStream(row.stream),
+      opened: row.opened ? toStream(row.opened) : null,
+      moved: row.moved.map((m) => ({ leadId: m.lead_id, streamId: m.stream_id })),
+      seatedFromWaiting: Number(row.seated_from_waiting),
+    },
+  }
+}
+
+export type PlacedChild = {
+  leadId: string
+  studentName: string
+  gender: StudentGender | null
+  className: LeadClass
+  streamId: string
+  // Their place in the class's order (1 first); null for a child the sync is about to release.
+  rank: number | null
+}
+
+/** Every child placed in a stream of `year`, for the change sheet's preview. Needs academic_years.manage. */
+export async function getYearStreamChildren(supabase: SupabaseClient, year: number): Promise<Result<PlacedChild[], StreamError>> {
+  const { data, error } = await supabase.rpc("year_stream_children", { schedule_year: year })
+  if (error) return { ok: false, error: streamError(error, "read the children in the streams") }
+  return {
+    ok: true,
+    data: (data as { lead_id: string; student_name: string; gender: StudentGender | null; class_name: LeadClass; stream_id: string; rank: number | null }[]).map(
+      (row) => ({
+        leadId: row.lead_id,
+        studentName: row.student_name,
+        gender: row.gender,
+        className: row.class_name,
+        streamId: row.stream_id,
+        rank: row.rank === null ? null : Number(row.rank),
+      }),
+    ),
+  }
 }
 
 /** Brings the year before's streams up one class into `year`, with 0 seats. Needs academic_years.manage. */

@@ -23,6 +23,8 @@ const CAUSES: Readonly<Record<string, string>> = {
   stream_opened: "A new stream was opened",
   declined: "The application was declined",
   gender: "Boy or girl was corrected",
+  // Changing who a stream takes (owner 2026-11-26).
+  stream_takes: "Who the stream takes was changed",
 }
 
 const RECORDS: Readonly<Record<string, BecauseOf>> = {

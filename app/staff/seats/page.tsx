@@ -3,7 +3,7 @@ import type { Metadata } from "next"
 import { Note, PageHeader, pageTitle, Tabs } from "@/components/kit"
 import { tanzaniaToday } from "@/lib/school-calendar"
 import { listFeeSchedules } from "@/lib/services/fees"
-import { getYearStreams } from "@/lib/services/streams"
+import { getYearStreamChildren, getYearStreams } from "@/lib/services/streams"
 import { createClient } from "@/utils/supabase/server"
 
 import { parseScheduleYear } from "../fees/years"
@@ -31,9 +31,16 @@ export default async function SeatsPage({ searchParams }: { searchParams: Promis
   const years = schedules.ok ? schedules.data.map((schedule) => schedule.year).toSorted((a, b) => a - b) : []
   const { year: requested } = await searchParams
   const year = requested === undefined ? defaultSeatsYear(years, tanzaniaToday()) : parseScheduleYear(requested)
-  const [streams, previous] =
-    year === null ? [null, null] : await Promise.all([getYearStreams(supabase, year), years.includes(year - 1) ? getYearStreams(supabase, year - 1) : null])
   const manages = staff.permissions.includes("academic_years.manage")
+  const [streams, previous, children] =
+    year === null
+      ? [null, null, null]
+      : await Promise.all([
+          getYearStreams(supabase, year),
+          years.includes(year - 1) ? getYearStreams(supabase, year - 1) : null,
+          // The Change sheet shows who would move where, so only the Manager reads the children placed.
+          manages ? getYearStreamChildren(supabase, year) : null,
+        ])
   const tabs =
     years.length > 0 ? (
       <Tabs
@@ -75,6 +82,8 @@ export default async function SeatsPage({ searchParams }: { searchParams: Promis
       previous={previous?.ok ? previous.data : null}
       who={{ manages, mayDecline: manages && staff.permissions.includes("leads.decline") }}
       tabs={tabs}
+      // Without the children the Change sheet can’t say who moves, so the pencils hide; the page still shows.
+      placed={children?.ok ? children.data : null}
     />
   )
 }

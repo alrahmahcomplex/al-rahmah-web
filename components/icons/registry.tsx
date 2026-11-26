@@ -90,6 +90,13 @@ export const seats = icon({
   detail: <path d="M4.5 12.5h15V16h-15z" />,
 })
 
+// A stream's label in the Change sheet's named field (owner, prototype v4, 26 Nov 2026):
+// a luggage tag, its hole the detail.
+export const tag = icon({
+  outline: <path d="M3.5 12V5A1.5 1.5 0 0 1 5 3.5h7l8.5 8.5-8.5 8.5z" />,
+  detail: <path d="M8 8h.01" />,
+})
+
 export const discounts = icon({
   outline: <path d="M20.7 9.8A9 9 0 1 1 14.2 3.3" />,
   detail: <path d="m8.8 15.2 6.4-6.4M9 9h.01M15 15h.01" />,
@@ -354,6 +361,7 @@ export const ICONS = {
   lock,
   mail,
   smscode,
+  tag,
 } satisfies Record<string, IconDef>
 
 export type IconName = keyof typeof ICONS

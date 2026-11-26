@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache"
 
 import { LEAD_CLASSES, type LeadClass } from "@/lib/services/leads"
-import { bringUpStreams, editStream, getSeatOutlook, openStream, requestStream, STREAM_TAKES, type StreamError, type StreamTakes } from "@/lib/services/streams"
+import { bringUpStreams, changeStream, getSeatOutlook, openStream, requestStream, STREAM_TAKES, type StreamError, type StreamTakes } from "@/lib/services/streams"
 import { createClient } from "@/utils/supabase/server"
 
 // Seats, once streams are on (#449, prototype v42): open, change and bring up
@@ -79,30 +79,91 @@ export async function openStreamAction(input: {
   return { status: "done", message, childCanPay: outlook.ok && !outlook.data.blocked }
 }
 
-export async function editStreamAction(input: { streamId: string; label: string; seats: number; name: string; placed: number }): Promise<StreamOutcome> {
-  if (typeof input.streamId !== "string" || typeof input.label !== "string" || !isWhole(input.seats, 0)) return { status: "refused", message: LOST }
+// What a saved change did, for the sheet's message: the stream as saved, the
+// stream opened with it, each child the stream no longer takes and where they
+// sit now (null: waiting), and how many waiting children took a seat.
+export type ChangeOutcome =
+  | {
+      status: "done"
+      stream: { label: string; takes: StreamTakes; seats: number }
+      opened: { id: string; label: string; takes: StreamTakes } | null
+      moved: { leadId: string; streamId: string | null }[]
+      seatedFromWaiting: number
+    }
+  | { status: "refused"; message: string }
+
+export async function changeStreamAction(input: {
+  streamId: string
+  label: string
+  seats: number
+  takes: string
+  // Names for the refusals: the stream (as it would be saved) and the stream being raised.
+  name: string
+  raiseName?: string
+  open?: { takes: string; label: string; seats: number; requestId: string }
+  raise?: { streamId: string; seats: number }
+}): Promise<ChangeOutcome> {
+  const open = input.open
+  const raise = input.raise
+  if (
+    typeof input.streamId !== "string" ||
+    typeof input.label !== "string" ||
+    !isWhole(input.seats, 0) ||
+    !isTakes(input.takes) ||
+    (open && (!isTakes(open.takes) || typeof open.label !== "string" || !isWhole(open.seats, 1) || typeof open.requestId !== "string")) ||
+    (raise && (typeof raise.streamId !== "string" || !isWhole(raise.seats, 0))) ||
+    (open && raise)
+  ) {
+    return { status: "refused", message: LOST }
+  }
   const supabase = await createClient()
-  const edited = await editStream(supabase, {
+  const changed = await changeStream(supabase, {
     streamId: input.streamId,
     label: input.label.trim(),
     seats: input.seats,
+    takes: input.takes,
+    open: open && isTakes(open.takes) ? { takes: open.takes, label: open.label.trim(), seats: open.seats, requestId: open.requestId } : undefined,
+    raise,
   })
-  if (!edited.ok) {
-    if (edited.error === "below_placed") {
+  if (!changed.ok) {
+    if (changed.error === "below_placed") {
       // The database's count: a payment may have placed a child since the sheet opened.
-      const placed = ("placed" in edited ? edited.placed : null) ?? input.placed
       revalidateSeats()
+      const placed = changed.placed
+      if (changed.raised) {
+        const n = placed ?? raise?.seats ?? 0
+        return {
+          status: "refused",
+          message: `${input.raiseName ?? "That stream"} has ${n} ${n === 1 ? "child" : "children"} placed. The seats can’t go below ${n}.`,
+        }
+      }
       return {
         status: "refused",
-        message: `${input.name} has ${placed} ${placed === 1 ? "child" : "children"} placed. The seats can’t go below ${placed}.`,
+        message:
+          placed === null
+            ? "More children stay in this stream than those seats. Type more seats."
+            : `${placed} ${placed === 1 ? "child stays" : "children stay"} in ${input.name}, so the seats can’t go below ${placed}.`,
       }
     }
-    return refused(edited.error)
+    if (changed.error === "label_taken") {
+      return {
+        status: "refused",
+        message: changed.opening
+          ? "That label is already taken in this class. Choose another label for the new stream."
+          : "That label is already taken in this class. Choose another label.",
+      }
+    }
+    if (changed.error === "forbidden") return { status: "refused", message: "Only the Admissions Manager can change a stream." }
+    return { status: "refused", message: refused(changed.error).message }
   }
   revalidateSeats()
+  const { stream, opened, moved, seatedFromWaiting } = changed.data
   return {
     status: "done",
-    message: `${input.name} saved: ${edited.data.seats} seats.`,
+    stream: { label: stream.label, takes: stream.takes, seats: stream.seats },
+    opened: opened ? { id: opened.id, label: opened.label, takes: opened.takes } : null,
+    moved,
+    seatedFromWaiting,
   }
 }
 

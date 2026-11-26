@@ -11,7 +11,7 @@ import type { ClassStreams, Stream, StreamRequest, StreamTakes, YearStreams } fr
 let ids = 0
 const stream = (label: string, takes: StreamTakes, seats: number, placed: number): Stream => {
   ids += 1
-  return { id: `s${ids}`, label, takes, seats, position: ids, placed, broughtUpFrom: null }
+  return { id: `s${ids}`, label, takes, seats, position: ids, placed, boys: 0, girls: 0, broughtUpFrom: null }
 }
 const cls = (className: ClassStreams["className"], streams: Stream[], free: Partial<ClassStreams> = {}): ClassStreams => ({
   className,

@@ -1,30 +1,73 @@
-/* Audit: the filters, then the entries in one card (DESIGN.md, Inputs and Lists). */
+/* Audit (#504): layout around the kit parts — one filter row outside the table
+   card, four-column table with two-line phone rows, and plain-word changes in
+   the side sheet. Tokens come from app/tokens.css only (scripts/design-lint.mjs). */
+
 .au-page { display: flex; flex-direction: column; gap: 16px; }
-.au-filters { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 14px 16px; }
-.au-filters label { display: block; margin-bottom: 6px; font-size: 12.5px; font-weight: 600; color: var(--gf-ink-soft); }
-.au-w-date { width: 160px; }
-.au-w-who { width: 224px; }
-.au-w-area { width: 192px; }
-.au-w-record { width: 256px; }
-.au-actions { display: flex; gap: 8px; }
+.au-page > .kit-ph { margin-bottom: 0; }
+
+/* ---------- filter row: one row on desktop using the kit's 44px controls, wrapping on a phone ---------- */
+.au-filters { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px 8px; }
+.au-f { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.au-f label { font-size: 12.5px; font-weight: 600; color: var(--gf-ink-soft); }
+.au-f-date { flex: 0 1 162px; }
+.au-f-who { flex: 1 1 124px; }
+.au-f-area { flex: 1 1 132px; }
+.au-f-rec { flex: 1.3 1 160px; }
+.au-actions { display: flex; gap: 8px; align-items: center; margin-left: auto; flex: none; }
+
 @media (max-width: 640px) {
-  .au-filters > div { width: 100%; }
+  .au-f-date { flex: 1 1 calc(50% - 4px); }
+  .au-f-who, .au-f-area { flex: 1 1 calc(50% - 4px); }
+  .au-f-rec { flex: 1 1 100%; }
+  .au-actions { margin-left: 0; width: 100%; }
+  .au-actions > .kit-btn { flex: 1; }
 }
-.au-total { margin: 0; color: var(--gf-quiet); font-size: 13px; }
 
-.au-list { margin: 0; padding: 0; list-style: none; font-size: 14px; }
-.au-entry { display: flex; flex-direction: column; gap: 4px; padding: 12px 0; }
-.au-entry + .au-entry { border-top: 1px solid var(--gf-mist); }
-.au-entry:first-child { padding-top: 0; }
-.au-entry:last-child { padding-bottom: 0; }
-.au-line { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin: 0; }
-.au-actor { font-weight: 600; }
-.au-number { color: var(--gf-indigo); font-size: 12.5px; font-weight: 600; text-decoration: underline; text-underline-offset: 3px; font-variant-numeric: tabular-nums; border-radius: 4px; }
-.au-number:focus-visible { outline: 3px solid rgb(9 0 187 / 0.45); outline-offset: 2px; }
-.au-when { color: var(--gf-quiet); font-size: 12.5px; font-variant-numeric: tabular-nums; }
-.au-record { margin: 0; color: var(--gf-quiet); font-size: 12.5px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
-.au-changes { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 2px; color: var(--gf-quiet); font-size: 12.5px; }
-.au-changes li { overflow-wrap: anywhere; }
-.au-to { color: var(--gf-ink); }
+/* ---------- table cells and phone two-line rows ---------- */
+.au-table .kit-tbl tbody th { font-weight: 400; }
+.au-date { white-space: nowrap; color: var(--gf-ink-soft); }
+.au-actor { font-weight: 600; white-space: nowrap; }
+.au-rec { display: block; min-width: 0; }
+.au-table .kit-tbl .au-rec b { display: block; font-weight: 600; }
+.au-table .kit-tbl .au-rec small { display: block; color: var(--kit-quiet, var(--gf-quiet)); font-size: 12.5px; font-weight: 400; }
 
-.au-pages { display: flex; align-items: center; gap: 12px; font-size: 14px; }
+/* Phone: each row becomes two short lines: Event + Date, then Record + Actor. */
+@media (max-width: 640px) {
+  .au-table.kit-tw { margin: 0 -6px; }
+  .au-table .kit-tbl thead { display: none; }
+  .au-table .kit-tbl tbody tr.kit-tr-open {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: "main time" "sub who";
+    gap: 2px 12px;
+    padding: 12px 8px;
+    border-top: 1px solid var(--gf-mist);
+  }
+  .au-table .kit-tbl tbody tr.kit-tr-open:first-child { border-top: 0; }
+  .au-table .kit-tbl tbody tr.kit-tr-open > :is(td, th) { padding: 0; border: 0; min-width: 0; }
+  .au-table .kit-tbl tbody tr.kit-tr-open > :nth-child(1) { grid-area: time; text-align: right; font-size: 12.5px; }
+  .au-table .kit-tbl tbody tr.kit-tr-open > :nth-child(2) { grid-area: who; text-align: right; font-size: 12.5px; }
+  .au-table .kit-tbl tbody tr.kit-tr-open > :nth-child(3) { grid-area: main; font-weight: 600; }
+  .au-table .kit-tbl tbody tr.kit-tr-open > :nth-child(4) { grid-area: sub; font-size: 12.5px; }
+  .au-date, .au-actor { color: var(--kit-quiet, var(--gf-quiet)); font-weight: 400; }
+  .au-table .kit-tbl .au-rec b,
+  .au-table .kit-tbl .au-rec small { display: inline; font-weight: 400; color: var(--kit-quiet, var(--gf-quiet)); }
+  .au-table .kit-tbl .au-rec small::before { content: " · "; }
+}
+
+/* ---------- card footer: entry count and pagination ---------- */
+.au-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 4px 2px;
+  border-top: 1px solid var(--gf-mist);
+}
+.au-total { margin: 0; color: var(--gf-quiet); font-size: 13px; font-variant-numeric: tabular-nums; }
+
+/* ---------- side sheet inline change formatting ---------- */
+.au-was { color: var(--kit-quiet, var(--gf-quiet)); font-weight: 400; }
+.au-arrow { color: var(--kit-quiet, var(--gf-quiet)); font-weight: 400; margin: 0 4px; }
+.au-more { margin: 0; color: var(--kit-quiet, var(--gf-quiet)); font-size: 13px; }

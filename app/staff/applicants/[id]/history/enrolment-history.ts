@@ -9,7 +9,7 @@ import type { LeadHistoryChange, LeadHistoryEntry } from "@/lib/services/audit"
 const RECORD = "lead_fee_profiles"
 
 // In the order an entry lists them.
-const LABELS: Readonly<Record<string, string>> = {
+export const ENROLMENT_LABELS: Readonly<Record<string, string>> = {
   enrolled_trigger: "Enrolled by",
   enrolled_on: "Enrolled on",
   status_before_enrolled: "Status before Enrolled",
@@ -23,7 +23,7 @@ const LABELS: Readonly<Record<string, string>> = {
   pre_form_one: "Pre-Form One programme",
 }
 
-export const ENROLMENT_FIELDS: readonly string[] = Object.keys(LABELS)
+export const ENROLMENT_FIELDS: readonly string[] = Object.keys(ENROLMENT_LABELS)
 
 // The lead it belongs to, and the payment by id, which the entry says in words.
 export const ENROLMENT_HIDDEN: ReadonlySet<string> = new Set(["lead_id", "enrolled_trigger_payment_id"])
@@ -53,7 +53,7 @@ export function causeText(cause: unknown): string | null {
 }
 
 export function enrolmentLabel(record: string | null, field: string): string | null {
-  return record === RECORD ? (LABELS[field] ?? null) : null
+  return record === RECORD ? (ENROLMENT_LABELS[field] ?? null) : null
 }
 
 // A profile field's value in words; null for any other field or record.

@@ -167,17 +167,24 @@ export async function getLeadStatusSince(supabase: SupabaseClient, leadId: strin
   return { ok: true, data: tanzaniaToday(new Date(data)) }
 }
 
-export type AuditActor = { id: string; name: string }
+export type AuditActor = { id: string; name: string; roleId?: string }
 
 // Every staff member the Super Admin may pick as an actor, deactivated ones
 // and the Super Admin included.
 export async function getAuditActors(supabase: SupabaseClient): Promise<Result<AuditActor[], "unavailable">> {
-  const { data, error } = await supabase.from("staff_members").select("id, full_name").order("full_name")
+  const { data, error } = await supabase.from("staff_members").select("id, full_name, role_id").order("full_name")
   if (error) {
     console.error("Could not read the staff for the audit filters", error)
     return { ok: false, error: "unavailable" }
   }
-  return { ok: true, data: ((data ?? []) as { id: string; full_name: string }[]).map((s) => ({ id: s.id, name: s.full_name })) }
+  return {
+    ok: true,
+    data: ((data ?? []) as { id: string; full_name: string; role_id: string }[]).map((s) => ({
+      id: s.id,
+      name: s.full_name,
+      roleId: s.role_id,
+    })),
+  }
 }
 
 // One field's change as text: values are JSON as stored, so a column a

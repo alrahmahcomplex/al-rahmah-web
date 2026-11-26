@@ -1,8 +1,18 @@
-import type { InviteBatchReport, InviteBudgetConfig } from "@/lib/services/agent-invite-batches"
+import type { InviteBatchReport, InviteBudgetConfig, StopReason } from "@/lib/services/agent-invite-batches"
 
 
 // The Agents screen's words for invite batches (#192). Times are in East
 // Africa Time. "Sent" means Auth accepted the email, never that it arrived.
+
+// Short reason why a batch stopped; also used by the Audit page (#504).
+export const BATCH_STOP_SHORT_LABELS: Readonly<Record<StopReason, string>> = {
+  done: "Every agent waiting for an invite was tried",
+  batch_limit: "Stopped after the most one batch sends",
+  daily_budget: "Stopped at today's budget for agent invites",
+  hourly_limit: "Stopped at Supabase's hourly email limit",
+  time_limit: "Stopped at the time one batch may take",
+  access_off: "Stopped because agent access was turned off",
+}
 
 const WHEN = new Intl.DateTimeFormat("en-GB", {
   dateStyle: "medium",

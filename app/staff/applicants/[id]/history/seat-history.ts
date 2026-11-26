@@ -13,7 +13,7 @@ const SEAT = "seat_placements"
 const REQUEST = "stream_requests"
 
 // Each table's fields in the order an entry lists them, with their labels.
-const LABELS: Readonly<Record<string, Readonly<Record<string, string>>>> = {
+export const SEAT_LABELS: Readonly<Record<string, Readonly<Record<string, string>>>> = {
   // The stream itself is named in the summary.
   [SEAT]: { cause: "Because" },
   [REQUEST]: { class_name: "Class", enrollment_year: "Enrollment year", need: "Needs", resolved_by_stream_id: "Stream opened" },
@@ -21,7 +21,7 @@ const LABELS: Readonly<Record<string, Readonly<Record<string, string>>>> = {
 
 // The waiting fields keep the queue's order and the class and year the lead
 // already shows; the entry's own time and staff name say the rest.
-const HIDDEN: Readonly<Record<string, ReadonlySet<string>>> = {
+export const SEAT_HIDDEN: Readonly<Record<string, ReadonlySet<string>>> = {
   [SEAT]: new Set(["lead_id", "stream_id", "waiting_since", "waiting_xid", "waiting_year", "waiting_class", "changed_at"]),
   [REQUEST]: new Set(["lead_id", "requested_by", "requested_at", "resolved_at"]),
 }
@@ -29,18 +29,19 @@ const HIDDEN: Readonly<Record<string, ReadonlySet<string>>> = {
 const NEEDS: Readonly<Record<string, string>> = {
   Boys: "A stream for boys",
   Girls: "A stream for girls",
+  Mixed: "A mixed stream",
 }
 
 export function seatLabel(record: string | null, field: string): string | null {
-  return LABELS[record ?? ""]?.[field] ?? null
+  return SEAT_LABELS[record ?? ""]?.[field] ?? null
 }
 
 export function seatHidden(record: string | null, field: string): boolean {
-  return HIDDEN[record ?? ""]?.has(field) ?? false
+  return SEAT_HIDDEN[record ?? ""]?.has(field) ?? false
 }
 
 export function seatOrder(record: string | null): readonly string[] | null {
-  const labels = LABELS[record ?? ""]
+  const labels = SEAT_LABELS[record ?? ""]
   return labels ? Object.keys(labels) : null
 }
 

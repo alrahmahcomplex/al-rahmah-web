@@ -286,7 +286,7 @@ a.kit-row { border-radius: 14px; }
 
 /* ---------- key-value list and section ---------- */
 .kit-kv { margin: 0; display: grid; grid-template-columns: minmax(110px, 0.8fr) minmax(0, 1.4fr); gap: 8px 14px; font-size: 14px; }
-.kit-kv dt { color: var(--kit-quiet, var(--gf-quiet)); }
+.kit-kv dt { color: var(--kit-quiet, var(--gf-quiet)); overflow-wrap: anywhere; }
 .kit-kv dd { margin: 0; font-weight: 600; overflow-wrap: anywhere; }
 .kit-kv dd small { display: block; font-weight: 400; font-size: 12.5px; line-height: 1.35; color: var(--kit-quiet, var(--gf-quiet)); }
 .kit-kv dd .kit-link { margin-left: 6px; font-size: 13px; }
@@ -295,7 +295,7 @@ a.kit-row { border-radius: 14px; }
 /* Each row takes the list’s columns, so values line up whatever the action’s width. */
 .kit-kv-row { grid-column: 1 / -1; display: grid; grid-template-columns: subgrid; row-gap: 2px; align-items: baseline; padding: 10px 0; border-top: 1px solid var(--gf-mist); }
 .kit-kv-row:first-child { border-top: 0; }
-.kit-kv-row dt { color: var(--kit-quiet, var(--gf-quiet)); }
+.kit-kv-row dt { color: var(--kit-quiet, var(--gf-quiet)); overflow-wrap: anywhere; }
 .kit-kv-row dd { margin: 0; font-weight: 600; overflow-wrap: anywhere; }
 .kit-kv-row dd small { display: block; font-weight: 400; font-size: 12.5px; line-height: 1.35; color: var(--kit-quiet, var(--gf-quiet)); }
 .kit-kv-act { display: flex; justify-content: flex-end; }

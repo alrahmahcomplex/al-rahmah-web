@@ -26,7 +26,7 @@ async function overlayProblems(page: Page) {
 
 test("an Audit date that cannot be read stops the search and is never sent as an empty filter", async ({ page }) => {
   await open(page, "/staff/audit", "Audit")
-  const from = page.getByLabel("From")
+  const from = page.getByLabel("From", { exact: true })
   await from.fill("31/02/2026")
   await page.getByRole("button", { name: "Apply" }).click()
   await expect(page.getByText("Type the date as day/month/year, for example 25/09/2026.")).toBeVisible()
@@ -37,8 +37,8 @@ test("an Audit date that cannot be read stops the search and is never sent as an
   await expect(page).toHaveURL(/[?&]from=2026-09-05(&|$)/)
   await expect(from).toHaveValue(dayFirst("2026-09-05"))
 
-  // Clear empties the field, so the next Apply does not bring the date back.
-  await page.getByRole("link", { name: "Clear" }).click()
+  // Clear filters empties the field, so the next Apply does not bring the date back.
+  await page.getByRole("button", { name: "Clear filters" }).click()
   await expect(page).toHaveURL(/\/staff\/audit$/)
   await expect(from).toHaveValue("")
   await page.getByRole("button", { name: "Apply" }).click()
@@ -101,8 +101,13 @@ for (const width of [1280, 390]) {
 
     test("Audit has no axe findings", { tag: "@nightly" }, async ({ page }) => {
       await open(page, "/staff/audit", "Audit")
-      await expect(page.getByRole("list", { name: "Audit entries" })).toBeVisible()
+      const table = page.getByRole("table", { name: "Audit entries" })
+      await expect(table).toBeVisible()
       expect(await axeProblems(page)).toEqual([])
+
+      await table.locator("tbody tr").first().click()
+      await expect(page.getByRole("dialog")).toBeVisible()
+      expect(await overlayProblems(page)).toEqual([])
     })
   })
 }

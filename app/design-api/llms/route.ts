@@ -18,7 +18,7 @@ const REFUSALS = {
 
 export async function GET(request: Request) {
   const url = new URL(request.url)
-  const access = checkDesignKey(url.searchParams.get("key"), request.headers)
+  const access = await checkDesignKey(url.searchParams.get("key"), request.headers)
   if (access !== "open") {
     const [status, message] = REFUSALS[access]
     return new Response(message, { status, headers: HEADERS })

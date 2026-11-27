@@ -16,27 +16,50 @@ import { designKeyForThisBrowser } from "../actions"
 const DOTS = "••••••••"
 const noSubscribe = () => () => {}
 
-/** design.'s address on the live site; this server's own on localhost and Previews. */
-function useSiteOrigin() {
-  return useSyncExternalStore(
+/**
+ * Where llms.txt and the MCP server answer: design.'s own short addresses on
+ * the live site; this server's /design-api/ ones on localhost and Previews,
+ * which have no such short addresses.
+ */
+function useAddresses() {
+  const origin = useSyncExternalStore(
     noSubscribe,
     () => (window.location.hostname === "design.alrahmahcomplex.or.tz" ? DESIGN_ORIGIN : window.location.origin),
     () => DESIGN_ORIGIN,
   )
+  return origin === DESIGN_ORIGIN
+    ? { llms: `${DESIGN_ORIGIN}/llms.txt`, mcp: `${DESIGN_ORIGIN}/mcp` }
+    : { llms: `${origin}/design-api/llms`, mcp: `${origin}/design-api/mcp` }
+}
+
+/** The password inside single quotes for a shell, whatever characters it holds. */
+const shellQuoted = (text: string) => `'${text.replaceAll("'", `'\\''`)}'`
+/** The password inside a TOML basic string. */
+const tomlEscaped = (text: string) => text.replaceAll("\\", "\\\\").replaceAll('"', '\\"')
+
+/** Each agent's setup with this password: the real one to copy, or dots to show. */
+function setups(mcp: string, secret: string) {
+  return {
+    claude: `claude mcp add --transport http alrahmah-design \\\n  ${mcp} \\\n  --header ${shellQuoted(`Authorization: Bearer ${secret}`)}`,
+    codex: `[mcp_servers.alrahmah-design]\nurl = "${mcp}"\nhttp_headers = { Authorization = "Bearer ${tomlEscaped(secret)}" }`,
+    other: JSON.stringify({ "alrahmah-design": { url: mcp, headers: { Authorization: `Bearer ${secret}` } } }, null, 2),
+  }
 }
 
 const TOOLS = [
   { name: "list_parts", what: "every part in the kit", detail: "Name, group, one line on what it is for, and where its code lives.", icon: "filter" },
   { name: "get_part", what: "one part in full", detail: "Its code, and the rules from DESIGN.md that apply to it.", icon: "search" },
   { name: "get_tokens", what: "colours, type, corners, shadows", detail: "The values in app/tokens.css, as the app reads them.", icon: "tag" },
-  { name: "get_rules", what: "the design rules", detail: "DESIGN.md, whole or one section: the Kit First Rule, the One Invitation Rule, Do’s and Don’ts.", icon: "audit" },
-  { name: "get_icons", what: "icons and illustrations", detail: "Every icon by name with its SVG, and the illustrations.", icon: "pen" },
+  { name: "get_rules", what: "the design rules", detail: "DESIGN.md, whole or one section or named rule: the Kit First Rule, the One Invitation Rule, Do’s and Don’ts.", icon: "audit" },
+  { name: "get_icons", what: "icons", detail: "Every icon by name with its SVG. For the illustrations, ask get_part for illustrations.", icon: "pen" },
 ] as const
 
-const COPY = { copiedMessage: "Copied", copyFailedMessage: "Couldn’t copy. The text is selected: press Ctrl+C." }
+// A code block shows the real setup and selects it when the clipboard is refused; a code chip cannot.
+const COPY_BLOCK = { copiedMessage: "Copied", copyFailedMessage: "Couldn’t copy. The text is selected: press Ctrl+C." }
+const COPY_CHIP = { copiedMessage: "Copied", copyFailedMessage: "Couldn’t copy. Press the copy button again." }
 
 export function ConnectCards() {
-  const origin = useSiteOrigin()
+  const { llms, mcp } = useAddresses()
   const [key, setKey] = useState<string | null>(null)
 
   useEffect(() => {
@@ -51,25 +74,19 @@ export function ConnectCards() {
   }, [])
 
   // Until the password arrives, the page shows dots and holds no copy buttons.
-  const secret = key ?? DOTS
-  const ready = (text: string) => (key ? text : null)
-  const host = origin.replace(/^https?:\/\//, "")
-  const mcp = `${origin}/mcp`
-  const claude = `claude mcp add --transport http alrahmah-design ${mcp} --header "Authorization: Bearer ${secret}"`
-  const codex = `[mcp_servers.alrahmah-design]\nurl = "${mcp}"\nhttp_headers = { Authorization = "Bearer ${secret}" }`
-  const other = JSON.stringify({ "alrahmah-design": { url: mcp, headers: { Authorization: `Bearer ${secret}` } } }, null, 2)
-  const mask = (text: string) => text.replaceAll(secret, DOTS)
+  const shown = setups(mcp, DOTS)
+  const real = key ? setups(mcp, key) : null
 
   return (
     <Bento columns={2} className="kp-ds">
       <Card id="link" title="Any AI that can open a link" caption="ChatGPT, Claude, Gemini: paste this link into the chat.">
         <div className="kp-rowx">
           <CodeChip
-            code={`${host}/llms.txt?key=${DOTS}`}
+            code={`${llms.replace(/^https?:\/\//, "")}?key=${DOTS}`}
             prefix="The link"
-            copyValue={ready(`${origin}/llms.txt?key=${encodeURIComponent(secret)}`)}
+            copyValue={key ? `${llms}?key=${encodeURIComponent(key)}` : null}
             copyLabel="Copy link"
-            {...COPY}
+            {...COPY_CHIP}
           />
         </div>
         <Note icon="info">The link holds the password. Anyone you send it to can read the design system.</Note>
@@ -77,14 +94,14 @@ export function ConnectCards() {
 
       <Card id="mcp" title="Agents that use MCP" caption="Claude Code, Codex, Cursor and other coding agents.">
         <div className="kp-rowx">
-          <CodeChip code={mcp} prefix="The MCP address" copyValue={mcp} copyLabel="Copy address" {...COPY} />
+          <CodeChip code={mcp} prefix="The MCP address" copyValue={mcp} copyLabel="Copy address" {...COPY_CHIP} />
         </div>
         <TabSwitch
           label="Agent"
           tabs={[
-            { value: "claude", label: "Claude Code", panel: <CodeBlock copyValue={ready(claude)} copyLabel="Copy command" {...COPY}>{mask(claude.replace(` ${mcp} `, ` \\\n  ${mcp} \\\n  `))}</CodeBlock> },
-            { value: "codex", label: "Codex", panel: <CodeBlock label="~/.codex/config.toml" copyValue={ready(codex)} copyLabel="Copy settings" {...COPY}>{mask(codex)}</CodeBlock> },
-            { value: "other", label: "Other", panel: <CodeBlock copyValue={ready(other)} copyLabel="Copy settings" {...COPY}>{mask(other)}</CodeBlock> },
+            { value: "claude", label: "Claude Code", panel: <CodeBlock copyValue={real?.claude ?? null} copyLabel="Copy command" {...COPY_BLOCK}>{shown.claude}</CodeBlock> },
+            { value: "codex", label: "Codex", panel: <CodeBlock label="~/.codex/config.toml" copyValue={real?.codex ?? null} copyLabel="Copy settings" {...COPY_BLOCK}>{shown.codex}</CodeBlock> },
+            { value: "other", label: "Other", panel: <CodeBlock copyValue={real?.other ?? null} copyLabel="Copy settings" {...COPY_BLOCK}>{shown.other}</CodeBlock> },
           ]}
         />
       </Card>

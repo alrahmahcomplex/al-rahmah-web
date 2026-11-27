@@ -105,7 +105,7 @@ export function SidebarContent({
                   {link}
                   <SectionsToggle id={sectionsId} open={sectionsOpen} label={item.label} onToggle={() => setSectionsOpen((now) => !now)} />
                 </div>
-                {sectionsOpen && <SidebarSections id={sectionsId} groups={sections.groups} onChoose={onChoose} />}
+                {sectionsOpen && <SidebarSections id={sectionsId} pageHref={sections.href} groups={sections.groups} onChoose={onChoose} />}
               </Fragment>
             )
           }),

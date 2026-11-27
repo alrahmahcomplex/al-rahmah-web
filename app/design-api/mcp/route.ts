@@ -19,7 +19,7 @@ function refuse(status: number, message: string) {
 
 export async function POST(request: Request) {
   const bearer = /^Bearer\s+(.+)$/i.exec(request.headers.get("authorization") ?? "")?.[1] ?? null
-  const access = checkDesignKey(bearer, request.headers)
+  const access = await checkDesignKey(bearer, request.headers)
   if (access === "wrong") return refuse(401, "Send the design site's password: Authorization: Bearer <the password>.")
   if (access === "tries") return refuse(429, "Too many wrong passwords. Wait 10 minutes, then try again.")
   if (access === "unset") return refuse(503, "The design site isn't set up yet.")

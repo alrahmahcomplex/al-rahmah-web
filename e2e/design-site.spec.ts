@@ -108,11 +108,28 @@ test.describe("Connect an AI", () => {
     await expect(page.getByText(DESIGN_PASSWORD)).toHaveCount(0)
 
     await page.getByRole("button", { name: "Copy link" }).click()
-    await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(`http://localhost:3100/llms.txt?key=${encodeURIComponent(DESIGN_PASSWORD)}`)
+    // Off design.alrahmahcomplex.or.tz the link names the app's own address, which answers here.
+    const link = `http://localhost:3100/design-api/llms?key=${encodeURIComponent(DESIGN_PASSWORD)}`
+    await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(link)
+    expect((await page.request.get(link, { headers: { "x-real-ip": `10.${randomUUID()}` } })).status()).toBe(200)
 
     await page.getByRole("tab", { name: "Codex" }).click()
     await page.getByRole("button", { name: "Copy settings" }).click()
     await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toContain(`Authorization = "Bearer ${DESIGN_PASSWORD}"`)
+  })
+
+  test("a part pressed in the sidebar here opens the Design system page at that part", async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 800 })
+    await openDesign(page, "/design/connect")
+    await expect(page.locator('[data-shell="new"][data-live]')).toBeVisible()
+    const sidebar = page.getByRole("complementary", { name: "Sidebar" })
+    // No part is on this page, so none is marked.
+    await expect(sidebar.locator('[aria-current="location"]')).toHaveCount(0)
+    await sidebar.getByRole("button", { name: "Inputs" }).click()
+    await sidebar.getByRole("link", { name: /Password field/ }).click()
+    await expect(page).toHaveURL(/\/design$/)
+    await expect(page.getByRole("region", { name: "Password field" })).toBeInViewport()
+    await expect(sidebar.getByRole("link", { name: /Password field/ })).toHaveAttribute("aria-current", "location")
   })
 })
 

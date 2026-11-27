@@ -1,6 +1,6 @@
 "use client"
 
-import { usePathname } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 import { useEffect, useRef, useState, type MouseEvent } from "react"
 
 import { Icon } from "@/components/icons"
@@ -12,10 +12,17 @@ import type { ShellSectionGroup } from "../shell-types"
  * design site, prototype v6). The groups open one at a time. A section is a
  * link to the block with its id on the page: pressing it scrolls the stage
  * there. While the stage scrolls, the section on screen is marked current
- * and its group opens. Hidden while the sidebar is folded (new-shell.css).
+ * and its group opens. Pressed on another page, it opens the sections' page
+ * (`pageHref`) at that section. Hidden while the sidebar is folded
+ * (new-shell.css).
  */
-export function SidebarSections({ id, groups, onChoose }: { id: string; groups: ShellSectionGroup[]; onChoose?: () => void }) {
+
+// A section asked for from another page, scrolled to once its page is drawn.
+let pendingSection = ""
+
+export function SidebarSections({ id, pageHref, groups, onChoose }: { id: string; pageHref: string; groups: ShellSectionGroup[]; onChoose?: () => void }) {
   const pathname = usePathname()
+  const router = useRouter()
   const [open, setOpen] = useState(groups[0]?.name ?? "")
   // Nothing is marked until a section is on the page: on another page none is.
   const [current, setCurrent] = useState("")
@@ -56,6 +63,13 @@ export function SidebarSections({ id, groups, onChoose }: { id: string; groups: 
       if (!frame) frame = requestAnimationFrame(follow)
     }
     stage.addEventListener("scroll", schedule, { passive: true })
+    // A section asked for from another page: go to it now its page is here.
+    const asked = pendingSection && document.getElementById(pendingSection)
+    if (asked) {
+      mark(pendingSection)
+      requestAnimationFrame(() => asked.scrollIntoView({ block: "start" }))
+    }
+    pendingSection = ""
     // Once for the page as it opens, after its blocks are drawn.
     schedule()
     return () => {
@@ -81,9 +95,15 @@ export function SidebarSections({ id, groups, onChoose }: { id: string; groups: 
   }
 
   function jump(event: MouseEvent<HTMLAnchorElement>, sectionId: string) {
-    const block = document.getElementById(sectionId)
-    if (!block) return
     event.preventDefault()
+    const block = document.getElementById(sectionId)
+    if (!block) {
+      // On another page: open the sections' page, which then goes to the section.
+      pendingSection = sectionId
+      onChoose?.()
+      router.push(pageHref)
+      return
+    }
     window.clearTimeout(jumping.current)
     jumping.current = window.setTimeout(() => (jumping.current = 0), 800)
     mark(sectionId)
@@ -109,7 +129,7 @@ export function SidebarSections({ id, groups, onChoose }: { id: string; groups: 
               {group.sections.map((section) => (
                 <li key={section.id}>
                   <a
-                    href={`#${section.id}`}
+                    href={`${pageHref}#${section.id}`}
                     className="ns-sub-link"
                     data-section={section.id}
                     aria-current={current === section.id ? "location" : undefined}

@@ -1,6 +1,6 @@
 "use client"
 
-import { useRef, type ReactNode } from "react"
+import { useEffect, useRef, useState, type ReactNode } from "react"
 
 import { Icon } from "@/components/icons"
 import { cn } from "@/lib/utils"
@@ -17,7 +17,7 @@ export type CodeBlockProps = {
   /** The copy button's name and tooltip ("Copy command"). */
   copyLabel: string
   copiedMessage: string
-  /** Said when the browser refuses the clipboard; the text is then selected so it can be copied by hand. */
+  /** Said when the browser refuses the clipboard; the block then shows `copyValue` itself, selected, so it can be copied by hand. */
   copyFailedMessage: string
   /** An optional short label above the block, such as a file name. */
   label?: string
@@ -28,10 +28,24 @@ export type CodeBlockProps = {
  * The code block (DESIGN.md, Cards; design site round, 27 Nov 2026): a
  * command or a few lines of settings on Lavender Chrome, 16px corners, a thin
  * Indigo Line, monospace 13px, with the code chip's round copy button in its
- * top-right corner. Long lines scroll sideways inside it.
+ * top-right corner. Long lines scroll sideways inside it. When the browser
+ * refuses the clipboard, the block shows what the button copies (a masked
+ * secret in full) and selects it.
  */
 export function CodeBlock({ children, copyValue, copyLabel, copiedMessage, copyFailedMessage, label, className }: CodeBlockProps) {
   const preRef = useRef<HTMLPreElement>(null)
+  const [byHand, setByHand] = useState(0)
+
+  // Once the block shows the text to copy by hand, select it.
+  useEffect(() => {
+    const pre = preRef.current
+    const selection = window.getSelection()
+    if (byHand === 0 || !pre || !selection) return
+    const range = document.createRange()
+    range.selectNodeContents(pre)
+    selection.removeAllRanges()
+    selection.addRange(range)
+  }, [byHand])
 
   async function copy() {
     if (copyValue === null) return
@@ -39,14 +53,7 @@ export function CodeBlock({ children, copyValue, copyLabel, copiedMessage, copyF
       await navigator.clipboard.writeText(copyValue)
       toast(copiedMessage, { tone: "good" })
     } catch {
-      const pre = preRef.current
-      const selection = window.getSelection()
-      if (pre && selection) {
-        const range = document.createRange()
-        range.selectNodeContents(pre)
-        selection.removeAllRanges()
-        selection.addRange(range)
-      }
+      setByHand((n) => n + 1)
       toast(copyFailedMessage, { tone: "bad" })
     }
   }
@@ -56,7 +63,7 @@ export function CodeBlock({ children, copyValue, copyLabel, copiedMessage, copyF
       {label && <p className="kit-codeblock-label">{label}</p>}
       <div className="kit-codeblock">
         <pre ref={preRef} tabIndex={0}>
-          {children}
+          {byHand > 0 && copyValue !== null ? copyValue : children}
         </pre>
         {copyValue !== null && (
           <button type="button" className="kit-code-copy" data-icon-host="" aria-label={copyLabel} title={copyLabel} onClick={copy}>

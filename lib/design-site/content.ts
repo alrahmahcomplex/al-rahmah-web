@@ -48,12 +48,31 @@ export async function designSections(): Promise<{ heading: string; level: number
   })
 }
 
-/** One section of DESIGN.md by its heading, matched loosely; null when none matches. */
+/** The named rules DESIGN.md writes in bold inside its sections ("**The Kit First Rule.** …"), each with its text. */
+export async function namedRules(): Promise<{ name: string; text: string }[]> {
+  const lines = ((await repoFile("DESIGN.md")) ?? "").split("\n")
+  const rules: { name: string; text: string }[] = []
+  lines.forEach((line, i) => {
+    const match = /^\*\*(The [^*]+? Rule)\.?\*\*/.exec(line)
+    if (!match) return
+    // The rule runs on until the next heading or the next named rule.
+    let end = i + 1
+    while (end < lines.length && !/^#{1,6} /.test(lines[end]) && !/^\*\*The [^*]+? Rule/.test(lines[end])) end++
+    rules.push({ name: match[1], text: lines.slice(i, end).join("\n").trim() })
+  })
+  return rules
+}
+
+/** One section of DESIGN.md by its heading, or one named rule, matched loosely; null when none matches. */
 export async function designSection(heading: string): Promise<string | null> {
   const wanted = heading.trim().toLowerCase()
+  if (!wanted) return null
   const sections = await designSections()
   const found = sections.find((s) => s.heading.toLowerCase() === wanted) ?? sections.find((s) => s.heading.toLowerCase().includes(wanted))
-  return found?.text ?? null
+  if (found) return found.text
+  const rules = await namedRules()
+  const rule = rules.find((r) => r.name.toLowerCase() === wanted) ?? rules.find((r) => r.name.toLowerCase().includes(wanted))
+  return rule?.text ?? null
 }
 
 const FENCE: Record<string, string> = { tsx: "tsx", ts: "ts", css: "css", md: "markdown" }

@@ -53,6 +53,11 @@ describe("the MCP server", () => {
     expect(textOf(await call("get_tokens"))).toContain("--gf-indigo")
     expect(textOf(await call("get_rules", { section: "Buttons" }))).toMatch(/^### Buttons/)
     expect(textOf(await call("get_rules"))).toContain("The Kit First Rule")
+    // A named rule that lives inside a section, as the server's instructions name it.
+    const kitFirst = textOf(await call("get_rules", { section: "The Kit First Rule" }))
+    expect(kitFirst).toMatch(/^\*\*The Kit First Rule\.\*\*/)
+    expect(kitFirst).not.toContain("### Buttons")
+    expect(textOf(await call("get_rules", { section: "one invitation" }))).toMatch(/^\*\*The One Invitation Rule\.\*\*/)
     const none = await call("get_rules", { section: "No such heading" })
     expect((none?.result as { isError: boolean }).isError).toBe(true)
   })

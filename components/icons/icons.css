@@ -14,7 +14,9 @@
 .gf-ic-line { stroke: var(--icon-line, currentColor); transition: stroke var(--gf-t-med) var(--gf-ease-out); }
 .gf-ic-detail { stroke: var(--icon-detail, currentColor); transition: stroke var(--gf-t-med) var(--gf-ease-out); }
 
-:is(.kit-btn, .kit-ck, .kit-sw-knob, .kit-step-dot, .kit-err, [data-icon-host="indigo"], [data-icon-tone="inherit"]) .gf-ic { color: inherit; }
+:is(.kit-btn, .kit-ck, .kit-sw-knob, .kit-step-dot, .kit-err, [data-icon-host="indigo"], [data-icon-tone="inherit"]) .gf-ic,
+/* Filled indigo when chosen or pressed: the icon is white with the text. */
+:is(.kit-sel-o[data-selected], .kit-chipb[aria-pressed="true"], .kit-fpill:is([aria-pressed="true"], [aria-current="page"]), .kit-class[aria-pressed="true"]) .gf-ic { color: inherit; }
 [data-icon-host="indigo"] .gf-ic { color: var(--gf-paper); }
 
 :is(

@@ -10,7 +10,7 @@ bump: minor
 - The Interviews list filters by Conditional, and Reports counts Conditional interviews.
 - Marketing agents see a Conditional result as "Amepokelewa kwa masharti".
 
-### CHANGED
+### IMPROVED
 
 - The Failed result messages give the school's own number (+255 677 330 099 for primary, +255 677 990 033 for secondary) instead of the admissions office number.
 - Results show as coloured tags on the Interviews list and the student's record: Passed green, Conditional orange, Failed red.

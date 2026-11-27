@@ -53,9 +53,9 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
   const params = await searchParams
   const today = tanzaniaToday()
   const admissionYear = currentAdmissionYear(today)
-  // The year the charts show (#518): `?year=` from the card's year list, else the current one.
+  // The year asked for in `?year=` from the card's year list (#518), else the current one.
   const asked = Number(one(params.year))
-  const chartYear = Number.isInteger(asked) && asked >= 2000 && asked <= 2100 ? asked : admissionYear
+  const askedYear = Number.isInteger(asked) && asked >= 2000 && asked <= 2100 ? asked : admissionYear
   const day = pickedDay(one(params.day), today)
   const week = pickedWeek(one(params.week), today)
 
@@ -65,7 +65,7 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
   const interviews = interviewRange(day ?? today)
   const applied = appliedRange(week, today)
 
-  const [notices, interviewCounts, appliedCounts, overdue, seats, discounts, chartCounts, chartYears] = await Promise.all([
+  const [notices, interviewCounts, appliedCounts, overdue, seats, discounts, askedCounts, chartYears] = await Promise.all([
     getMyNotices(supabase),
     canView ? countInterviewsByDay(supabase, interviews.from, interviews.to) : null,
     canView ? countRegistrationsByDay(supabase, applied.from, applied.to) : null,
@@ -73,9 +73,14 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
     canSeeSeats ? seatsOnOpening(supabase, today) : null,
     mayDecideDiscounts(permissions) ? countPendingDiscountRequests(supabase) : null,
     // Every applicant enrolling in the year picked, imported records with the rest (#518).
-    canView ? getHomeChartCounts(supabase, chartYear) : null,
+    canView ? getHomeChartCounts(supabase, askedYear) : null,
     canView ? getAdmissionYears(supabase) : null,
   ])
+  // The years with an applicant, and the current one even before its first.
+  const years = chartYears?.ok ? [...new Set([admissionYear, ...chartYears.data])].toSorted((a, b) => b - a) : []
+  // A year the list does not offer (an old link, or a year whose last applicant has gone) shows the current one.
+  const chartYear = years.includes(askedYear) ? askedYear : admissionYear
+  const chartCounts = chartYear === askedYear ? askedCounts : canView ? await getHomeChartCounts(supabase, chartYear) : null
 
   const actions = quickActions({
     permissions,
@@ -90,8 +95,6 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
     (chartYears && !chartYears.ok) ||
     (canSeeSeats && seats && !seats.ok)
   const counts = chartCounts?.ok ? chartCounts.data : null
-  // The years with an applicant, and the current one even before its first.
-  const years = chartYears?.ok ? [...new Set([admissionYear, ...chartYears.data])].toSorted((a, b) => b - a) : []
   // A year still taking applicants: Months runs on to this month.
   const open = chartYear >= admissionYear
   // v40 order, Sources first and so the one shown; a tab with nothing to draw is left out.
@@ -120,7 +123,7 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
       )}
       <div className="hm-body">
         <div className="hm-main">
-          {(charts.length > 0 || years.length > 0) && <ChartCard tabs={charts} years={years} year={chartYear} current={admissionYear} />}
+          {(charts.length > 0 || years.length > 0) && <ChartCard tabs={charts} years={years} year={chartYear} current={admissionYear} empty={counts?.total === 0} />}
         </div>
         <div className="hm-side">
           {interviewCounts?.ok && (

@@ -251,10 +251,30 @@ test.describe("the chart card", () => {
     await expect(charts(page).getByText("DAY CARE · students")).toBeHidden()
   })
 
+  test("the Admission year list switches every chart to the year picked, and a year it does not offer shows the current one", async ({ page }) => {
+    const current = String(currentAdmissionYear(tanzaniaToday()))
+    const year = charts(page).getByRole("combobox", { name: "Admission year" })
+    await signIn(page, MANAGER)
+    await page.goto("/staff?year=2100")
+    await expect(year).toHaveText(current)
+
+    // The seed has applicants in more than one year, newest first.
+    await year.click()
+    const other = page.getByRole("option").filter({ hasNotText: current }).first()
+    const picked = (await other.textContent())!.trim()
+    await other.click()
+    await expect(page).toHaveURL(new RegExp(`[?&]year=${picked}`))
+    await expect(year).toHaveText(picked)
+
+    await year.click()
+    await page.getByRole("option", { name: current }).click()
+    await expect(page).not.toHaveURL(/[?&]year=/)
+  })
+
   test("staff who may not see payments get no Seats tab, and staff who see only payments get Seats alone", async ({ page }) => {
     const leadsOnly = await createThrowawayStaff(["leads.view"])
     await signIn(page, leadsOnly)
-    await expect(charts(page).getByRole("tab")).toHaveText(["Sources", "Classes", "Months"])
+    await expect(charts(page).getByRole("tab")).toHaveText(["Sources", "Classes", "Months", "Status"])
 
     await page.context().clearCookies()
     const paymentsOnly = await createThrowawayStaff(["payments.view"])

@@ -23,18 +23,30 @@ type ShownTip = Tip & { key: string; x: number; y: number }
  * The admission-year list over the tabs (#518) picks the year every tab but
  * Seats counts; Seats is always the coming opening.
  */
-export function ChartCard({ tabs, years, year, current }: { tabs: ChartTab[]; years: number[]; year: number; current: number }) {
+export function ChartCard({
+  tabs,
+  years,
+  year,
+  current,
+  empty,
+}: {
+  tabs: ChartTab[]
+  years: number[]
+  year: number
+  current: number
+  /** The year picked has no applicant yet: said under the list, over Seats when it shows. */
+  empty: boolean
+}) {
   return (
     <Card className="hm-chart" aria-label="Charts">
       {years.length > 0 && <YearPick years={years} year={year} current={current} />}
-      {tabs.length > 0 ? (
+      {empty && <p className="hm-ch-none">No applicants for {year} yet.</p>}
+      {tabs.length > 0 && (
         <TabSwitch
           label="Charts"
           className="hm-ch-tabs"
           tabs={tabs.map((tab) => ({ value: tab.kind, label: TAB_NAMES[tab.kind], panel: <ChartPanel key={tab.kind} tab={tab} /> }))}
         />
-      ) : (
-        <p className="hm-ch-none">No applicants for {year} yet.</p>
       )}
     </Card>
   )

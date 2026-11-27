@@ -68,7 +68,8 @@ const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "
 const short = (day: string) => `${+day.slice(8)} ${MONTHS[+day.slice(5, 7) - 1]}`
 const WHY_HINT = "Optional. Anything the reason alone doesn’t say."
 
-const tabHref = (key: string) => (key ? `/staff/kit?tab=${key}` : "/staff/kit")
+// The tabs link to this page, wherever it is served (design. or /design).
+const tabHref = (page: string, key: string) => (key ? `${page}?tab=${key}` : page)
 
 function Labelled({ id, label, hint, hintId, children }: { id?: string; label: string; hint?: string; hintId?: string; children: React.ReactNode }) {
   return (
@@ -182,14 +183,17 @@ function WeekPart({ today }: { today: string }) {
   )
 }
 
-/** `today` is Tanzania's date from the server, so the page hydrates the same in any time zone. */
-export function FormPartsCard({ tab, today }: { tab: string; today: string }) {
+/**
+ * `today` is Tanzania's date, read in the browser once the page is live (the
+ * page itself is static), `page` the page's own address and `tab` its ?tab=.
+ */
+export function FormPartsCard({ page, tab, today }: { page: string; tab: string; today: string }) {
   const [filters, setFilters] = useState([false, true])
   const current = TABS.find(([, key]) => key === tab) ?? TABS[0]
   const ids = { pay: useId(), paid: useId(), paidHint: useId(), at: useId(), atLabel: useId(), why: useId(), whyHint: useId(), ends: useId() }
 
   return (
-    <Card title="Form parts on the student’s record" data-bento="full">
+    <Card id="form-parts" title="Form parts on the student’s record" data-bento="full">
       <p className="kp-spec">
         Ten parts the student’s record and the other screens need. Each one borrows a look already on this page. Lists and the calendar open in our own popups,
         never the browser’s grey ones.
@@ -197,7 +201,7 @@ export function FormPartsCard({ tab, today }: { tab: string; today: string }) {
       <form className="kp-fpg" data-kit-form="form-parts" onSubmit={(event) => event.preventDefault()}>
         <div className="kp-fpc">
           <h3>Tabs</h3>
-          <Tabs label="Student record sections" scroll={false} tabs={TABS.map(([label, key]) => ({ label, href: tabHref(key) }))} current={tabHref(current[1])} />
+          <Tabs label="Student record sections" scroll={false} tabs={TABS.map(([label, key]) => ({ label, href: tabHref(page, key) }))} current={tabHref(page, current[1])} />
           <p className="kp-spec">Showing: {current[0]}</p>
         </div>
         <div className="kp-fpc">
@@ -308,7 +312,7 @@ export function ListInPopoverCard() {
   const whoId = useId()
   const fromId = useId()
   return (
-    <Card title="Choice list in a popover">
+    <Card id="popover-list" title="Choice list in a popover">
       <div className="kp-rowx">
         <Popover
           trigger={<RoundButton icon="filter" label="Filter Visited applicants" size={40} on={period !== "all"} />}
@@ -324,7 +328,7 @@ export function ListInPopoverCard() {
         </Popover>
       </div>
       {/* As the Audit filter: a plain GET form, sent by the browser with no handler of ours. */}
-      <form method="get" action="/staff/kit" className="kp-fpc" data-kit-form="who" aria-label="Filter the audit">
+      <form method="get" className="kp-fpc" data-kit-form="who" aria-label="Filter the audit">
         <div className="kp-fld">
           <label className="kp-fl" htmlFor={fromId}>
             From

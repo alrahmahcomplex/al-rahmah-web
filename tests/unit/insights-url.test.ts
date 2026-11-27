@@ -6,9 +6,9 @@ import nextConfig from "../../next.config"
 
 describe("the referrer every page allows", () => {
   it("is the site's origin only, so no page's query string reaches the next page or its analytics", async () => {
-    expect(await nextConfig.headers?.()).toEqual([
-      { source: "/:path*", headers: [{ key: "Referrer-Policy", value: "strict-origin" }] },
-    ])
+    // Then design.'s noindex header, on its host only (tests/unit/design-site-hosts.test.ts).
+    expect((await nextConfig.headers?.())?.[0]).toEqual({ source: "/:path*", headers: [{ key: "Referrer-Policy", value: "strict-origin" }] })
+    expect((await nextConfig.headers?.())?.filter((rule) => !rule.has)).toHaveLength(1)
   })
 })
 

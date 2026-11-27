@@ -9,15 +9,28 @@
 //
 // next.config.ts imports this file, so it uses relative imports only.
 
+import { DESIGN_COOKIE } from "./design-site/cookie"
 import { LANGUAGE_STATE_PREFIX, languageRewritesFor, type LanguageRewrite } from "./language-state"
 
 export const PUBLIC_HOST = "alrahmahcomplex.or.tz"
 export const PORTAL_HOST = "portal.alrahmahcomplex.or.tz"
 export const AGENTS_HOST = "agents.alrahmahcomplex.or.tz"
+// The design system (design site, prototype v6): the kit page behind one
+// password, llms.txt and the MCP server. One app with the others; its pages
+// live under /design, which design. serves at its root.
+export const DESIGN_HOST = "design.alrahmahcomplex.or.tz"
 
 export const PUBLIC_ORIGIN = `https://${PUBLIC_HOST}`
 export const PORTAL_ORIGIN = `https://${PORTAL_HOST}`
 export const AGENTS_ORIGIN = `https://${AGENTS_HOST}`
+export const DESIGN_ORIGIN = `https://${DESIGN_HOST}`
+
+// The design pages' own addresses in the app, and the lock screen any of
+// them shows until the browser has given the password.
+export const DESIGN_PREFIX = "/design"
+export const DESIGN_UNLOCK_PATH = "/design-unlock"
+// The design pages design. serves at its root: "" is the Design system page.
+const DESIGN_PAGES = ["", "/connect"] as const
 
 // The staff portal's pages: staff screens and sign-in (/auth is shared with
 // agents., except /auth/confirm which belongs to staff).
@@ -111,7 +124,7 @@ export function agentsOrigin(requestOrigin: string): string {
 }
 
 type HostCondition = { type: "host"; value: string }
-type Condition = HostCondition | { type: "query"; key: string; value?: string }
+type Condition = HostCondition | { type: "query" | "cookie"; key: string; value?: string }
 
 type Redirect = {
   source: string
@@ -249,4 +262,61 @@ export function agentsHostRewrites(): LanguageRewrite[] {
     { source: "/icons/:path+", has: agents, destination: "/agents/icons/:path+" },
     ...languageRewritesFor("/auth/forgot-password", (state) => `${LANGUAGE_STATE_PREFIX}/${state}/agents-auth/forgot-password`, agents),
   ]
+}
+
+// The design site's moves, checked before crossHostRedirects so /staff/kit
+// reaches the design system in one hop:
+// - The kit page moved from /staff/kit: from the production hosts to
+//   design.'s root, and on localhost and Previews to /design.
+// - The design pages' app addresses (/design...) on the other production
+//   hosts go to design., and on design. itself to their root addresses.
+// - design. serves nothing else: staff and agent pages go to their hosts,
+//   the Admission form to the public site.
+export function designRedirects(): Redirect[] {
+  const others = [PUBLIC_HOST, PORTAL_HOST, AGENTS_HOST]
+  const toDesign = (page: string) => (page ? `${DESIGN_ORIGIN}${page}` : `${DESIGN_ORIGIN}/`)
+  return [
+    ...[...others, DESIGN_HOST].flatMap((host) => [
+      { source: "/staff/kit", has: onHost(host), destination: `${DESIGN_ORIGIN}/`, permanent: false },
+      { source: "/staff/kit/:path+", has: onHost(host), destination: `${DESIGN_ORIGIN}/`, permanent: false },
+    ]),
+    ...others.flatMap((host) => [
+      ...DESIGN_PAGES.map((page) => ({ source: `${DESIGN_PREFIX}${page}`, has: onHost(host), destination: toDesign(page), permanent: false })),
+      { source: DESIGN_UNLOCK_PATH, has: onHost(host), destination: `${DESIGN_ORIGIN}/`, permanent: false },
+    ]),
+    ...DESIGN_PAGES.map((page) => ({ source: `${DESIGN_PREFIX}${page}`, has: onHost(DESIGN_HOST), destination: page || "/", permanent: false })),
+    { source: DESIGN_UNLOCK_PATH, has: onHost(DESIGN_HOST), destination: "/", permanent: false },
+    ...prefixRedirects(DESIGN_HOST, PORTAL_ORIGIN, STAFF_PATHS),
+    ...prefixRedirects(DESIGN_HOST, AGENTS_ORIGIN, AGENT_PATHS),
+    { source: "/apply", has: onHost(DESIGN_HOST), destination: `${PUBLIC_ORIGIN}/apply`, permanent: false },
+    // Every other host: the kit page's old address opens the design pages here.
+    { source: "/staff/kit", destination: DESIGN_PREFIX, permanent: false },
+    { source: "/staff/kit/:path+", destination: DESIGN_PREFIX, permanent: false },
+  ]
+}
+
+// Before every other rewrite. A design page opens only for a browser whose
+// cookie holds the password's token (lib/design-site/token.ts); any other
+// gets the lock screen at the same address. Without a password (`token`
+// null) every design page is locked. Checked by the routing layer, so the
+// pages stay static. Each address has its locked rule before its open one,
+// so the result is the same whether rewrites chain or stop at the first
+// match. design. serves the design pages at its root, and llms.txt and the
+// MCP server beside them; those check the password themselves.
+export function designRewrites(token: string | null): LanguageRewrite[] {
+  const design = onHost(DESIGN_HOST)
+  const unless = token ? { missing: [{ type: "cookie" as const, key: DESIGN_COOKIE, value: token }] } : {}
+  const locked = (source: string, has?: HostCondition[]): LanguageRewrite => ({ source, ...(has ? { has } : {}), ...unless, destination: DESIGN_UNLOCK_PATH })
+  return [
+    ...DESIGN_PAGES.flatMap((page) => [locked(page || "/", design), { source: page || "/", has: design, destination: `${DESIGN_PREFIX}${page}` }]),
+    { source: "/llms.txt", has: design, destination: "/design-api/llms" },
+    { source: "/mcp", has: design, destination: "/design-api/mcp" },
+    locked(DESIGN_PREFIX),
+    locked(`${DESIGN_PREFIX}/:path+`),
+  ]
+}
+
+// design. is kept out of search results.
+export function designHostHeaders() {
+  return [{ source: "/:path*", has: onHost(DESIGN_HOST), headers: [{ key: "X-Robots-Tag", value: "noindex, nofollow" }] }]
 }

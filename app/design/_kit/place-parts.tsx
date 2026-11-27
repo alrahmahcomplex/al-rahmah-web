@@ -35,7 +35,7 @@ export function LastNameCard() {
   const [from, setFrom] = useState<LastNameFrom>("father_last")
   const full = studentFullName({ ...name, fatherMiddle: cleanName(name.fatherMiddle), fatherLast: cleanName(name.fatherLast) }, from)
   return (
-    <Card title="Last-name choice">
+    <Card id="last-name" title="Last-name choice">
       <p className="kp-spec">Some students use the father’s middle name as their last name. Once his middle and last names are in, the form asks which one; his last name is picked to start with.</p>
       <div className="flex flex-col gap-3">
         <StudentNameBoxes id={id} labels={{ ...NAME_LABELS, student: "Student’s name", father: "Father’s name" }} value={name} onChange={setName} required={false} />
@@ -58,7 +58,7 @@ export function PlaceListsCard() {
   const [country, setCountry] = useState("")
   const out = region === OUTSIDE_TANZANIA
   return (
-    <Card title="Type-ahead list: region and country">
+    <Card id="type-ahead" title="Type-ahead list: region and country">
       <p className="kp-spec">
         Typing shows the best match as faint text; Right arrow, Tab or Enter takes it, and Space does when only one fits. The arrow opens the list over the page with a search box.
         Only these two lists go A to Z.
@@ -98,7 +98,7 @@ export function TwoChoicesCard() {
   const id = useId()
   const [who, setWho] = useState<string | null>(null)
   return (
-    <Card title="Two big choices">
+    <Card id="two-choices" title="Two big choices">
       <p className="kp-spec">One question first, as two big buttons, each with a line under it. Nothing else shows until one is picked.</p>
       <ChoiceTiles
         name={`${id}-who`}
@@ -124,7 +124,7 @@ export function ChipUpBarCard() {
   ]
   const activeGroup = step < 4 ? 0 : 1
   return (
-    <Card title="Stepper: Start over on the right">
+    <Card id="stepper-reset" title="Stepper: Start over on the right">
       <p className="kp-spec">
         The parents’ form: on the first question Start over holds the left slot. From the second on, Back takes it, Start over moves to the right and the section chip sits centred above the bar (<code>chipUp</code> with <code>endReset</code>). Staff forms leave <code>chipUp</code> off.
       </p>

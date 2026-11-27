@@ -80,7 +80,7 @@ test.describe("on a desktop", () => {
   })
 
   test("the toggle folds the sidebar to its icons, across a reload and a link", async ({ page }) => {
-    await open(page, ADMISSIONS, "/staff/kit")
+    await open(page, ADMISSIONS, "/staff")
     await expect(toggle(page)).toHaveAttribute("aria-pressed", "true")
     await toggle(page).click()
     await expect(toggle(page)).toHaveAttribute("aria-pressed", "false")
@@ -96,13 +96,13 @@ test.describe("on a desktop", () => {
     await expect(toggle(page)).toHaveAttribute("aria-pressed", "false")
 
     await toggle(page).click()
-    await page.goto("/staff/kit")
+    await page.goto("/staff")
     await expect(toggle(page)).toHaveAttribute("aria-pressed", "true")
     await expect(handle(page)).toBeVisible()
   })
 
   test("the edge resizes the sidebar by keyboard and remembers it; Home and a double-click return to the narrowest", async ({ page }) => {
-    await open(page, ADMISSIONS, "/staff/kit")
+    await open(page, ADMISSIONS, "/staff")
     const edge = handle(page)
     await expect(edge).toHaveAttribute("aria-valuemin", /\d+/)
     const min = Number(await edge.getAttribute("aria-valuemin"))
@@ -138,7 +138,7 @@ test.describe("on a desktop", () => {
   })
 
   test("the bell counts the requests the Manager may decide, lists them and hides its pip once opened", async ({ page }) => {
-    await open(page, MANAGER, "/staff/kit")
+    await open(page, MANAGER, "/staff")
     const bell = page.getByRole("banner").getByRole("button", { name: /^New requests, [1-9]\d* waiting$/ })
     await expect(bell).toBeVisible()
     await expect(page.locator(".ns-pip")).toHaveText(/^[1-9]\d*$/)
@@ -158,7 +158,7 @@ test.describe("on a desktop", () => {
   })
 
   test("staff who decide no requests see no bell; the person pill opens the account menu", async ({ page }) => {
-    await open(page, ADMISSIONS, "/staff/kit")
+    await open(page, ADMISSIONS, "/staff")
     await expect(page.getByRole("banner").getByRole("button", { name: /^New requests/ })).toHaveCount(0)
     const me = page.getByRole("banner").getByRole("button", { name: `${ADMISSIONS.name} ${ADMISSIONS.roleName}` })
     await me.click()
@@ -180,7 +180,7 @@ test.describe("on a desktop", () => {
   })
 
   test("pressing the bottom of the stage's scrollbar jumps to the end of the page", async ({ page }) => {
-    await open(page, ADMISSIONS, "/staff/kit")
+    await open(page, MANAGER, "/staff/reports")
     const scroll = page.locator(".ns-scroll")
     await expect(page.locator(".ns-vbar[data-on]")).toBeVisible()
     const bar = (await page.locator(".ns-vbar").boundingBox())!
@@ -193,8 +193,8 @@ test.describe("on a desktop", () => {
 test.describe("Back on the stage", () => {
   test.use({ viewport: { width: 1280, height: 800 } })
 
-  test("returns to where the kit page was scrolled, and a new page starts at the top with the stage focused", async ({ page }) => {
-    await open(page, MANAGER, "/staff/kit")
+  test("returns to where Reports was scrolled, and a new page starts at the top with the stage focused", async ({ page }) => {
+    await open(page, MANAGER, "/staff/reports")
     const scroll = page.locator(".ns-scroll")
     await scroll.evaluate((el) => el.scrollTo(0, 1500))
     await expect.poll(() => scroll.evaluate((el) => Math.round(el.scrollTop))).toBe(1500)
@@ -206,7 +206,7 @@ test.describe("Back on the stage", () => {
     await expect(scroll).toBeFocused()
 
     await page.goBack()
-    await expect(page).toHaveURL(/\/staff\/kit$/)
+    await expect(page).toHaveURL(/\/staff\/reports$/)
     await expect.poll(() => scroll.evaluate((el) => Math.round(el.scrollTop))).toBe(1500)
   })
 })
@@ -316,7 +316,7 @@ test.describe("moving between pages by links", () => {
 test("a role that may approve discounts but not view applicants gets a bell whose number matches its list", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 })
   const person = await createThrowawayStaff(["discounts.approve"])
-  await open(page, person, "/staff/kit")
+  await open(page, person, "/staff")
   const bell = page.getByRole("banner").getByRole("button", { name: /^New requests/ })
   const waiting = Number((await bell.getAttribute("aria-label"))!.match(/(\d+) waiting/)?.[1] ?? 0)
   await bell.click()

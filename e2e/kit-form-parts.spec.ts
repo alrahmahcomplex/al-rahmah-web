@@ -1,9 +1,8 @@
 import { type Locator, type Page } from "@playwright/test"
 
-import { ADMISSIONS } from "../tests/support/fixtures"
 import { axeProblems, settled } from "./axe"
+import { openDesign } from "./design"
 import { chooseOption, dayFirst } from "./kit-parts"
-import { signInOnce } from "./log-in"
 import { expect, test } from "./staff-test"
 
 // The kit's form parts on the kit page (#358): the prototype's card "Form
@@ -11,7 +10,7 @@ import { expect, test } from "./staff-test"
 // and the choice list inside a popover. The card is one plain form whose
 // parts are all uncontrolled, so each test reads what it would post.
 
-// Staff are in Tanzania, and the kit page takes Tanzania's date from the server: the device's
+// Staff are in Tanzania, and the kit page takes Tanzania's date in the browser: the device's
 // today matches it at any hour. The block behind UTC sets its own zone.
 test.use({ timezoneId: "Africa/Dar_es_Salaam" })
 
@@ -19,9 +18,8 @@ const CARD = "Form parts on the student’s record"
 const WRONG_DATE = "Type the date as day/month/year, for example 25/09/2026."
 const WRONG_TIME = "Type the time as hours:minutes, for example 14:30."
 
-async function openKit(page: Page, path = "/staff/kit") {
-  await signInOnce(page, ADMISSIONS.email, ADMISSIONS.password)
-  await page.goto(path)
+async function openKit(page: Page, path = "/design") {
+  await openDesign(page, path)
   await expect(page.getByRole("heading", { level: 1, name: "Design system" })).toBeVisible()
   await expect(page.locator('[data-shell="new"][data-live]')).toBeVisible()
   const card = page.getByRole("region", { name: CARD })
@@ -382,7 +380,7 @@ test("in a plain GET form, an unreadable date stops the search and focus moves t
   // A real date is sent as YYYY-MM-DD, with "" for Anyone.
   await from.fill(dayFirst("2026-11-02"))
   await form.getByRole("button", { name: "Apply" }).click()
-  await expect(page).toHaveURL(/\/staff\/kit\?from=2026-11-02&actor=$/)
+  await expect(page).toHaveURL(/\/design\?from=2026-11-02&actor=$/)
 })
 
 test.describe("in a time zone behind UTC", () => {
@@ -487,7 +485,7 @@ test("tabs are links; the current one is marked", async ({ page }) => {
   const nav = card.getByRole("navigation", { name: "Student record sections" })
   await expect(nav.getByRole("link", { name: "Overview" })).toHaveAttribute("aria-current", "page")
   await nav.getByRole("link", { name: "Interview" }).click()
-  await expect(page).toHaveURL(/\/staff\/kit\?tab=interview$/)
+  await expect(page).toHaveURL(/\/design\?tab=interview$/)
   const interview = nav.getByRole("link", { name: "Interview" })
   await expect(interview).toHaveAttribute("aria-current", "page")
   await expect(card.getByText("Showing: Interview")).toBeVisible()

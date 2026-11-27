@@ -13,7 +13,7 @@ import {
   promptNeededInState,
   statePath,
 } from "@/lib/language-state"
-import { agentsHostRewrites } from "@/lib/site-hosts"
+import { agentsHostRewrites, designRewrites } from "@/lib/site-hosts"
 
 type Rewrite = ReturnType<typeof languageStateRewrites>[number]
 
@@ -86,9 +86,10 @@ describe("picking a page's copy from the lang cookie", () => {
 })
 
 describe("next.config.ts", () => {
-  it("rewrites before the filesystem, so agents host rules and public language copies run first", async () => {
+  it("rewrites before the filesystem, so the design site's, then the agents host's rules and the public language copies run first", async () => {
     const rewrites = await nextConfig.rewrites!()
-    expect(Array.isArray(rewrites) ? null : rewrites.beforeFiles).toEqual([...agentsHostRewrites(), ...languageStateRewrites()])
+    // No DESIGN_SITE_PASSWORD in tests: the design pages are locked (null token).
+    expect(Array.isArray(rewrites) ? null : rewrites.beforeFiles).toEqual([...designRewrites(null), ...agentsHostRewrites(), ...languageStateRewrites()])
   })
 
   it("sends a direct visit to a copy back to the public address", async () => {

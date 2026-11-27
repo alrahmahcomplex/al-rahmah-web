@@ -1,46 +1,48 @@
 import { type Locator, type Page } from "@playwright/test"
 
-import { ADMISSIONS } from "../tests/support/fixtures"
 import { axeProblems, settled } from "./axe"
-import { signInOnce } from "./log-in"
+import { openDesign } from "./design"
 import { expect, test } from "./staff-test"
 
 // The kit page (#319): the prototype's Design system page rebuilt with
-// components/kit, then the kit's other pieces. Any signed-in staff member may
-// open it; it is drawn in the new shell (#322).
+// components/kit, then the kit's other pieces. Since the design site it is
+// the Design system page there (/design locally), behind the site's password,
+// in the catalogue's groups, drawn in the shell (#322).
 
 async function openKit(page: Page) {
-  await signInOnce(page, ADMISSIONS.email, ADMISSIONS.password)
-  await page.goto("/staff/kit")
+  await openDesign(page)
   await expect(page.getByRole("heading", { level: 1, name: "Design system" })).toBeVisible()
   await expect(page.locator('[data-shell="new"][data-live]')).toBeVisible()
 }
 
-test("a signed-out visitor is sent to sign in", async ({ page }) => {
+test("the old address opens the design site, which asks for its password first", async ({ page }) => {
   await page.goto("/staff/kit")
-  await expect(page).toHaveURL(/\/auth/)
+  await expect(page).toHaveURL(/\/design$/)
+  await expect(page.getByRole("heading", { name: "Design system", exact: true })).toBeVisible()
+  await expect(page.getByRole("textbox", { name: "Password" })).toBeVisible()
+  await expect(page.getByRole("heading", { name: "Colour", exact: true })).toHaveCount(0)
 })
 
 test("shows both parts on the stage of the new shell, and is not indexed", async ({ page }) => {
   await openKit(page)
   await expect(page).toHaveTitle("Design system · Al-Rahmah Complex")
   await expect(page.locator('meta[name="robots"]')).toHaveAttribute("content", /noindex/)
-  await expect(page.locator('[data-shell="new"]').getByRole("navigation", { name: "Staff" })).toBeVisible()
+  await expect(page.locator('[data-shell="new"]').getByRole("navigation", { name: "Design system" })).toBeVisible()
 
-  const top = page.locator('[data-part="design-system"]')
-  for (const title of ["Icons: one colour at rest, two in use", "Illustrations", "Colour", "Type", "Buttons", "Fields", "Selectors", "Stepper: chip bar", "Cards and chips", "Summary rows"])
+  const top = page.locator("main")
+  for (const title of ["Icons: indigo at rest, the detail orange in use", "Illustrations", "Colour", "Type", "Buttons", "Fields", "Selectors", "Stepper: chip bar", "Cards and chips", "Summary rows"])
     await expect(top.getByRole("heading", { level: 2, name: title, exact: true })).toBeVisible()
   // The swatches read their values from app/tokens.css.
   await expect(top.getByText("#0900bb")).toBeVisible()
 
-  const more = page.locator('[data-part="more"]')
+  const more = page.locator("main")
   for (const title of ["Page header", "Filter pills and table", "Table", "List row", "Chips", "Note", "Empty state", "Loading state", "Skeleton", "Task card and finished state", "Guided form", "Sheet", "Side sheet", "Popover", "Toast", "Finish"])
     await expect(more.getByRole("heading", { level: 2, name: title, exact: true })).toBeVisible()
 })
 
 test("the controls answer: selectors, filter pills, rows, chip buttons and the pending button", async ({ page }) => {
   await openKit(page)
-  const top = page.locator('[data-part="design-system"]')
+  const top = page.locator("main")
   const tile = top.getByRole("button", { name: /FORM 1/ })
   await expect(tile).toHaveAttribute("aria-pressed", "true")
   await tile.click()
@@ -50,7 +52,7 @@ test("the controls answer: selectors, filter pills, rows, chip buttons and the p
   await expect(top.getByRole("radio", { name: "STD 7" })).toBeChecked()
   await expect(top.getByRole("textbox", { name: "Example field with an error" })).toHaveAccessibleDescription("Type the full name, at least two names.")
 
-  const more = page.locator('[data-part="more"]')
+  const more = page.locator("main")
   const detail = more.getByRole("region", { name: "Sections and key-value list" })
   await expect(detail).toContainText("DMSN-90001")
   const row = more.getByRole("row", { name: "Baraka Mfano" })
@@ -63,7 +65,7 @@ test("the controls answer: selectors, filter pills, rows, chip buttons and the p
   const filtered = more.getByRole("region", { name: "Filter pills and table" })
   await expect(filtered.getByText("No applicant matches")).toBeVisible()
   await expect(filtered.getByRole("table", { name: "Applicants" })).toHaveCount(0)
-  await more.getByRole("button", { name: "Clear" }).first().click()
+  await filtered.getByRole("button", { name: "Clear" }).click()
   await expect(filtered.getByRole("table", { name: "Applicants" })).toBeVisible()
 
   const deposit = more.getByRole("group", { name: "What kind of payment is it?" }).getByRole("button", { name: "Initial deposit" })
@@ -77,7 +79,7 @@ test("the controls answer: selectors, filter pills, rows, chip buttons and the p
 
   // #348: a link drawn as a button, a disabled button and the bad note are shown too.
   const states = more.getByRole("region", { name: "Button states" })
-  await expect(states.getByRole("link", { name: "Open Applicants" })).toHaveAttribute("href", "/staff/applicants")
+  await expect(states.getByRole("link", { name: "Open Applicants" })).toHaveAttribute("href", "/design")
   await expect(states.getByRole("button", { name: "Continue" })).toBeDisabled()
   await expect(more.getByRole("region", { name: "Note" }).getByText("The payment form could not open. Check your connection and try again.")).toBeVisible()
 })
@@ -89,12 +91,12 @@ test("the link filter pills: each is a link to ?filter=, the current one is mark
   await expect(pill("All")).toHaveAttribute("aria-current", "page")
 
   await pill("Visited").click()
-  await expect(page).toHaveURL(/\/staff\/kit\?filter=Visited$/)
+  await expect(page).toHaveURL(/\/design\?filter=Visited$/)
   await expect(pill("Visited")).toHaveAttribute("aria-current", "page")
   await expect(pill("All")).not.toHaveAttribute("aria-current")
 
   await page.goBack()
-  await expect(page).toHaveURL(/\/staff\/kit$/)
+  await expect(page).toHaveURL(/\/design$/)
   await expect(pill("All")).toHaveAttribute("aria-current", "page")
 })
 
@@ -107,19 +109,19 @@ for (const width of [1280, 390]) {
     expect(await axeProblems(page)).toEqual([])
 
     // #380: quiet text on a hovered row's Lavender Chrome (the tinted boxes on Whisper, Chrome and Mist are in the scan above).
-    const more = page.locator('[data-part="more"]')
+    const more = page.locator("main")
     await more.getByRole("row", { name: "Baraka Mfano" }).hover()
     expect(await axeProblems(page, ".kit-tr-open:hover")).toEqual([])
     await more.getByRole("region", { name: "List row" }).locator("button.kit-row").first().hover()
     expect(await axeProblems(page, "button.kit-row:hover")).toEqual([])
-    await page.locator('[data-part="design-system"]').getByText("Not a sibling", { exact: true }).hover()
+    await page.locator("main").getByText("Not a sibling", { exact: true }).hover()
     expect(await axeProblems(page, ".gf-choice:hover")).toEqual([])
   })
 
   test(`axe finds nothing in the open sheets and popover at ${width}px`, { tag: "@nightly" }, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 })
     await openKit(page)
-    const more = page.locator('[data-part="more"]')
+    const more = page.locator("main")
 
     await more.getByRole("region", { name: "Sheet", exact: true }).getByRole("button", { name: "Review" }).first().click()
     await expect(page.getByRole("dialog", { name: "Sibling · 10%" })).toBeVisible()
@@ -166,7 +168,7 @@ async function tabStaysInside(page: Page, overlay: Locator, presses: number) {
 test("a centre sheet: focus on the title, Tab stays inside, Escape and Close return focus, a decision shows the toast", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 })
   await openKit(page)
-  const card = page.locator('[data-part="more"]').getByRole("region", { name: "Sheet", exact: true })
+  const card = page.locator("main").getByRole("region", { name: "Sheet", exact: true })
   const review = card.getByRole("button", { name: "Review" }).first()
 
   await review.click()
@@ -199,7 +201,7 @@ test("a centre sheet: focus on the title, Tab stays inside, Escape and Close ret
 test("a sheet's body is in the tab order only while it scrolls", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 900 })
   await openKit(page)
-  await page.locator('[data-part="more"]').getByRole("region", { name: "Sheet", exact: true }).getByRole("button", { name: "Review" }).first().click()
+  await page.locator("main").getByRole("region", { name: "Sheet", exact: true }).getByRole("button", { name: "Review" }).first().click()
   const review = page.getByRole("dialog", { name: "Sibling · 10%" })
   await expect(review.getByRole("heading", { name: "Sibling · 10%" })).toBeFocused()
   await page.keyboard.press("Tab")
@@ -211,7 +213,7 @@ test("a sheet's body is in the tab order only while it scrolls", async ({ page }
 
   // On a phone the record's body is longer than the sheet: Tab reaches it, so the keyboard can scroll it.
   await page.setViewportSize({ width: 360, height: 640 })
-  await page.locator('[data-part="more"]').getByRole("row", { name: "Rehema Said Abdallah" }).click()
+  await page.locator("main").getByRole("row", { name: "Rehema Said Abdallah" }).click()
   const record = page.getByRole("dialog", { name: "Rehema Said Abdallah" })
   await expect(record.getByRole("heading", { name: "Rehema Said Abdallah" })).toBeFocused()
   await page.keyboard.press("Tab")
@@ -223,7 +225,7 @@ test("a sheet's body is in the tab order only while it scrolls", async ({ page }
 test("a side sheet's inline editors: the fee with its reason, and the father's name", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 640 })
   await openKit(page)
-  const row = page.locator('[data-part="more"]').getByRole("row", { name: "Zuhura Ali Mussa Khamis" })
+  const row = page.locator("main").getByRole("row", { name: "Zuhura Ali Mussa Khamis" })
   await row.click()
   const sheet = page.getByRole("dialog", { name: "Zuhura Ali Mussa Khamis" })
   await expect(sheet.getByRole("heading", { name: "Zuhura Ali Mussa Khamis" })).toBeFocused()
@@ -273,7 +275,7 @@ test("a side sheet's inline editors: the fee with its reason, and the father's n
 test("on a phone, the record sheet adds a Previous school inline and Record payment records the payment", async ({ page }) => {
   await page.setViewportSize({ width: 360, height: 640 })
   await openKit(page)
-  const row = page.locator('[data-part="more"]').getByRole("row", { name: "Rehema Said Abdallah" })
+  const row = page.locator("main").getByRole("row", { name: "Rehema Said Abdallah" })
   await row.click()
   const record = page.getByRole("dialog", { name: "Rehema Said Abdallah" })
   // The keyboard works the same on a bottom sheet: title first, Tab stays inside, Escape returns focus.
@@ -316,7 +318,7 @@ test("on a phone, the record sheet adds a Previous school inline and Record paym
 test("the popovers: the bell's new requests and the account menu", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 900 })
   await openKit(page)
-  const card = page.locator('[data-part="more"]').getByRole("region", { name: "Popover" })
+  const card = page.locator("main").getByRole("region", { name: "Popover" })
   const bell = card.getByRole("button", { name: "New requests" })
   await expect(card.locator(".kp-pip")).toHaveText("2")
 
@@ -367,7 +369,7 @@ test("the guided form folds each answer, finishes its groups and ends on the fin
   test.slow()
   await page.setViewportSize({ width: 1280, height: 900 })
   await openKit(page)
-  const card = page.locator('[data-part="more"]').getByRole("region", { name: "Guided form" })
+  const card = page.locator("main").getByRole("region", { name: "Guided form" })
   const open = card.locator(".gf-step.gf-open")
   const bar = card.locator(".gf-bar-row")
   const question = (name: string) => open.getByRole("heading", { level: 2, name })
@@ -477,7 +479,7 @@ test("under reduced motion the staff guided form can be answered to the end", as
   await page.emulateMedia({ reducedMotion: "reduce" })
   await page.setViewportSize({ width: 390, height: 844 })
   await openKit(page)
-  const card = page.locator('[data-part="more"]').getByRole("region", { name: "Guided form" })
+  const card = page.locator("main").getByRole("region", { name: "Guided form" })
   const open = card.locator(".gf-step.gf-open")
   await answerNames(open, ["Neema", "Juma", "Salim"])
   await expect(open.getByRole("heading", { name: "Which class is Neema joining?" })).toBeVisible()
@@ -495,7 +497,7 @@ test("under reduced motion the staff guided form can be answered to the end", as
 test("removing a student keeps the names being typed for another", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 900 })
   await openKit(page)
-  const card = page.locator('[data-part="more"]').getByRole("region", { name: "Guided form" })
+  const card = page.locator("main").getByRole("region", { name: "Guided form" })
   const open = card.locator(".gf-step.gf-open")
   await answerNames(open, ["Neema", "Juma", "Salim"])
   await pick(open, "STD 5")

@@ -77,7 +77,7 @@ function DiscountReviews() {
   }
 
   return (
-    <Card title="Sheet" data-bento="full">
+    <Card id="sheet" title="Sheet" data-bento="full">
       {DISCOUNT_REQUESTS.map((d, i) => {
         const result = decided[d.name]
         return (
@@ -441,7 +441,7 @@ function ApplicantSheets() {
   )
 
   return (
-    <Card title="Side sheet" data-bento="full">
+    <Card id="side-sheet" title="Side sheet" data-bento="full">
       <Table
         label="Applicants"
         rows={apps}
@@ -616,7 +616,7 @@ function Popovers() {
   const [unread, setUnread] = useState<number>(NEW_REQUESTS.length)
   const [bellOpen, setBellOpen] = useState(false)
   return (
-    <Card title="Popover">
+    <Card id="popover" title="Popover">
       <div className="kp-rowx kp-topbar">
         <span className="kp-bellw">
           <Popover
@@ -661,14 +661,12 @@ function Popovers() {
   )
 }
 
-/** The overlay cards of the kit page's second grid. */
-export function OverlayCards() {
+export { ApplicantSheets as SideSheetCard, DiscountReviews as SheetCard, Popovers as PopoverCard }
+
+export function ToastCard() {
   return (
     <>
-      <DiscountReviews />
-      <ApplicantSheets />
-      <Popovers />
-      <Card title="Toast">
+      <Card id="toast" title="Toast">
         <div className="kp-rowx">
           <Button variant="ghost" size="small" onClick={() => toast("Approved. Invite sent to asha@example.com.")}>
             News
@@ -689,13 +687,12 @@ export function OverlayCards() {
         </div>
         <p className="kp-spec">One sentence at the bottom of the screen after a save or a failure, on a faint tint with a thin line in its own colour. It leaves by itself.</p>
       </Card>
-      <FinishCard />
     </>
   )
 }
 
 /** The finish mark, drawn again with its confetti each time Play it is pressed. */
-function FinishCard() {
+export function FinishCard() {
   const [round, setRound] = useState(0)
   const mark = useRef<HTMLSpanElement>(null)
 
@@ -704,7 +701,7 @@ function FinishCard() {
   }, [round])
 
   return (
-    <Card title="Finish">
+    <Card id="finish" title="Finish">
       <p className="kp-spec">
         When a form is done, the green circle draws itself, then the tick, left to right, as on the live Admission form. Then confetti bursts out of the tick in
         orange, indigo and green, and flutters down: 60 pieces on a phone, 85 wider.

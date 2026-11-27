@@ -28,6 +28,11 @@ describe("sidebarLimits", () => {
     expect(sidebarLimits({ ...AT_1280, longestLabel: 60 }).min).toBe(162)
   })
 
+  it("never opens narrower than the floor it is given", () => {
+    expect(sidebarLimits({ ...AT_1280, openMin: 212 }).min).toBe(212)
+    expect(sidebarLimits({ ...AT_1280, longestLabel: 200, openMin: 212 }).min).toBe(262)
+  })
+
   it("lets the widest reach half way to the page column", () => {
     // The page column fills the stage at 1280px: the distance is the padding alone.
     expect(sidebarLimits(AT_1280).max).toBe(252 + 20)

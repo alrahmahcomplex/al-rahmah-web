@@ -5,8 +5,10 @@
 export const SIDEBAR_BASE = 252
 /** The folded sidebar. */
 export const FOLDED_WIDTH = 60
-/** Before anything is measured: the prototype's first width. */
-export const FIRST_WIDTH = 190
+/** The open sidebar is never narrower (owner, design site round, 27 Nov 2026: more room). */
+export const OPEN_MIN = 212
+/** Before anything is measured: the open sidebar's first width. */
+export const FIRST_WIDTH = OPEN_MIN
 /** The brand title's size, in px, at the widest and the narrowest. */
 export const TITLE_MAX = 14
 export const TITLE_MIN = 11
@@ -32,20 +34,22 @@ export type SidebarMeasures = {
   pageMax: number
   /** The stage's width with the sidebar at SIDEBAR_BASE. */
   stageAtBase: number
+  /** A floor under the narrowest, such as OPEN_MIN. */
+  openMin?: number
 }
 
 export type SidebarLimits = { min: number; max: number }
 
 /**
- * The narrowest is the larger of: the width that leaves the same gap after
- * the longest label as before the icons, and the one that fits the brand
- * title at its smallest size plus a gap. The widest is SIDEBAR_BASE plus
- * half the distance from the stage's edge to the page column.
+ * The narrowest is the largest of: the width that leaves the same gap after
+ * the longest label as before the icons, the one that fits the brand title
+ * at its smallest size plus a gap, and `openMin`. The widest is SIDEBAR_BASE
+ * plus half the distance from the stage's edge to the page column.
  */
 export function sidebarLimits(m: SidebarMeasures): SidebarLimits {
   const byLabels = m.rowPadding + m.iconSize + m.rowGap + m.longestLabel + m.framePadding + m.rowPadding
   const byTitle = m.titleLeft + (m.titleWidth * TITLE_MIN) / TITLE_MAX + TITLE_GAP
-  const min = Math.ceil(Math.max(byLabels, byTitle))
+  const min = Math.ceil(Math.max(byLabels, byTitle, m.openMin ?? 0))
   const toPage = m.pagePadding + Math.max(0, (m.stageAtBase - 2 * m.pagePadding - m.pageMax) / 2)
   return { min, max: Math.max(min, Math.floor(SIDEBAR_BASE + toPage / 2)) }
 }

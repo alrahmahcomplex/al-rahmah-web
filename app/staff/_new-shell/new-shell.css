@@ -44,8 +44,9 @@ html:has(.ns) body { background: var(--gf-paper); }
 .ns-name small { display: block; font-size: calc(var(--ns-title, 14px) * 0.8); line-height: 1.2; color: var(--gf-quiet); }
 .ns[data-folded] .ns-name { opacity: 0; transform: translateX(-10px); pointer-events: none; }
 
-/* The list always fits: rows shrink from 26px to 24px and group gaps from
-   25px to 15px on a short screen; past that it scrolls with no bar. */
+/* The list always fits: rows shrink from 38px to 24px and group gaps from
+   31px to 15px on a short screen; past that it scrolls with no bar. Rows are
+   4px apart (owner, design site round, 27 Nov 2026: more room). */
 .ns-nav {
   flex: 1; min-height: 0; overflow: hidden auto; padding: 0 0 6px; display: flex; flex-direction: column;
   scrollbar-width: none;
@@ -53,7 +54,7 @@ html:has(.ns) body { background: var(--gf-paper); }
 .ns-nav::-webkit-scrollbar { display: none; }
 
 .ns-group {
-  flex: 0 1 25px; min-height: 15px; display: flex; align-items: flex-end; margin: 0; padding: 0 10px 4px;
+  flex: 0 1 31px; min-height: 15px; display: flex; align-items: flex-end; margin: 0; padding: 0 12px 6px;
   white-space: nowrap; overflow: hidden; letter-spacing: 0.06em; text-transform: uppercase;
   color: color-mix(in srgb, var(--gf-indigo) 62%, transparent);
   font: italic 700 10.5px/1 var(--font-exo), "Exo", system-ui, sans-serif;
@@ -62,12 +63,13 @@ html:has(.ns) body { background: var(--gf-paper); }
 .ns-group:first-child { flex-basis: 17px; }
 
 .ns-link {
-  position: relative; flex: 0 1 26px; min-height: 24px; display: flex; align-items: center; gap: 10px; padding: 0 10px;
-  border-radius: 14px; color: var(--gf-ink-soft); font-weight: 500; font-size: 13px; white-space: nowrap; text-decoration: none;
+  position: relative; flex: 0 1 38px; min-height: 24px; display: flex; align-items: center; gap: 12px; padding: 0 12px;
+  border-radius: 16px; color: var(--gf-ink-soft); font-weight: 500; font-size: 13px; white-space: nowrap; text-decoration: none;
   outline: none;
   transition: background var(--gf-t-med) var(--gf-ease-out), color var(--gf-t-med), padding var(--gf-side) var(--gf-ease-out),
     margin var(--gf-side) var(--gf-ease-out), border-radius var(--gf-side) var(--gf-ease-out);
 }
+.ns-link + .ns-link { margin-top: 4px; }
 .ns-link:hover { background: var(--gf-chrome); color: var(--gf-indigo); }
 /* Inside the ring, as the list clips anything past its edges. */
 .ns-link:focus-visible { outline: 3px solid var(--gf-focus-ring); outline-offset: -3px; }
@@ -76,6 +78,52 @@ html:has(.ns) body { background: var(--gf-paper); }
   font: italic 700 13.5px var(--font-exo), "Exo", system-ui, sans-serif;
 }
 .ns-link .gf-ic { width: 16px; height: 16px; }
+
+/* A page's sections under its row (design site, prototype v6): the row keeps
+   a chevron that folds them; the groups open one at a time inside a thin
+   Lavender Mist line; the section on screen is marked. A sidebar with
+   sections keeps its rows' full height and scrolls instead. */
+.ns-link-w { position: relative; flex: none; display: flex; flex-direction: column; }
+.ns-link-w > .ns-link { flex: none; height: 38px; padding-right: 40px; }
+.ns-link-w + .ns-link, .ns-sub + .ns-link { margin-top: 4px; }
+.ns-nav:has(.ns-sub) :is(.ns-link, .ns-group) { flex-shrink: 0; }
+.ns-chev {
+  position: absolute; right: 4px; top: 50%; width: 30px; height: 30px; margin-top: -15px; padding: 0; border: 0; border-radius: 50%;
+  display: grid; place-items: center; background: transparent; cursor: pointer; transition: background var(--gf-t-med) var(--gf-ease-out);
+}
+.ns-chev:hover { background: var(--gf-chrome); }
+.ns-chev:focus-visible { outline: 3px solid var(--gf-focus-ring); outline-offset: -3px; }
+.ns-chev .gf-ic, .ns-sub-h .gf-ic { transition: transform var(--gf-t-med) var(--gf-ease-out); }
+.ns-chev[aria-expanded="false"] .gf-ic, .ns-sub-h[aria-expanded="false"] .gf-ic { transform: rotate(-90deg); }
+.ns-sub { flex: none; display: flex; flex-direction: column; gap: 2px; margin: 4px 0 8px 20px; padding-left: 10px; border-left: 1px solid var(--gf-mist); }
+.ns-sub-h {
+  height: 30px; display: flex; align-items: center; gap: 6px; padding: 0 8px; margin-top: 6px; border: 0; border-radius: 12px; background: transparent;
+  cursor: pointer; text-align: left; white-space: nowrap; letter-spacing: 0.06em; text-transform: uppercase;
+  color: color-mix(in srgb, var(--gf-indigo) 62%, transparent); font: italic 700 10.5px/1 var(--font-exo), "Exo", system-ui, sans-serif;
+  transition: background var(--gf-t-med) var(--gf-ease-out), color var(--gf-t-med);
+}
+.ns-sub-g:first-child .ns-sub-h { margin-top: 0; }
+.ns-sub-h:hover { background: var(--gf-chrome); color: var(--gf-indigo); }
+.ns-sub-h:focus-visible, .ns-sub-link:focus-visible { outline: 3px solid var(--gf-focus-ring); outline-offset: -3px; }
+.ns-sub-h .gf-ic { width: 12px; height: 12px; }
+.ns-sub-list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 2px; }
+.ns-sub-list[hidden] { display: none; }
+.ns-sub-link {
+  height: 32px; display: flex; align-items: center; gap: 6px; padding: 0 8px 0 26px; border-radius: 12px; text-decoration: none; outline: none;
+  color: var(--gf-ink-soft); font: 500 12.5px var(--font-sans), system-ui, sans-serif; white-space: nowrap;
+  transition: background var(--gf-t-med) var(--gf-ease-out), color var(--gf-t-med);
+}
+.ns-sub-link > span { overflow: hidden; text-overflow: ellipsis; }
+.ns-sub-link:hover { background: var(--gf-chrome); color: var(--gf-indigo); }
+.ns-sub-link[aria-current="location"] { background: var(--gf-whisper); color: var(--gf-indigo); font-weight: 600; }
+.ns-sub-link em {
+  flex: none; padding: 1px 6px; border-radius: 999px; background: var(--gf-orange-tint); color: var(--gf-orange-deep);
+  font: 600 9.5px var(--font-sans), system-ui, sans-serif; font-style: normal;
+}
+.ns[data-folded] :is(.ns-chev, .ns-sub) { display: none; }
+@media (pointer: coarse) {
+  .ns-sub-link, .ns-sub-h { height: 40px; }
+}
 
 /* A hovered label rolls up to a second copy of itself. */
 .ns-label { position: relative; height: 20px; line-height: 20px; overflow: hidden; transition: opacity var(--gf-t-med) var(--gf-ease-out); }
@@ -89,13 +137,14 @@ html:has(.ns) body { background: var(--gf-paper); }
 }
 
 /* Folded: group names become lines, each row a circle up to 30px. */
-.ns[data-folded] .ns-group { flex: none; height: 1px; min-height: 1px; padding: 0; margin: 5px 14px 5px 12px; background: var(--gf-mist); }
+.ns[data-folded] .ns-group { flex: none; height: 1px; min-height: 1px; padding: 0; margin: 8px 14px 8px 12px; background: var(--gf-mist); }
+.ns[data-folded] .ns-link + .ns-link { margin-top: 4px; }
 .ns[data-folded] .ns-group:first-child { margin-top: 0; background: transparent; }
 .ns[data-folded] .ns-group span {
   position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap;
 }
 .ns[data-folded] .ns-link {
-  flex: 0 1 30px; min-height: 24px; height: auto; width: auto; aspect-ratio: 1; align-self: center; margin: 0; padding: 0; gap: 0;
+  flex: 0 1 38px; min-height: 24px; height: auto; width: auto; aspect-ratio: 1; align-self: center; margin: 0; padding: 0; gap: 0;
   justify-content: center; border-radius: 50%; overflow: hidden;
 }
 .ns[data-folded] .ns-label { width: 0; flex: none; opacity: 0; }
@@ -147,6 +196,13 @@ html:has(.ns) body { background: var(--gf-paper); }
 .ns-requests { display: flex; flex-direction: column; max-height: calc(100dvh - 160px); overflow-y: auto; overscroll-behavior: contain; }
 .ns-pop-line { margin: 4px 0 8px; font-size: 13px; color: var(--gf-ink-soft); }
 .ns-signout { display: flex; flex-direction: column; }
+
+/* ---------- the bare shell: the brand in the top bar, no sidebar (bare-shell.tsx) ---------- */
+.ns[data-bare] { grid-template-columns: minmax(0, 1fr); }
+.ns-brand { display: flex; align-items: center; gap: 8px; padding-left: 6px; }
+.ns-brand :is(.ns-logo, .ns-name) { position: static; }
+.ns-brand .ns-name { height: auto; }
+.ns-page-centre { min-height: 100%; display: grid; place-items: center; }
 
 /* ---------- the stage ---------- */
 .ns-stage {

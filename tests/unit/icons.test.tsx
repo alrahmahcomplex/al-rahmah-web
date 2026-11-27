@@ -13,8 +13,11 @@ const SET_1 = [
   "plus", "x", "reset", "alert", "info", "phone", "user", "school", "house", "link", "filter",
 ]
 const FORM_ONLY = ["clock", "globe", "trash"]
-// The form parts' glyphs (#358); the calendar has two lines since v38.
+// The form parts' glyphs (#358); the calendar has two lines since v38, the
+// upload since the design site round.
 const FORM_PARTS = ["down", "calendar", "upload"]
+// The password field's show and hide button (design site round, 27 Nov 2026).
+const PASSWORD = ["eye", "eye-off"]
 // Seats' streams (#449, prototype v42): bring up, and the pencil on a stream.
 const STREAMS = ["up", "pen"]
 // The previous school's region field (#511, prototype v53).
@@ -25,15 +28,15 @@ const AGENTS_APP = ["copy", "chat", "signout"]
 const SIGN_UP = ["lock", "mail", "smscode"]
 // A stream’s label in the Change sheet (prototype v4, 26 Nov 2026).
 const LABELS = ["tag"]
-const ONE_LINE = ["back", "right", "check", "plus", "x", "phone", "down", "upload", "up"]
+const ONE_LINE = ["back", "right", "check", "plus", "x", "phone", "down", "up"]
 const names = Object.keys(ICONS) as IconName[]
 
 // @ts-expect-error: the registry type rejects an icon without an outline.
 icon({ detail: <path d="M0 0" /> })
 
 describe("icon registry", () => {
-  it("holds set 1, the Admission form's glyphs, the streams' two, the region pin, the agents app glyphs, the sign-up discs and the label tag, nothing else", () => {
-    expect(names).toEqual([...SET_1, ...FORM_ONLY, ...FORM_PARTS, ...STREAMS, ...PLACES, ...AGENTS_APP, ...SIGN_UP, ...LABELS])
+  it("holds set 1, the Admission form's glyphs, the password eyes, the streams' two, the region pin, the agents app glyphs, the sign-up discs and the label tag, nothing else", () => {
+    expect(names).toEqual([...SET_1, ...FORM_ONLY, ...FORM_PARTS, ...PASSWORD, ...STREAMS, ...PLACES, ...AGENTS_APP, ...SIGN_UP, ...LABELS])
   })
 
   it("gives every icon a second line except the one-line glyphs", () => {

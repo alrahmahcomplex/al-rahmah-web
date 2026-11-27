@@ -1,14 +1,15 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 
-import { LEAD_CLASSES, type LeadClass } from "./leads"
+import { LEAD_CLASSES, LEAD_STATUSES, type LeadClass, type LeadStatus } from "./leads"
 import type { Result } from "./result"
 
-// The counts behind Home's chart card (#405, #518), from home_chart_counts.
-// An application is a lead enrolling in the year asked for, imported records
-// included; each counts once by month, once by class and once by source.
-// Counts only: no row ever leaves the database.
+// The counts behind Home's chart card (#405, #518), from home_chart_counts,
+// and the admission years it can show, from home_admission_years. An
+// application is a lead enrolling in the year asked for, imported records
+// counted like any other; each counts once by month, class, status and
+// source. Counts only: no row ever leaves the database.
 
-export const APPLICATION_SOURCES = ["admission_form", "agent_code", "promo_code", "walk_in", "earlier_records"] as const
+export const APPLICATION_SOURCES = ["admission_form", "agent_code", "promo_code", "walk_in"] as const
 export type ApplicationSource = (typeof APPLICATION_SOURCES)[number]
 
 export type HomeChartCounts = {
@@ -20,15 +21,17 @@ export type HomeChartCounts = {
   months: { month: string; count: number }[]
   /** Every class in school order, zeros included. */
   classes: { className: LeadClass; count: number }[]
-  /** In APPLICATION_SOURCES order, zeros included. */
+  /** In LEAD_STATUSES order, zeros included. */
+  statuses: { status: LeadStatus; count: number }[]
+  /** In APPLICATION_SOURCES order, zeros included. An imported record with no code is a walk-in. */
   sources: { source: ApplicationSource; count: number }[]
   total: number
 }
 
-type Row = { dimension: "month" | "class" | "source"; bucket: string; application_count: number | string }
+type Row = { dimension: "month" | "class" | "status" | "source"; bucket: string; application_count: number | string }
 
 /**
- * The applications enrolling in `year`, by month, class and source. Needs
+ * The applications enrolling in `year`, by month, class, status and source. Needs
  * leads.view: anyone else gets `forbidden`.
  */
 export async function getHomeChartCounts(supabase: SupabaseClient, year: number): Promise<Result<HomeChartCounts, "forbidden" | "unavailable">> {
@@ -54,8 +57,23 @@ export async function getHomeChartCounts(supabase: SupabaseClient, year: number)
     data: {
       months,
       classes: LEAD_CLASSES.map((className) => ({ className, count: count("class", className) })),
+      statuses: LEAD_STATUSES.map((status) => ({ status, count: count("status", status) })),
       sources: APPLICATION_SOURCES.map((source) => ({ source, count: count("source", source) })),
       total: months.reduce((sum, row) => sum + row.count, 0),
     },
   }
+}
+
+/**
+ * Every admission year with at least one applicant, newest first. Needs
+ * leads.view: anyone else gets `forbidden`.
+ */
+export async function getAdmissionYears(supabase: SupabaseClient): Promise<Result<number[], "forbidden" | "unavailable">> {
+  const { data, error } = await supabase.rpc("home_admission_years")
+  if (error) {
+    if (error.message === "forbidden" || error.code === "42501") return { ok: false, error: "forbidden" }
+    console.error("Could not list the admission years for Home", error)
+    return { ok: false, error: "unavailable" }
+  }
+  return { ok: true, data: (data as { year: number }[]).map((row) => Number(row.year)) }
 }

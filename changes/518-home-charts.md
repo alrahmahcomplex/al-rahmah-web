@@ -2,9 +2,14 @@
 bump: minor
 ---
 
+### NEW
+
+- Home's chart card has an **Admission year** list. It opens on the current admission year (next year's from 1 June) and lists every year that has an applicant, so 2028 appears once someone applies for 2028. Every chart except Seats shows the year picked.
+- A **Status** tab shows how many of the year's applicants are Applied, Visited, Interviewed, Enrolled or Declined.
+
 ### IMPROVED
 
-- Home's charts now count every applicant for the current admission year, by the year they enrol in. From 1 June that is next year's admissions. Imported records count too:
-  - **Sources:** an imported record with a code counts under its agent's Discount code or Promo code. One with no code goes in a new slice, **Earlier records**, which appears only when there are some.
-  - **Months:** the columns run from June to this month. An imported record counts in the month of its own visit date from the file, so an import never piles up in the month it ran. Applicants dated before June share one first column, **Before Jun**, so the columns add up to the total.
-  - **Classes:** every applicant for the year, imported records included.
+- Home's charts count every applicant for the year they enrol in, imported records the same as the rest:
+  - **Sources:** an imported record with a code counts under its agent's Discount code or Promo code. One with no code counts as Walk-in at the desk.
+  - **Months:** the columns run from the first month anyone in the year applied or visited to the last, or to this month while the year is still open. An imported record counts in the month of its own visit date, so an import never piles up in the month it ran.
+  - **Classes:** every applicant for the year, imported or not.

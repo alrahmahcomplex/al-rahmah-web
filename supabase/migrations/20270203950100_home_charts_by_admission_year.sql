@@ -1,25 +1,29 @@
--- Home's chart counts by enrollment year, imported records included (#518).
+-- Home's chart counts by admission year, imported records included (#518).
 -- Read-only: nothing here writes a row.
 --
--- Owner decisions of 2026-11-21: Home counts every applicant, those from the
--- Admission form, the desk, agents' codes and student imports, by the year
--- they enrol in. Home asks for the current admission year
--- (currentAdmissionYear in lib/school-calendar.ts).
+-- Owner decisions of 2026-11-21 and 2026-11-26: Home counts every applicant,
+-- those from the Admission form, the desk, agents' codes and student imports,
+-- by the year they enrol in, with no line drawn between imported records and
+-- the rest. Home opens on the current admission year (currentAdmissionYear in
+-- lib/school-calendar.ts) and lists every other year that has an applicant
+-- (home_admission_years) to switch to.
 --
 -- An application is a lead whose enrollment_year is the year asked for,
 -- whatever its status or closure mark now. Each counts once in each
--- dimension, so the three totals are the same:
+-- dimension, so the four totals are the same:
 --
 --   month   'YYYY-MM' of its own date in Tanzania time: the day it was
 --           created, or for an imported record its Visit date from the file
 --           (the import day only when the file gave none), so an import
 --           never piles up in the month it ran;
 --   class   its current class;
---   source  promo_code       its code is a Promo code;
---           agent_code       any other code, an agent's Discount code;
---           earlier_records  no code, brought in by a student import;
---           admission_form   no code, and the public Admission form created it;
---           walk_in          no code, and staff created it at the desk.
+--   status  its current status (Applied, Visited, Interviewed, Enrolled,
+--           Declined), imported or not;
+--   source  promo_code      its code is a Promo code;
+--           agent_code      any other code, an agent's Discount code;
+--           admission_form  no code, and the public Admission form created it;
+--           walk_in         no code otherwise: staff created it at the desk,
+--                           or a student import brought it in.
 --
 -- Whether the form or staff created a lead is recorded only in the lead's
 -- insert row in audit_log, which only the Super Admin may read. So this
@@ -46,6 +50,7 @@ begin
         with applications as (
             select
                 l.class_name,
+                l.status,
                 to_char(
                     case
                         when l.import_batch_id is not null and l.visit_date is not null then l.visit_date
@@ -58,8 +63,6 @@ begin
                         then 'promo_code'
                     when l.referral_code is not null
                         then 'agent_code'
-                    when l.import_batch_id is not null
-                        then 'earlier_records'
                     when exists (
                         select 1 from public.audit_log a
                         where a.table_name = 'leads'
@@ -76,6 +79,34 @@ begin
         union all
         select 'class', a.class_name::text, count(*) from applications a group by a.class_name
         union all
+        select 'status', a.status::text, count(*) from applications a group by a.status
+        union all
         select 'source', a.source, count(*) from applications a group by a.source;
 end;
 $$;
+
+-- The admission years Home's year list offers: every year with at least one
+-- applicant, newest first. Home adds the current admission year when it has
+-- none yet. Same guard as home_chart_counts; years only, never a row.
+create or replace function public.home_admission_years()
+returns table (year integer)
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+begin
+    if not public.has_permission('leads.view') then
+        raise exception 'forbidden';
+    end if;
+
+    return query
+        select distinct l.enrollment_year
+        from public.leads l
+        where l.enrollment_year is not null
+        order by l.enrollment_year desc;
+end;
+$$;
+
+revoke all on function public.home_admission_years() from public, anon;
+grant execute on function public.home_admission_years() to authenticated;

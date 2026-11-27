@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest"
 
-import { classesTab, monthsTab, niceScale, RING, ringArcs, seatsTabOf, sourcesTab, type SeatsTabClass } from "@/app/staff/_home/charts"
+import { classesTab, monthsTab, niceScale, RING, ringArcs, seatsTabOf, sourcesTab, statusTab, type SeatsTabClass } from "@/app/staff/_home/charts"
 import { APPLICATION_SOURCES, type ApplicationSource, type HomeChartCounts } from "@/lib/services/home-charts"
-import { LEAD_CLASSES, type LeadClass } from "@/lib/services/leads"
+import { LEAD_CLASSES, LEAD_STATUSES, type LeadClass, type LeadStatus } from "@/lib/services/leads"
 
 // Home's chart card (#405, #518): the tabs and their sentences, from v38's numbers.
 
@@ -13,11 +13,13 @@ function counts({
   months = [],
   from = "2026-01",
   sources = {},
+  statuses = {},
 }: {
   classes?: Partial<Record<LeadClass, number>>
   months?: number[]
   from?: string
   sources?: Partial<Record<ApplicationSource, number>>
+  statuses?: Partial<Record<LeadStatus, number>>
 }): HomeChartCounts {
   const [y, m] = from.split("-").map(Number)
   const rows = months.flatMap((count, i) => {
@@ -27,6 +29,7 @@ function counts({
   return {
     months: rows,
     classes: LEAD_CLASSES.map((className) => ({ className, count: classes[className] ?? 0 })),
+    statuses: LEAD_STATUSES.map((status) => ({ status, count: statuses[status] ?? 0 })),
     sources: APPLICATION_SOURCES.map((source) => ({ source, count: sources[source] ?? 0 })),
     total: rows.reduce((sum, row) => sum + row.count, 0),
   }
@@ -74,28 +77,26 @@ describe("Classes", () => {
 })
 
 describe("Months", () => {
-  it("names the busiest month, as v38 does", () => {
-    expect(monthsTab(V38, "2026-11-15", 2027)?.heading).toBe("September was the busiest month, with 21 applications")
+  it("names the busiest month with its year", () => {
+    expect(monthsTab(V38, "2026-11-15", true)?.heading).toBe("September 2026 was the busiest month, with 21 applications")
   })
 
-  it("draws June of the year before to the month running, which is lighter and says so", () => {
-    const tab = monthsTab(V38, "2026-11-15", 2027)!
-    expect(tab.points.map((point) => point.short)).toEqual(["Before Jun", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov"])
-    expect(tab.points.filter((point) => point.part).map((point) => point.label)).toEqual(["November"])
+  it("draws from the first month anyone applied to the month running, which is lighter and says so", () => {
+    const tab = monthsTab(V38, "2026-11-15", true)!
+    expect(tab.points.map((point) => point.short)).toEqual(["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov"])
+    expect(tab.points.filter((point) => point.part).map((point) => point.label)).toEqual(["November 2026"])
     expect(tab.note).toBe("November so far, shown lighter.")
-    expect(tab.points.at(-1)!.tip).toEqual({ number: "11", words: "November so far · applications" })
-    expect(tab.points[4].tip).toEqual({ number: "21", words: "Sep · applications" })
+    expect(tab.points.at(-1)!.tip).toEqual({ number: "11", words: "November 2026 so far · applications" })
+    expect(tab.points[8].tip).toEqual({ number: "21", words: "September 2026 · applications" })
   })
 
-  it("puts every applicant dated before that June in one first column, so the columns add up to the total", () => {
-    const tab = monthsTab(V38, "2026-11-15", 2027)!
-    expect(tab.points[0]).toMatchObject({ label: "Before June 2026", value: 4 + 6 + 9 + 14 + 11, early: true })
-    expect(tab.points[0].tip).toEqual({ number: "44", words: "Before June 2026 · applications" })
+  it("draws every applicant, imported or not, so the columns add up to the total", () => {
+    const tab = monthsTab(V38, "2026-11-15", true)!
     expect(tab.points.reduce((sum, point) => sum + point.value, 0)).toBe(V38.total)
   })
 
-  it("has no first column when no one is dated before June, and draws a month with none as zero", () => {
-    const tab = monthsTab(counts({ months: [3, 0, 2], from: "2026-06" }), "2026-09-01", 2027)!
+  it("runs on to this month while the year is open, drawing a month with none as zero", () => {
+    const tab = monthsTab(counts({ months: [3, 0, 2], from: "2026-06" }), "2026-09-01", true)!
     expect(tab.points.map((point) => [point.short, point.value])).toEqual([
       ["Jun", 3],
       ["Jul", 0],
@@ -104,22 +105,57 @@ describe("Months", () => {
     ])
   })
 
-  it("runs on into the new calendar year, at most twelve months", () => {
-    const tab = monthsTab(counts({ months: Array(12).fill(1), from: "2026-06" }), "2027-05-20", 2027)!
-    expect(tab.points.map((point) => point.short)).toEqual(["Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec", "Jan", "Feb", "Mar", "Apr", "May"])
+  it("stops at the last month with an applicant once the year is over, with nothing lighter", () => {
+    const tab = monthsTab(counts({ months: [8, 14, 0, 2], from: "2025-07" }), "2026-11-15", false)!
+    expect(tab.points.map((point) => point.label)).toEqual(["July 2025", "August 2025", "September 2025", "October 2025"])
+    expect(tab.points.some((point) => point.part)).toBe(false)
+    expect(tab.note).toBeNull()
+    expect(tab.heading).toBe("August 2025 was the busiest month, with 14 applications")
+  })
+
+  it("runs across the calendar year, however many months the year's applicants span", () => {
+    const tab = monthsTab(counts({ months: Array(15).fill(1), from: "2025-03" }), "2026-05-20", true)!
+    expect(tab.points).toHaveLength(15)
+    expect(tab.points[0].label).toBe("March 2025")
+    expect(tab.points.at(-1)!.label).toBe("May 2026")
     expect(tab.note).toBe("May so far, shown lighter.")
   })
 
   it("says so far when the month running is the busiest, and counts one application as one", () => {
-    expect(monthsTab(counts({ months: [1], from: "2026-06" }), "2026-06-04", 2027)?.heading).toBe("June is the busiest month so far, with 1 application")
+    expect(monthsTab(counts({ months: [1], from: "2026-06" }), "2026-06-04", true)?.heading).toBe("June 2026 is the busiest month so far, with 1 application")
   })
 
-  it("gives a tie to the earlier month, and never names the first column", () => {
-    expect(monthsTab(counts({ months: [9, 0, 0, 0, 0, 5, 5, 2] }), "2026-08-10", 2027)?.heading).toBe("June was the busiest month, with 5 applications")
+  it("gives a tie to the earlier month", () => {
+    expect(monthsTab(counts({ months: [5, 0, 5, 2] }), "2026-04-10", true)?.heading).toBe("January 2026 was the busiest month, with 5 applications")
   })
 
   it("is left out when no one has applied for the year", () => {
-    expect(monthsTab(NONE, "2026-11-15", 2027)).toBeNull()
+    expect(monthsTab(NONE, "2026-11-15", true)).toBeNull()
+  })
+})
+
+describe("Status", () => {
+  const YEAR = counts({ months: [113], statuses: { Applied: 40, Visited: 31, Interviewed: 22, Enrolled: 15, Declined: 5 } })
+
+  it("draws every status in the order a family moves through them, zeros included", () => {
+    const tab = statusTab(counts({ months: [3], statuses: { Applied: 2, Enrolled: 1 } }), true)!
+    expect(tab.points.map((point) => [point.label, point.value])).toEqual([
+      ["Applied", 2],
+      ["Visited", 0],
+      ["Interviewed", 0],
+      ["Enrolled", 1],
+      ["Declined", 0],
+    ])
+    expect(tab.points[3].tip).toEqual({ number: "1", words: "Enrolled · applicants" })
+  })
+
+  it("says where the applicants are while the year is open, and how many enrolled once it is over", () => {
+    expect(statusTab(YEAR, true)?.heading).toBe("Where the year’s applicants are now")
+    expect(statusTab(YEAR, false)?.heading).toBe("15 of 113 applicants enrolled")
+  })
+
+  it("is left out when no one has applied for the year", () => {
+    expect(statusTab(NONE, true)).toBeNull()
   })
 })
 
@@ -187,25 +223,12 @@ describe("Sources", () => {
     expect(tab.points[0].tip).toEqual({ number: "74 · 58%", words: "Admission form" })
   })
 
-  it("adds Earlier records last, for imported records with no code", () => {
-    const tab = sourcesTab(counts({ months: [10], sources: { admission_form: 6, earlier_records: 4 } }))!
-    expect(tab.points.map((point) => [point.label, point.value, point.percent])).toEqual([
-      ["Admission form", 6, 60],
-      ["Agents’ Discount codes", 0, 0],
-      ["Promo codes", 0, 0],
-      ["Walk-in at the desk", 0, 0],
-      ["Earlier records", 4, 40],
-    ])
-    expect(tab.points[4].tip).toEqual({ number: "4 · 40%", words: "Earlier records" })
-  })
-
   it("names whichever source is largest", () => {
     const at = (sources: Partial<Record<ApplicationSource, number>>) =>
       sourcesTab(counts({ months: [Object.values(sources).reduce((sum, n) => sum + n, 0)], sources }))?.heading
     expect(at({ agent_code: 3, admission_form: 1 })).toBe("Most families apply with an agent’s Discount code")
     expect(at({ promo_code: 3 })).toBe("Most families apply with a Promo code")
     expect(at({ walk_in: 3, promo_code: 1 })).toBe("Most families apply at the desk")
-    expect(at({ earlier_records: 3, walk_in: 1 })).toBe("Most applicants are Earlier records")
   })
 
   it("is left out when no one has applied this year", () => {

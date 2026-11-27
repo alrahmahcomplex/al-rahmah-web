@@ -14,17 +14,16 @@ export type ChartPoint = {
   value: number
   /** Drawn lighter: the month still running. */
   part?: boolean
-  /** The Months tab's first column: every applicant dated before the admission year's June. */
-  early?: boolean
   /** The tooltip: the number in bold, what it is underneath. */
   tip: { number: string; words: string }
 }
 
 export type ClassesTab = { kind: "classes"; heading: string; points: ChartPoint[]; groups: AxisGroup[] }
 export type MonthsTab = { kind: "months"; heading: string; points: ChartPoint[]; note: string | null }
+export type StatusTab = { kind: "status"; heading: string; points: ChartPoint[]; note: null }
 export type SeatsTab = { kind: "seats"; heading: string; points: (ChartPoint & { seats: number; full: boolean; fill: number })[] }
 export type SourcesTab = { kind: "sources"; heading: string; points: (ChartPoint & { percent: number })[]; total: number }
-export type ChartTab = ClassesTab | MonthsTab | SeatsTab | SourcesTab
+export type ChartTab = ClassesTab | MonthsTab | SeatsTab | SourcesTab | StatusTab
 
 /** A run of classes of one school level under the axis. */
 export type AxisGroup = { label: string; short: string; span: number }
@@ -74,43 +73,62 @@ export function classesTab(counts: HomeChartCounts): ClassesTab | null {
 }
 
 /**
- * Applications per month of the admission year: from June of the year before
- * (the admission year starts on 1 June, #517) to the month running, which is
- * drawn lighter. Applicants dated before that June share one first column,
- * so the columns add up to the total.
+ * Applications per month for the year shown, from the first month anyone in
+ * it applied or visited to the last (owner, 2026-11-26): an imported record
+ * counts in its own Visit date's month like any other. While the year is
+ * still taking applicants, the columns run on to this month, drawn lighter.
+ * Every applicant is in a column, so the columns add up to the total.
  */
-export function monthsTab(counts: HomeChartCounts, today: string, admissionYear: number): MonthsTab | null {
+export function monthsTab(counts: HomeChartCounts, today: string, open: boolean): MonthsTab | null {
   if (counts.total === 0) return null
-  const start = `${admissionYear - 1}-06`
   const now = today.slice(0, 7)
-  const last = counts.months.reduce((latest, row) => (row.month > latest ? row.month : latest), now)
+  const first = counts.months[0].month
+  const latest = counts.months.at(-1)!.month
+  const last = open && now > latest ? now : latest
   const byMonth = new Map(counts.months.map((row) => [row.month, row.count]))
   const points: ChartPoint[] = []
-  for (let month = start; month <= last; month = nextMonth(month)) {
+  for (let month = first; month <= last; month = nextMonth(month)) {
     const name = MONTHS[Number(month.slice(5, 7)) - 1]
+    const label = `${name} ${month.slice(0, 4)}`
     const value = byMonth.get(month) ?? 0
-    const part = month === now
+    const part = open && month === now
     points.push({
-      label: name,
+      label,
       short: name.slice(0, 3),
       value,
       part,
-      tip: { number: String(value), words: `${part ? `${name} so far` : name.slice(0, 3)} · applications` },
+      tip: { number: String(value), words: `${part ? `${label} so far` : label} · applications` },
     })
   }
   const busiest = largest(points, (point) => point.value)!
-  const earlier = counts.months.filter((row) => row.month < start).reduce((sum, row) => sum + row.count, 0)
-  if (earlier > 0) {
-    const label = `Before June ${admissionYear - 1}`
-    points.unshift({ label, short: "Before Jun", value: earlier, early: true, tip: { number: String(earlier), words: `${label} · applications` } })
-  }
   return {
     kind: "months",
     heading: busiest.part
       ? `${busiest.label} is the busiest month so far, with ${applications(busiest.value)}`
       : `${busiest.label} was the busiest month, with ${applications(busiest.value)}`,
     points,
-    note: `${MONTHS[Number(now.slice(5, 7)) - 1]} so far, shown lighter.`,
+    note: points.some((point) => point.part) ? `${MONTHS[Number(now.slice(5, 7)) - 1]} so far, shown lighter.` : null,
+  }
+}
+
+/**
+ * Where the year's applicants are now, by status in the order a family moves
+ * through them, imported records with the rest. While the year is open the
+ * heading says just that; once it is over, how many enrolled.
+ */
+export function statusTab(counts: HomeChartCounts, open: boolean): StatusTab | null {
+  if (counts.total === 0) return null
+  const enrolled = counts.statuses.find((row) => row.status === "Enrolled")?.count ?? 0
+  return {
+    kind: "status",
+    heading: open ? "Where the year’s applicants are now" : `${enrolled} of ${counts.total} applicants enrolled`,
+    points: counts.statuses.map(({ status, count }) => ({
+      label: status,
+      short: status,
+      value: count,
+      tip: { number: String(count), words: `${status} · applicants` },
+    })),
+    note: null,
   }
 }
 
@@ -162,14 +180,12 @@ const SOURCE_NAMES: Record<ApplicationSource, { label: string; short: string; he
   agent_code: { label: "Agents’ Discount codes", short: "Agents", heading: "Most families apply with an agent’s Discount code" },
   promo_code: { label: "Promo codes", short: "Promo codes", heading: "Most families apply with a Promo code" },
   walk_in: { label: "Walk-in at the desk", short: "Walk-in", heading: "Most families apply at the desk" },
-  earlier_records: { label: "Earlier records", short: "Earlier records", heading: "Most applicants are Earlier records" },
 }
 
-/** Applications by where they came from, Earlier records last when there are any: the ring with the total in the middle, and its list. */
+/** Applications by where they came from: the ring with the total in the middle, and its list. */
 export function sourcesTab(counts: HomeChartCounts): SourcesTab | null {
   if (counts.total === 0) return null
-  // Earlier records only once there are some: the year's four sources always show.
-  const rows = counts.sources.filter((row) => row.source !== "earlier_records" || row.count > 0)
+  const rows = counts.sources
   const points = rows.map(({ source, count }) => {
     const percent = Math.round((count / counts.total) * 100)
     return {

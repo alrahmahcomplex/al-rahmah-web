@@ -4,8 +4,8 @@ import { beforeAll, describe, expect, test, vi } from "vitest"
 
 import { admissionYears, type AdmissionChild, type AdmissionForm } from "@/lib/admission-form"
 import { submitAdmissionForm } from "@/lib/services/admission-form"
-import { APPLICATION_SOURCES, getHomeChartCounts, type HomeChartCounts } from "@/lib/services/home-charts"
-import { createLead, LEAD_CLASSES, type LeadClass } from "@/lib/services/leads"
+import { APPLICATION_SOURCES, getAdmissionYears, getHomeChartCounts, type HomeChartCounts } from "@/lib/services/home-charts"
+import { createLead, LEAD_CLASSES, LEAD_STATUSES, type LeadClass, type LeadStatus } from "@/lib/services/leads"
 
 import { anonClient, asSystem, createThrowawayStaff, inRolledBackTransaction, secretClient, signedIn, unusedAdmissionNumber } from "../support/db"
 import { discountPhone, freshCode } from "../support/discount-codes"
@@ -14,7 +14,8 @@ import { ACCOUNTANT, ADMISSIONS, MANAGER } from "../support/fixtures"
 vi.mock("server-only", () => ({}))
 
 // Home's chart counts (#405, #518) against local Supabase: every applicant
-// enrolling in the year asked for, imported records included. The test moves
+// enrolling in the year asked for, imported records counted like the rest,
+// and the years Home's year list offers. The test moves
 // the leads it makes into two enrollment years of its own in 2001–2023, which
 // no seed and no other test uses, and reads only those. Each lead is placed
 // at a time of day in Tanzania, which the database turns into an instant
@@ -73,8 +74,10 @@ async function atDesk(className: AdmissionChild["className"]): Promise<string> {
 }
 
 // A lead brought in by a student import, with its Visit date from the file
-// (or none) and its code (or none). It is created now, the import day.
-async function imported(className: LeadClass, visitDate: string | null, code: string | null = null): Promise<string> {
+// (or none), its code (or none), its status and its enrollment year. It is
+// created now, the import day. A Declined lead is closed to edits, so it goes
+// straight into its year.
+async function imported(className: LeadClass, visitDate: string | null, code: string | null = null, status?: LeadStatus, enrollmentYear = 2027): Promise<string> {
   const admissionNumber = await unusedAdmissionNumber()
   return asSystem(async (sql) => {
     const batch = await sql.query<{ id: string }>(
@@ -88,17 +91,19 @@ async function imported(className: LeadClass, visitDate: string | null, code: st
     )
     const lead = await sql.query<{ id: string }>(
       `insert into public.leads (admission_number, student_name, class_name, enrollment_year, day_or_boarding, status, visit_date,
-           guardian_contact_id, referral_code, import_batch_id, custodian_relationship)
-       values ($1, $2, $3, 2027, 'Day', $4, $5, $6, $7, $8, 'Mother') returning id`,
+           guardian_contact_id, referral_code, import_batch_id, custodian_relationship, declined_reason)
+       values ($1, $2, $3, $9, 'Day', $4, $5, $6, $7, $8, 'Mother',
+           case when $4::public.lead_status = 'Declined' then 'Family changed plans'::public.declined_reason end) returning id`,
       [
         admissionNumber,
         `Chart Import ${randomUUID().slice(0, 8)}`,
         className,
-        visitDate ? "Visited" : "Applied",
+        status ?? (visitDate ? "Visited" : "Applied"),
         visitDate,
         contact.rows[0].id,
         code,
         batch.rows[0].id,
+        enrollmentYear,
       ],
     )
     return lead.rows[0].id
@@ -167,8 +172,8 @@ beforeAll(async () => {
   await place(formPromo, year, [before, 10, 31, 23, 59])
   await place(deskAgent, year, [year, 1, 4, 0, 0])
 
-  // Imported records: by their Visit date, never the import day; by their code's source, or Earlier records.
-  await place(await imported("FORM 1", `${before - 1}-03-15`), year)
+  // Imported records: by their Visit date, never the import day; by their code's source, or the desk.
+  await imported("FORM 1", `${before - 1}-03-15`, null, "Declined", year)
   await place(await imported("FORM 1", `${before}-08-05`, AGENT_CODE), year)
   await place(await imported("STD 2", `${before}-08-06`, promo), year)
   // No Visit date in the file: the import day is its own date.
@@ -180,12 +185,12 @@ beforeAll(async () => {
 })
 
 describe("home_chart_counts", () => {
-  test("counts every applicant by enrollment year, imported records included, whatever year they applied in", async () => {
+  test("counts every applicant by enrollment year, imported records with the rest, whatever year they applied in", async () => {
     expect((await countsAs(MANAGER)).total).toBe(10)
     const next = await countsAs(MANAGER, year + 1)
     expect(next.total).toBe(2)
     expect(nonZero(next.classes, (row: { className: string }) => row.className)).toEqual({ "FORM 2": 1, "FORM 3": 1 })
-    expect(nonZero(next.sources, (row: { source: string }) => row.source)).toEqual({ walk_in: 1, earlier_records: 1 })
+    expect(nonZero(next.sources, (row: { source: string }) => row.source)).toEqual({ walk_in: 2 })
     expect(monthsOf(next)).toEqual({ [`${year - 1}-09`]: 2 })
   })
 
@@ -216,7 +221,21 @@ describe("home_chart_counts", () => {
     })
   })
 
-  test("sorts them by source: a Promo code, an agent's code, Earlier records, the Admission form, or the desk", async () => {
+  test("counts them by their current status, every status listed, imported records with the rest", async () => {
+    const counts = await countsAs(MANAGER)
+    expect(counts.statuses.map((row) => row.status)).toEqual([...LEAD_STATUSES])
+    const direct = await inRolledBackTransaction(async (sql) => {
+      const { rows } = await sql.query<{ status: string; n: number }>(
+        "select status::text as status, count(*)::int as n from public.leads where enrollment_year = $1 group by status",
+        [year],
+      )
+      return Object.fromEntries(rows.map((row) => [row.status, row.n]))
+    })
+    expect(nonZero(counts.statuses, (row: { status: string }) => row.status)).toEqual(direct)
+    expect(direct.Declined).toBe(1)
+  })
+
+  test("sorts them by source: a Promo code, an agent's code, the Admission form, or else the desk", async () => {
     const counts = await countsAs(MANAGER)
     expect(counts.sources.map((row) => row.source)).toEqual([...APPLICATION_SOURCES])
     expect(nonZero(counts.sources, (row: { source: string }) => row.source)).toEqual({
@@ -226,9 +245,8 @@ describe("home_chart_counts", () => {
       // From the form and from an import.
       promo_code: 2,
       // Registered by staff, one later touched by the form: never the form.
-      walk_in: 2,
-      // Imported with no code, with a Visit date or without.
-      earlier_records: 2,
+      // And imported with no code, with a Visit date or without.
+      walk_in: 4,
     })
   })
 
@@ -242,6 +260,7 @@ describe("home_chart_counts", () => {
     expect(counts.total).toBe(direct)
     expect(sum(counts.months)).toBe(direct)
     expect(sum(counts.classes)).toBe(direct)
+    expect(sum(counts.statuses)).toBe(direct)
     expect(sum(counts.sources)).toBe(direct)
   })
 
@@ -265,6 +284,7 @@ describe("home_chart_counts", () => {
     const allowed: Record<string, (bucket: string) => boolean> = {
       month: (bucket) => /^\d{4}-(0[1-9]|1[0-2])$/.test(bucket),
       class: (bucket) => (LEAD_CLASSES as readonly string[]).includes(bucket),
+      status: (bucket) => (LEAD_STATUSES as readonly string[]).includes(bucket),
       source: (bucket) => (APPLICATION_SOURCES as readonly string[]).includes(bucket),
     }
     for (const row of data as Record<string, unknown>[]) {
@@ -272,5 +292,27 @@ describe("home_chart_counts", () => {
       expect(allowed[row.dimension as string](row.bucket as string)).toBe(true)
       expect(Number(row.application_count)).toBeGreaterThan(0)
     }
+  })
+})
+
+describe("home_admission_years", () => {
+  test("lists every year with an applicant, newest first, each once", async () => {
+    const result = await getAdmissionYears(await signedIn(MANAGER))
+    if (!result.ok) throw new Error(`years refused: ${result.error}`)
+    expect(result.data).toContain(year)
+    expect(result.data).toContain(year + 1)
+    expect(result.data).toEqual([...new Set(result.data)].toSorted((a, b) => b - a))
+    // The years either side of the two planted ones have no lead (emptyYears).
+    expect(result.data).not.toContain(year - 1)
+    expect(result.data).not.toContain(year + 2)
+  })
+
+  test("is the same for every role that may view leads, and refused to anyone else", async () => {
+    const manager = await getAdmissionYears(await signedIn(MANAGER))
+    expect(await getAdmissionYears(await signedIn(ADMISSIONS))).toEqual(manager)
+    expect(await getAdmissionYears(await signedIn(ACCOUNTANT))).toEqual(manager)
+    const outsider = await createThrowawayStaff(["payments.view"])
+    expect(await getAdmissionYears(await signedIn(outsider))).toEqual({ ok: false, error: "forbidden" })
+    expect(await getAdmissionYears(anonClient())).toEqual({ ok: false, error: "forbidden" })
   })
 })

@@ -146,10 +146,21 @@ describe("countInterviewsByDay", () => {
         [imported.leadId, 900_000 + randomInt(0, 99_999), claim.year, MANAGER.id, imported.batchId],
       ),
     )
+
+    // Imported with a Visit date on the first day, its result later recorded as sat on the third:
+    // the sitting's own date wins over the Visit date.
+    const resulted = await importedLead(first, claim.year)
+    await asSystem((sql) =>
+      sql.query(
+        `insert into public.interviews (lead, serial_number, serial_year, registered_by, import_batch_id, interview_date, result, score)
+         values ($1, $2, $3, $4, $5, $6, 'Passed', 65)`,
+        [resulted.leadId, 900_000 + randomInt(0, 99_999), claim.year, MANAGER.id, resulted.batchId, third],
+      ),
+    )
   })
 
-  test("counts every interview on its own day: the result's date, else the S/N's day, else an import's Visit date", async () => {
-    expect(await countInterviewsByDay(await signedIn(MANAGER), first, third)).toEqual({ ok: true, data: { [first]: 2, [second]: 2, [third]: 1 } })
+  test("counts every interview on its own day: the result's date, else an import's Visit date, else the S/N's day", async () => {
+    expect(await countInterviewsByDay(await signedIn(MANAGER), first, third)).toEqual({ ok: true, data: { [first]: 2, [second]: 2, [third]: 2 } })
     expect(await countInterviewsByDay(await signedIn(MANAGER), second, second)).toEqual({ ok: true, data: { [second]: 2 } })
   })
 

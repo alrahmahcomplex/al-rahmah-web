@@ -36,8 +36,9 @@ async function countByDay(
 /**
  * The interviews on each day from `from` to `to` (YYYY-MM-DD in Tanzania,
  * both included): every child given an S/N, with a result or not, on the
- * date recorded with the result, else the day the S/N was given. One a
- * student import brought in counts on the child's Visit date from the file.
+ * interview date recorded with the result. Before a result, one a student
+ * import brought in counts on the child's Visit date from the file, and any
+ * other on the day the S/N was given.
  */
 export function countInterviewsByDay(supabase: SupabaseClient, from: string, to: string): Promise<Result<DayCounts, "unavailable">> {
   return countByDay(supabase, "home_interviews_by_day", "interview_count", from, to)

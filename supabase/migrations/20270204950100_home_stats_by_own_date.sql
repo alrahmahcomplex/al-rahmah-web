@@ -13,10 +13,11 @@
 
 -- Interviews on each day from from_day to to_day (Tanzania dates, both
 -- included). An interview counts once its child was given an S/N, with a
--- result or not, whatever happened to the child after. Its day is the date
--- recorded with its result; before a result, the day the S/N was given; and
--- for one a student import brought in, the child's Visit date from the file,
--- never the import day. A retaken interview counts again on its own day.
+-- result or not, whatever happened to the child after. Its day is the
+-- interview date staff record with its result, the day the sitting was held,
+-- imported or not. Before a result: for one a student import brought in, the
+-- child's Visit date from the file, never the import day; for any other, the
+-- day the S/N was given. A retaken interview counts again on its own day.
 create function public.home_interviews_by_day(from_day date, to_day date)
 returns table (day date, interview_count bigint)
 language sql

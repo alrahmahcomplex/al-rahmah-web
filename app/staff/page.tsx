@@ -2,10 +2,10 @@ import type { Metadata } from "next"
 import { Suspense } from "react"
 
 import { Note, pageTitle } from "@/components/kit"
-import { tanzaniaToday } from "@/lib/school-calendar"
+import { currentAdmissionYear, tanzaniaToday } from "@/lib/school-calendar"
 import { countPendingDiscountRequests } from "@/lib/services/discounts"
 import { getOverdueCount } from "@/lib/services/follow-ups"
-import { getHomeChartCounts } from "@/lib/services/home-charts"
+import { getAdmissionYears, getHomeChartCounts } from "@/lib/services/home-charts"
 import { countInterviewsByDay, countRegistrationsByDay } from "@/lib/services/home-stats"
 import { getMyNotices } from "@/lib/services/staff-admin"
 import { createClient } from "@/utils/supabase/server"
@@ -13,7 +13,7 @@ import { createClient } from "@/utils/supabase/server"
 import { fullClassesFor, mayReadActivity } from "./_home/activity-data"
 import { ActivityLog, ActivitySkeleton } from "./_home/activity-log"
 import { ChartCard } from "./_home/chart-card"
-import { classesTab, monthsTab, sourcesTab, type ChartTab } from "./_home/charts"
+import { classesTab, monthsTab, sourcesTab, statusTab, type ChartTab } from "./_home/charts"
 import { FindFamily } from "./_home/find-family"
 import { Notices } from "./_home/notices"
 import { mayCallBack, mayDecideDiscounts, mayOpenSeats, quickActions } from "./_home/quick-action-list"
@@ -52,6 +52,10 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
   const permissions = staff.permissions
   const params = await searchParams
   const today = tanzaniaToday()
+  const admissionYear = currentAdmissionYear(today)
+  // The year asked for in `?year=` from the card's year list (#518), else the current one.
+  const asked = Number(one(params.year))
+  const askedYear = Number.isInteger(asked) && asked >= 2000 && asked <= 2100 ? asked : admissionYear
   const day = pickedDay(one(params.day), today)
   const week = pickedWeek(one(params.week), today)
 
@@ -61,16 +65,22 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
   const interviews = interviewRange(day ?? today)
   const applied = appliedRange(week, today)
 
-  const [notices, interviewCounts, appliedCounts, overdue, seats, discounts, chartCounts] = await Promise.all([
+  const [notices, interviewCounts, appliedCounts, overdue, seats, discounts, askedCounts, chartYears] = await Promise.all([
     getMyNotices(supabase),
     canView ? countInterviewsByDay(supabase, interviews.from, interviews.to) : null,
     canView ? countRegistrationsByDay(supabase, applied.from, applied.to) : null,
     mayCallBack(permissions) ? getOverdueCount(supabase) : null,
     canSeeSeats ? seatsOnOpening(supabase, today) : null,
     mayDecideDiscounts(permissions) ? countPendingDiscountRequests(supabase) : null,
-    // home_chart_counts still filters by created_at calendar year; #518 switches it to enrollment_year and currentAdmissionYear.
-    canView ? getHomeChartCounts(supabase, Number(today.slice(0, 4))) : null,
+    // Every applicant enrolling in the year picked, imported records with the rest (#518).
+    canView ? getHomeChartCounts(supabase, askedYear) : null,
+    canView ? getAdmissionYears(supabase) : null,
   ])
+  // The years with an applicant, and the current one even before its first.
+  const years = chartYears?.ok ? [...new Set([admissionYear, ...chartYears.data])].toSorted((a, b) => b - a) : []
+  // A year the list does not offer (an old link, or a year whose last applicant has gone) shows the current one.
+  const chartYear = years.includes(askedYear) ? askedYear : admissionYear
+  const chartCounts = chartYear === askedYear ? askedCounts : canView ? await getHomeChartCounts(supabase, chartYear) : null
 
   const actions = quickActions({
     permissions,
@@ -79,13 +89,20 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
     waitingDiscounts: discounts?.ok ? discounts.data : null,
   })
   const statsFailed =
-    (interviewCounts && !interviewCounts.ok) || (appliedCounts && !appliedCounts.ok) || (chartCounts && !chartCounts.ok) || (canSeeSeats && seats && !seats.ok)
+    (interviewCounts && !interviewCounts.ok) ||
+    (appliedCounts && !appliedCounts.ok) ||
+    (chartCounts && !chartCounts.ok) ||
+    (chartYears && !chartYears.ok) ||
+    (canSeeSeats && seats && !seats.ok)
   const counts = chartCounts?.ok ? chartCounts.data : null
+  // A year still taking applicants: Months runs on to this month.
+  const open = chartYear >= admissionYear
   // v40 order, Sources first and so the one shown; a tab with nothing to draw is left out.
   const charts = [
     counts && sourcesTab(counts),
     counts && classesTab(counts),
-    counts && monthsTab(counts, today),
+    counts && monthsTab(counts, today, open),
+    counts && statusTab(counts, open),
     canSeeSeats && seats?.ok && seats.data.streams ? namedSeatsTab(seats.data.streams) : null,
   ].filter((tab): tab is ChartTab => !!tab)
 
@@ -105,7 +122,9 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
         </div>
       )}
       <div className="hm-body">
-        <div className="hm-main">{charts.length > 0 && <ChartCard tabs={charts} />}</div>
+        <div className="hm-main">
+          {(charts.length > 0 || years.length > 0) && <ChartCard tabs={charts} years={years} year={chartYear} current={admissionYear} empty={counts?.total === 0} />}
+        </div>
         <div className="hm-side">
           {interviewCounts?.ok && (
             <StatCard card={interviewCard(day, today, interviewCounts.data)} param="day" today={today} picked={day} words={DAY_WORDS} />

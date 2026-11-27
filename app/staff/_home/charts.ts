@@ -20,9 +20,10 @@ export type ChartPoint = {
 
 export type ClassesTab = { kind: "classes"; heading: string; points: ChartPoint[]; groups: AxisGroup[] }
 export type MonthsTab = { kind: "months"; heading: string; points: ChartPoint[]; note: string | null }
+export type StatusTab = { kind: "status"; heading: string; points: ChartPoint[]; note: null }
 export type SeatsTab = { kind: "seats"; heading: string; points: (ChartPoint & { seats: number; full: boolean; fill: number })[] }
 export type SourcesTab = { kind: "sources"; heading: string; points: (ChartPoint & { percent: number })[]; total: number }
-export type ChartTab = ClassesTab | MonthsTab | SeatsTab | SourcesTab
+export type ChartTab = ClassesTab | MonthsTab | SeatsTab | SourcesTab | StatusTab
 
 /** A run of classes of one school level under the axis. */
 export type AxisGroup = { label: string; short: string; span: number }
@@ -71,20 +72,38 @@ export function classesTab(counts: HomeChartCounts): ClassesTab | null {
   }
 }
 
-/** Applications per month this year, January to the month running, which is drawn lighter. */
-export function monthsTab(counts: HomeChartCounts, today: string): MonthsTab | null {
+/**
+ * Applications per month for the year shown, from the first month anyone in
+ * it applied or visited to the last (owner, 2026-11-26): an imported record
+ * counts in its own Visit date's month like any other. While the year is
+ * still taking applicants, the columns run on to this month, drawn lighter.
+ * Every applicant is in a column, so the columns add up to the total.
+ * Months with none are drawn as zeros only across a span of at most
+ * MONTHS_FILLED; a longer one (a mistyped visit date years back) draws just
+ * the months with applicants, so the mistake shows as its own column.
+ */
+export function monthsTab(counts: HomeChartCounts, today: string, open: boolean): MonthsTab | null {
   if (counts.total === 0) return null
-  const current = Number(today.slice(5, 7)) - 1
-  const points = counts.months.slice(0, current + 1).map((value, i) => {
-    const part = i === current
-    return {
-      label: MONTHS[i],
-      short: MONTHS[i].slice(0, 3),
+  const now = today.slice(0, 7)
+  const first = counts.months[0].month
+  const latest = counts.months.at(-1)!.month
+  const last = open && now > latest ? now : latest
+  const byMonth = new Map(counts.months.map((row) => [row.month, row.count]))
+  const columns = monthsBetween(first, last) <= MONTHS_FILLED ? everyMonth(first, last) : [...byMonth.keys(), ...(last === now && !byMonth.has(now) ? [now] : [])]
+  const points: ChartPoint[] = []
+  for (const month of columns) {
+    const name = MONTHS[Number(month.slice(5, 7)) - 1]
+    const label = `${name} ${month.slice(0, 4)}`
+    const value = byMonth.get(month) ?? 0
+    const part = open && month === now
+    points.push({
+      label,
+      short: name.slice(0, 3),
       value,
       part,
-      tip: { number: String(value), words: `${part ? `${MONTHS[i]} so far` : MONTHS[i].slice(0, 3)} · applications` },
-    }
-  })
+      tip: { number: String(value), words: `${part ? `${label} so far` : label} · applications` },
+    })
+  }
   const busiest = largest(points, (point) => point.value)!
   return {
     kind: "months",
@@ -92,8 +111,52 @@ export function monthsTab(counts: HomeChartCounts, today: string): MonthsTab | n
       ? `${busiest.label} is the busiest month so far, with ${applications(busiest.value)}`
       : `${busiest.label} was the busiest month, with ${applications(busiest.value)}`,
     points,
-    note: `${MONTHS[current]} so far, shown lighter.`,
+    note: points.some((point) => point.part) ? `${MONTHS[Number(now.slice(5, 7)) - 1]} so far, shown lighter.` : null,
   }
+}
+
+/**
+ * Where the year's applicants are now, by status in the order a family moves
+ * through them, imported records with the rest. While the year is open the
+ * heading says just that; once it is over, how many enrolled.
+ */
+export function statusTab(counts: HomeChartCounts, open: boolean): StatusTab | null {
+  if (counts.total === 0) return null
+  const enrolled = counts.statuses.find((row) => row.status === "Enrolled")?.count ?? 0
+  return {
+    kind: "status",
+    heading: open ? "Where the year’s applicants are now" : `${enrolled} of ${counts.total} applicants enrolled`,
+    points: counts.statuses.map(({ status, count }) => ({
+      label: status,
+      short: status,
+      value: count,
+      tip: { number: String(count), words: `${status} · applicants` },
+    })),
+    note: null,
+  }
+}
+
+/** The most columns Months fills with zero months: two school years. */
+export const MONTHS_FILLED = 24
+
+// The month after a YYYY-MM month.
+function nextMonth(month: string): string {
+  const [y, m] = month.split("-").map(Number)
+  return m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, "0")}`
+}
+
+// How many months from `first` to `last`, both counted.
+function monthsBetween(first: string, last: string): number {
+  const [fy, fm] = first.split("-").map(Number)
+  const [ly, lm] = last.split("-").map(Number)
+  return (ly - fy) * 12 + (lm - fm) + 1
+}
+
+// Every month from `first` to `last`, in order.
+function everyMonth(first: string, last: string): string[] {
+  const months: string[] = []
+  for (let month = first; month <= last; month = nextMonth(month)) months.push(month)
+  return months
 }
 
 /** One class on the Seats tab: its seats and seats held, whether it is full, and its free seats. */
@@ -143,7 +206,8 @@ const SOURCE_NAMES: Record<ApplicationSource, { label: string; short: string; he
 /** Applications by where they came from: the ring with the total in the middle, and its list. */
 export function sourcesTab(counts: HomeChartCounts): SourcesTab | null {
   if (counts.total === 0) return null
-  const points = counts.sources.map(({ source, count }) => {
+  const rows = counts.sources
+  const points = rows.map(({ source, count }) => {
     const percent = Math.round((count / counts.total) * 100)
     return {
       label: SOURCE_NAMES[source].label,
@@ -153,7 +217,7 @@ export function sourcesTab(counts: HomeChartCounts): SourcesTab | null {
       tip: { number: `${count} · ${percent}%`, words: SOURCE_NAMES[source].label },
     }
   })
-  const top = largest(counts.sources, (row) => row.count)!
+  const top = largest(rows, (row) => row.count)!
   return { kind: "sources", heading: SOURCE_NAMES[top.source].heading, points, total: counts.total }
 }
 

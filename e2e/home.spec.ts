@@ -2,7 +2,7 @@ import { type Page } from "@playwright/test"
 import { expect, test } from "./staff-test"
 
 import { addDays, mondayOf, shortDay, shortRange } from "@/app/staff/_home/stats"
-import { tanzaniaToday } from "@/lib/school-calendar"
+import { currentAdmissionYear, tanzaniaToday } from "@/lib/school-calendar"
 
 import { createThrowawayStaff, unusedAdmissionNumber } from "../tests/support/db"
 import { ACCOUNTANT, ADMISSIONS, MANAGER, type FixtureStaff } from "../tests/support/fixtures"
@@ -203,11 +203,14 @@ test.describe("the chart card", () => {
   const charts = (page: Page) => page.getByRole("region", { name: "Charts" })
   const tab = (page: Page, name: string) => charts(page).getByRole("tab", { name })
 
-  test("its four tabs each show their chart, and See the numbers shows them as a table", async ({ page }) => {
+  test("its five tabs each show their chart, and See the numbers shows them as a table", async ({ page }) => {
     await signIn(page, MANAGER)
-    await expect(charts(page).getByRole("tab")).toHaveText(["Sources", "Classes", "Months", "Seats"])
+    await expect(charts(page).getByRole("tab")).toHaveText(["Sources", "Classes", "Months", "Status", "Seats"])
     await expect(tab(page, "Sources")).toHaveAttribute("aria-selected", "true")
-    await expect(charts(page).getByRole("listitem")).toHaveText([/^Admission form/, /^Agents’ Discount codes/, /^Promo codes/, /^Walk-in at the desk/])
+    // The year list opens on the current admission year.
+    await expect(charts(page).getByRole("combobox", { name: "Admission year" })).toHaveText(String(currentAdmissionYear(tanzaniaToday())))
+    const sources = charts(page).getByRole("listitem")
+    await expect(sources).toHaveText([/^Admission form/, /^Agents’ Discount codes/, /^Promo codes/, /^Walk-in at the desk/])
 
     await tab(page, "Classes").click()
     await expect(charts(page).getByText(/ draws? the most students$/)).toBeVisible()
@@ -223,7 +226,12 @@ test.describe("the chart card", () => {
     await expect(charts(page).getByText(/busiest month/)).toBeVisible()
     const month = charts(page).getByRole("img", { name: /· applications$/ }).first()
     await month.hover()
-    await expect(charts(page).getByText(/^(Jan · applications|January so far · applications)$/)).toBeVisible()
+    // The first month anyone in the year applied or visited, with its year.
+    await expect(charts(page).getByText(/^[A-Z][a-z]+ \d{4}( so far)? · applications$/)).toBeVisible()
+
+    await tab(page, "Status").click()
+    await charts(page).getByRole("button", { name: "See the numbers" }).click()
+    await expect(charts(page).getByRole("table", { name: "Status: the numbers" }).getByRole("rowheader")).toHaveText(["Applied", "Visited", "Interviewed", "Enrolled", "Declined"])
 
     await tab(page, "Seats").click()
     await expect(charts(page).getByText("Each capsule is the whole class. The fill is the seats held.")).toBeVisible()
@@ -243,10 +251,30 @@ test.describe("the chart card", () => {
     await expect(charts(page).getByText("DAY CARE · students")).toBeHidden()
   })
 
+  test("the Admission year list switches every chart to the year picked, and a year it does not offer shows the current one", async ({ page }) => {
+    const current = String(currentAdmissionYear(tanzaniaToday()))
+    const year = charts(page).getByRole("combobox", { name: "Admission year" })
+    await signIn(page, MANAGER)
+    await page.goto("/staff?year=2100")
+    await expect(year).toHaveText(current)
+
+    // The seed has applicants in more than one year, newest first.
+    await year.click()
+    const other = page.getByRole("option").filter({ hasNotText: current }).first()
+    const picked = (await other.textContent())!.trim()
+    await other.click()
+    await expect(page).toHaveURL(new RegExp(`[?&]year=${picked}`))
+    await expect(year).toHaveText(picked)
+
+    await year.click()
+    await page.getByRole("option", { name: current }).click()
+    await expect(page).not.toHaveURL(/[?&]year=/)
+  })
+
   test("staff who may not see payments get no Seats tab, and staff who see only payments get Seats alone", async ({ page }) => {
     const leadsOnly = await createThrowawayStaff(["leads.view"])
     await signIn(page, leadsOnly)
-    await expect(charts(page).getByRole("tab")).toHaveText(["Sources", "Classes", "Months"])
+    await expect(charts(page).getByRole("tab")).toHaveText(["Sources", "Classes", "Months", "Status"])
 
     await page.context().clearCookies()
     const paymentsOnly = await createThrowawayStaff(["payments.view"])

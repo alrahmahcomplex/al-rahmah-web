@@ -1,14 +1,15 @@
 "use client"
 
+import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties, type FocusEvent, type MouseEvent, type ReactNode } from "react"
 
-import { Card, Table, TabSwitch, TextLink } from "@/components/kit"
+import { Card, Select, Table, TabSwitch, TextLink } from "@/components/kit"
 
-import { niceScale, RING, ringArcs, type AxisGroup, type ChartPoint, type ChartTab, type ClassesTab, type MonthsTab, type SeatsTab, type SourcesTab } from "./charts"
+import { niceScale, RING, ringArcs, type AxisGroup, type ChartPoint, type ChartTab, type ClassesTab, type MonthsTab, type SeatsTab, type SourcesTab, type StatusTab } from "./charts"
 import { smoothLine } from "./spark"
 import "./chart.css"
 
-const TAB_NAMES: Record<ChartTab["kind"], string> = { classes: "Classes", months: "Months", seats: "Seats", sources: "Sources" }
+const TAB_NAMES: Record<ChartTab["kind"], string> = { classes: "Classes", months: "Months", seats: "Seats", sources: "Sources", status: "Status" }
 
 type Tip = ChartPoint["tip"]
 type ShownTip = Tip & { key: string; x: number; y: number }
@@ -19,16 +20,68 @@ type ShownTip = Tip & { key: string; x: number; y: number }
  * numbers", and one chart in one indigo hue. The card fills its place in
  * Home's grid, so the chart takes the room left over. Every mark shows its tooltip on hover and on
  * keyboard focus: the number in bold, what it is underneath.
+ * The admission-year list over the tabs (#518) picks the year every tab but
+ * Seats counts; Seats is always the coming opening.
  */
-export function ChartCard({ tabs }: { tabs: ChartTab[] }) {
+export function ChartCard({
+  tabs,
+  years,
+  year,
+  current,
+  empty,
+}: {
+  tabs: ChartTab[]
+  years: number[]
+  year: number
+  current: number
+  /** The year picked has no applicant yet: said under the list, over Seats when it shows. */
+  empty: boolean
+}) {
   return (
     <Card className="hm-chart" aria-label="Charts">
-      <TabSwitch
-        label="Charts"
-        className="hm-ch-tabs"
-        tabs={tabs.map((tab) => ({ value: tab.kind, label: TAB_NAMES[tab.kind], panel: <ChartPanel key={tab.kind} tab={tab} /> }))}
-      />
+      {years.length > 0 && <YearPick years={years} year={year} current={current} />}
+      {empty && <p className="hm-ch-none">No applicants for {year} yet.</p>}
+      {tabs.length > 0 && (
+        <TabSwitch
+          label="Charts"
+          className="hm-ch-tabs"
+          tabs={tabs.map((tab) => ({ value: tab.kind, label: TAB_NAMES[tab.kind], panel: <ChartPanel key={tab.kind} tab={tab} /> }))}
+        />
+      )}
     </Card>
+  )
+}
+
+/**
+ * "Admission year" and the kit's choice list: every year with an applicant,
+ * newest first. The current admission year is the page without `?year`, so
+ * Home's plain link always opens on it.
+ */
+function YearPick({ years, year, current }: { years: number[]; year: number; current: number }) {
+  const router = useRouter()
+  const pathname = usePathname()
+  const params = useSearchParams()
+  const labelId = useId()
+
+  function show(value: string) {
+    const next = new URLSearchParams(params)
+    if (Number(value) === current) next.delete("year")
+    else next.set("year", value)
+    const query = next.toString()
+    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false })
+  }
+
+  return (
+    <div className="hm-ch-year">
+      <span id={labelId}>Admission year</span>
+      <Select
+        aria-labelledby={labelId}
+        className="hm-ch-yearpick"
+        options={years.map((option) => ({ value: String(option), label: String(option) }))}
+        value={String(year)}
+        onValueChange={show}
+      />
+    </div>
   )
 }
 
@@ -45,7 +98,7 @@ function ChartPanel({ tab }: { tab: ChartTab }) {
         </TextLink>
       </div>
       {tab.kind === "classes" && <ClassesLine tab={tab} mark={mark} />}
-      {tab.kind === "months" && <MonthColumns tab={tab} mark={mark} />}
+      {(tab.kind === "months" || tab.kind === "status") && <Columns tab={tab} mark={mark} />}
       {tab.kind === "seats" && <SeatCapsules tab={tab} mark={mark} />}
       {tab.kind === "sources" && <SourceRing tab={tab} mark={mark} />}
       <div id={tableId} hidden={!open}>
@@ -198,8 +251,8 @@ function ClassesLine({ tab, mark }: { tab: ClassesTab; mark: Mark }) {
   )
 }
 
-/** Months: thin columns on a light grid, the month still running lighter. */
-function MonthColumns({ tab, mark }: { tab: MonthsTab; mark: Mark }) {
+/** Months and Status: thin columns on a light grid, the month still running lighter. */
+function Columns({ tab, mark }: { tab: MonthsTab | StatusTab; mark: Mark }) {
   const { top, step } = niceScale(Math.max(...tab.points.map((point) => point.value)))
   return (
     <>
@@ -297,8 +350,8 @@ function NumbersTable({ tab }: { tab: ChartTab }) {
   const rows: TableRow[] =
     tab.kind === "seats"
       ? tab.points.map((point) => ({ label: point.label, value: `${point.value} of ${point.seats}` }))
-      : tab.points.map((point) => ({ label: tab.kind === "months" ? point.short : point.label, value: point.value }))
-  const first = tab.kind === "seats" ? "Class" : tab.kind === "months" ? "Month" : "Group"
+      : tab.points.map((point) => ({ label: point.label, value: point.value }))
+  const first = tab.kind === "seats" ? "Class" : tab.kind === "months" ? "Month" : tab.kind === "status" ? "Status" : "Group"
   return (
     <Table<TableRow>
       label={`${TAB_NAMES[tab.kind]}: the numbers`}

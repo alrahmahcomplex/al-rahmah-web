@@ -529,6 +529,11 @@ export const FUNCTIONS: Record<string, FunctionEntry> = {
     args: { row_offset: "0", row_limit: "10" },
     agent: { refused: "not_permitted" },
   },
+  "public.home_admission_years()": {
+    roles: ["authenticated"],
+    args: {},
+    agent: { refused: "forbidden" },
+  },
   "public.home_chart_counts(year integer)": {
     roles: ["authenticated"],
     args: { year: "2026" },

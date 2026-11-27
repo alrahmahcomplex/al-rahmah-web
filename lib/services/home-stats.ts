@@ -2,81 +2,53 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 
 import type { Result } from "./result"
 
-// The counts behind Home's two stat cards (#323). Both are read on the
-// caller's session, so row-level security decides what is counted: staff
-// with leads.view count every lead and interview, anyone else counts none.
-
-// Tanzania keeps UTC+3 all year, so a calendar day there starts at 21:00 UTC
-// the day before.
-const TANZANIA_OFFSET = "+03:00"
+// The counts behind Home's two stat cards (#323, #519), from
+// home_interviews_by_day and home_applications_by_day. Both read every record
+// by its own date, imported or entered here, whatever admission year the
+// child is applying for. They run on the caller's session, so row-level
+// security decides what is counted: staff with leads.view count every lead
+// and interview, anyone else counts none.
 
 /** How many on each day, keyed by YYYY-MM-DD. A day with none is left out. */
 export type DayCounts = Record<string, number>
 
-type DayRow = { day: string }
+type DayRow = { day: string } & Record<string, number | string>
 
-// Rows come back in pages of at most the API's row limit. A count higher than
-// the rows read means some were cut off, and a short count is never shown.
-function byDay(rows: DayRow[], count: number | null, what: string): Result<DayCounts, "unavailable"> {
-  if (count === null || count > rows.length) {
-    console.error(`Could not read every ${what}: ${count} counted, ${rows.length} read`)
+async function countByDay(
+  supabase: SupabaseClient,
+  fn: "home_interviews_by_day" | "home_applications_by_day",
+  column: string,
+  from: string,
+  to: string,
+): Promise<Result<DayCounts, "unavailable">> {
+  const { data, error } = await supabase.rpc(fn, { from_day: from, to_day: to })
+  if (error) {
+    // Someone signed out may not run it: they count none, as staff without leads.view do.
+    if (error.code === "42501") return { ok: true, data: {} }
+    console.error(`Could not count by day (${fn})`, error)
     return { ok: false, error: "unavailable" }
   }
   const counts: DayCounts = {}
-  for (const row of rows) counts[row.day] = (counts[row.day] ?? 0) + 1
+  for (const row of (data ?? []) as DayRow[]) counts[row.day] = Number(row[column])
   return { ok: true, data: counts }
 }
 
 /**
- * The interview sittings on each day from `from` to `to` (YYYY-MM-DD, both
- * included). A sitting's date is the one recorded with its result, so this
- * counts interviews held, not a schedule.
+ * The interviews on each day from `from` to `to` (YYYY-MM-DD in Tanzania,
+ * both included): every child given an S/N, with a result or not, on the
+ * date recorded with the result, else the day the S/N was given. One a
+ * student import brought in counts on the child's Visit date from the file.
  */
-export async function countInterviewsByDay(supabase: SupabaseClient, from: string, to: string): Promise<Result<DayCounts, "unavailable">> {
-  const { data, count, error } = await supabase
-    .from("interviews")
-    .select("day:interview_date", { count: "exact" })
-    .gte("interview_date", from)
-    .lte("interview_date", to)
-    .overrideTypes<DayRow[], { merge: false }>()
-  if (error) {
-    console.error("Could not count the interviews by day", error)
-    return { ok: false, error: "unavailable" }
-  }
-  return byDay(data ?? [], count, "interview")
+export function countInterviewsByDay(supabase: SupabaseClient, from: string, to: string): Promise<Result<DayCounts, "unavailable">> {
+  return countByDay(supabase, "home_interviews_by_day", "interview_count", from, to)
 }
 
 /**
- * The students registered on each day from `from` to `to` (YYYY-MM-DD in
- * Tanzania, both included), from the Admission form, the desk or an agent's
- * code. Students brought in by a student import are not counted: they were
- * not registered that day.
+ * The applications on each day from `from` to `to` (YYYY-MM-DD in Tanzania,
+ * both included), by each student's own date: the day they were registered,
+ * from the Admission form, the desk or an agent's code, or for one a student
+ * import brought in, the Visit date from the file.
  */
-export async function countRegistrationsByDay(supabase: SupabaseClient, from: string, to: string): Promise<Result<DayCounts, "unavailable">> {
-  const { data, count, error } = await supabase
-    .from("leads")
-    .select("created_at", { count: "exact" })
-    .is("import_batch_id", null)
-    .gte("created_at", `${from}T00:00:00${TANZANIA_OFFSET}`)
-    .lt("created_at", `${nextDay(to)}T00:00:00${TANZANIA_OFFSET}`)
-    .overrideTypes<{ created_at: string }[], { merge: false }>()
-  if (error) {
-    console.error("Could not count the registrations by day", error)
-    return { ok: false, error: "unavailable" }
-  }
-  return byDay(
-    (data ?? []).map((row) => ({ day: tanzaniaDay(row.created_at) })),
-    count,
-    "registration",
-  )
-}
-
-function nextDay(date: string): string {
-  const [year, month, day] = date.split("-").map(Number)
-  return new Date(Date.UTC(year, month - 1, day + 1)).toISOString().slice(0, 10)
-}
-
-// The Tanzania calendar day of a timestamp.
-function tanzaniaDay(timestamp: string): string {
-  return new Date(new Date(timestamp).getTime() + 3 * 3600_000).toISOString().slice(0, 10)
+export function countRegistrationsByDay(supabase: SupabaseClient, from: string, to: string): Promise<Result<DayCounts, "unavailable">> {
+  return countByDay(supabase, "home_applications_by_day", "application_count", from, to)
 }

@@ -78,6 +78,9 @@ export function classesTab(counts: HomeChartCounts): ClassesTab | null {
  * counts in its own Visit date's month like any other. While the year is
  * still taking applicants, the columns run on to this month, drawn lighter.
  * Every applicant is in a column, so the columns add up to the total.
+ * Months with none are drawn as zeros only across a span of at most
+ * MONTHS_FILLED; a longer one (a mistyped visit date years back) draws just
+ * the months with applicants, so the mistake shows as its own column.
  */
 export function monthsTab(counts: HomeChartCounts, today: string, open: boolean): MonthsTab | null {
   if (counts.total === 0) return null
@@ -86,8 +89,9 @@ export function monthsTab(counts: HomeChartCounts, today: string, open: boolean)
   const latest = counts.months.at(-1)!.month
   const last = open && now > latest ? now : latest
   const byMonth = new Map(counts.months.map((row) => [row.month, row.count]))
+  const columns = monthsBetween(first, last) <= MONTHS_FILLED ? everyMonth(first, last) : [...byMonth.keys(), ...(last === now && !byMonth.has(now) ? [now] : [])]
   const points: ChartPoint[] = []
-  for (let month = first; month <= last; month = nextMonth(month)) {
+  for (const month of columns) {
     const name = MONTHS[Number(month.slice(5, 7)) - 1]
     const label = `${name} ${month.slice(0, 4)}`
     const value = byMonth.get(month) ?? 0
@@ -132,10 +136,27 @@ export function statusTab(counts: HomeChartCounts, open: boolean): StatusTab | n
   }
 }
 
+/** The most columns Months fills with zero months: two school years. */
+export const MONTHS_FILLED = 24
+
 // The month after a YYYY-MM month.
 function nextMonth(month: string): string {
   const [y, m] = month.split("-").map(Number)
   return m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, "0")}`
+}
+
+// How many months from `first` to `last`, both counted.
+function monthsBetween(first: string, last: string): number {
+  const [fy, fm] = first.split("-").map(Number)
+  const [ly, lm] = last.split("-").map(Number)
+  return (ly - fy) * 12 + (lm - fm) + 1
+}
+
+// Every month from `first` to `last`, in order.
+function everyMonth(first: string, last: string): string[] {
+  const months: string[] = []
+  for (let month = first; month <= last; month = nextMonth(month)) months.push(month)
+  return months
 }
 
 /** One class on the Seats tab: its seats and seats held, whether it is full, and its free seats. */

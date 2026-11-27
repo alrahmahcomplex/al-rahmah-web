@@ -121,6 +121,25 @@ describe("Months", () => {
     expect(tab.note).toBe("May so far, shown lighter.")
   })
 
+  it("draws only the months with applicants when a mistyped date stretches the span past two years", () => {
+    const typo = counts({ months: [1], from: "2002-03" })
+    const year = counts({ months: [4, 0, 6], from: "2026-08" })
+    const tab = monthsTab({ ...year, months: [...typo.months, ...year.months], total: typo.total + year.total }, "2026-11-15", true)!
+    expect(tab.points.map((point) => [point.label, point.value])).toEqual([
+      ["March 2002", 1],
+      ["August 2026", 4],
+      ["October 2026", 6],
+      ["November 2026", 0],
+    ])
+    expect(tab.points.reduce((sum, point) => sum + point.value, 0)).toBe(11)
+    expect(tab.note).toBe("November so far, shown lighter.")
+  })
+
+  it("still fills the months with none across a span of two years", () => {
+    const tab = monthsTab(counts({ months: [1, ...Array(22).fill(0), 1], from: "2025-01" }), "2026-12-01", false)!
+    expect(tab.points).toHaveLength(24)
+  })
+
   it("says so far when the month running is the busiest, and counts one application as one", () => {
     expect(monthsTab(counts({ months: [1], from: "2026-06" }), "2026-06-04", true)?.heading).toBe("June 2026 is the busiest month so far, with 1 application")
   })

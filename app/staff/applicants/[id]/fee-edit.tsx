@@ -48,7 +48,7 @@ export function SiblingFeeControls({
   // The side sheet: Record payment opens the record's School fee tab.
   recordHref?: string | null
   // The record: Record payment opens its form here.
-  record?: { canWaive: boolean; canPayPreFormOne: boolean } | null
+  record?: { canWaive: boolean; canPayPreFormOne: boolean; warning?: string | null } | null
   onChanged?: () => void
 }) {
   const [open, setOpen] = useState<Open>(null)
@@ -69,7 +69,17 @@ export function SiblingFeeControls({
   )
   const anyLink = fee.canEdit || fee.canKeep
   let row: ReactNode = null
-  if (record) row = <RecordPayment leadId={leadId} canWaive={record.canWaive} canPayPreFormOne={record.canPayPreFormOne} note={fee.paymentNote} beside={anyLink ? links : null} />
+  if (record)
+    row = (
+      <RecordPayment
+        leadId={leadId}
+        canWaive={record.canWaive}
+        canPayPreFormOne={record.canPayPreFormOne}
+        note={fee.paymentNote}
+        warning={record.warning ?? null}
+        beside={anyLink ? links : null}
+      />
+    )
   else if (recordHref || anyLink)
     row = (
       <div className="lr-acts">

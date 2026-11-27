@@ -1,8 +1,16 @@
 import { Note } from "@/components/kit"
 import { formatDate, tanzaniaToday } from "@/lib/school-calendar"
-import { getInterviewRegistration, getLeadInterviews, type LeadInterview } from "@/lib/services/interviews"
+import {
+  getInterviewAgreement,
+  getInterviewRegistration,
+  getLeadInterviews,
+  type InterviewAgreement,
+  type LeadInterview,
+} from "@/lib/services/interviews"
 import type { Lead } from "@/lib/services/leads"
 import { createClient } from "@/utils/supabase/server"
+
+import { ResultTag } from "../../interviews/result-tag"
 
 import { EarlierInterviews } from "./earlier-interviews"
 import { InterviewFeeControl } from "./interview-fee"
@@ -34,6 +42,11 @@ export async function InterviewSection({
     canRecord ? getInterviewRegistration(supabase, lead.id) : null,
   ])
   const current = interviews.ok ? (interviews.data[0] ?? null) : null
+  // Who marked a Conditional result's agreement signed, and when.
+  const agreement =
+    current?.result === "Conditional" && current.agreementSignedAt !== null
+      ? await getInterviewAgreement(supabase, current.id)
+      : null
   const kind = registration?.ok ? registration.data : null
   const canRegister = canRecord && interviews.ok && kind !== null
 
@@ -47,6 +60,7 @@ export async function InterviewSection({
       ) : current ? (
         <CurrentInterview
           interview={current}
+          agreement={agreement?.ok ? agreement.data : null}
           leadId={lead.id}
           admissionNumber={lead.admissionNumber}
           canRecord={canRecord}
@@ -65,12 +79,14 @@ export async function InterviewSection({
 
 function CurrentInterview({
   interview,
+  agreement,
   leadId,
   admissionNumber,
   canRecord,
   canMarkFee,
 }: {
   interview: LeadInterview
+  agreement: InterviewAgreement | null
   leadId: string
   admissionNumber: string
   canRecord: boolean
@@ -115,11 +131,28 @@ function CurrentInterview({
             <dt>Interview date</dt>
             <dd>{interview.interviewDate && formatDate(interview.interviewDate)}</dd>
             <dt>Result</dt>
-            <dd>{interview.result}</dd>
+            <dd>
+              <ResultTag result={interview.result} />
+            </dd>
             <dt>Score</dt>
             <dd>{interview.score}%</dd>
             <dt>Next action</dt>
             <dd>{interview.nextAction}</dd>
+            {interview.result === "Conditional" && (
+              <>
+                <dt>Agreement</dt>
+                <dd>
+                  {interview.agreementSignedAt === null ? (
+                    "Not signed yet"
+                  ) : (
+                    <>
+                      Signed on {formatDate(tanzaniaToday(new Date(interview.agreementSignedAt)))}
+                      {agreement?.signedBy && <small>marked by {agreement.signedBy}</small>}
+                    </>
+                  )}
+                </dd>
+              </>
+            )}
           </>
         )}
       </dl>

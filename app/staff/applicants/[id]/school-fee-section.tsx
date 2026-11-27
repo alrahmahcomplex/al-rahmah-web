@@ -16,7 +16,7 @@ import { InstalmentTable } from "./instalment-table"
 import { PaymentList } from "./payment-list"
 import { PreFormOneProgramme } from "./pre-form-one-programme"
 import { PreFormOneTickSection } from "./pre-form-one-tick-section"
-import { readSiblingView } from "./lead-reads"
+import { readInterviews, readSiblingView } from "./lead-reads"
 import { readSeatCard } from "./seat-card"
 import { SeatPriorityTag } from "./seat-priority-tag"
 
@@ -38,7 +38,8 @@ const NO_SIBLING_FEE = { canEdit: false, feeEditNeeded: false, canKeep: false, s
 // the tick applies. The Sibling fee edit and "Leave the fee as it is" (#311)
 // sit beside Record payment for staff who may record payments; while a
 // Sibling request waits, the payment form says the fee is recorded in full
-// for now.
+// for now. While a Conditional result's agreement is unmarked, the payment
+// form warns, and never refuses (owner decision of 2026-11-27).
 export async function SchoolFeeSection({
   leadId,
   lead,
@@ -67,12 +68,18 @@ export async function SchoolFeeSection({
   }
 
   const supabase = await createClient()
-  const [fee, payments, sibling, seat] = await Promise.all([
+  const [fee, payments, sibling, seat, interviews] = await Promise.all([
     getLeadFee(supabase, leadId),
     listPayments(supabase, leadId),
     readSiblingView(leadId, staff.permissions.join(",")),
     lead ? readSeatCard(supabase, lead, staff) : null,
+    canRecord ? readInterviews(leadId) : null,
   ])
+  const current = interviews?.ok ? (interviews.data[0] ?? null) : null
+  const agreementWarning =
+    current?.result === "Conditional" && current.agreementSignedAt === null
+      ? "Conditional result: the agreement isn't marked as signed yet. Check the family has signed it before you take the payment."
+      : null
   const siblingFee = sibling?.fee ?? null
   const byHand = siblingFee && setByHandLine(siblingFee)
 
@@ -152,7 +159,11 @@ export async function SchoolFeeSection({
               record={
                 seat?.outlook.blocked && !fee.data.preFormOne.applies
                   ? null
-                  : { canWaive: fee.data.discount?.kind === "qualified_orphan", canPayPreFormOne: fee.data.preFormOne.applies }
+                  : {
+                      canWaive: fee.data.discount?.kind === "qualified_orphan",
+                      canPayPreFormOne: fee.data.preFormOne.applies,
+                      warning: agreementWarning,
+                    }
               }
             />
           ) : (

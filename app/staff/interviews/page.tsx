@@ -31,6 +31,7 @@ const RESULT_FILTERS: { value: InterviewResultFilter | undefined; label: string 
   { value: undefined, label: "Any result" },
   { value: "none", label: "No result yet" },
   { value: "Passed", label: "Passed" },
+  { value: "Conditional", label: "Conditional" },
   { value: "Failed", label: "Failed" },
 ]
 

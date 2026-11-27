@@ -556,6 +556,12 @@ export const FUNCTIONS: Record<string, FunctionEntry> = {
     },
     agent: { refused: "not_permitted" },
   },
+  // Who marked a Conditional result's agreement signed, and when: leads.view.
+  "public.interview_agreement(interview_id uuid)": {
+    roles: ["authenticated"],
+    args: { interview_id: "'1e7e0000-0000-4000-8000-000000000503'" },
+    agent: { refused: "forbidden" },
+  },
   "public.interview_discount()": {
     roles: ["authenticated"],
     args: {},
@@ -593,6 +599,14 @@ export const FUNCTIONS: Record<string, FunctionEntry> = {
     agent: { returns: [] },
   },
   // Whether the caller manages staff on a role (#241): false for an agent.
+  // Marking a Conditional result's agreement signed: agreements.mark. The
+  // seeded Passed interview is made Conditional for the sample call.
+  "public.mark_agreement_signed(interview_id uuid)": {
+    roles: ["authenticated"],
+    setup: "update public.interviews set result = 'Conditional' where id = '1e7e0000-0000-4000-8000-000000000503'",
+    args: { interview_id: "'1e7e0000-0000-4000-8000-000000000503'" },
+    agent: { refused: "not_permitted" },
+  },
   "public.manages_role(role_id uuid)": {
     roles: ["authenticated"],
     args: { role_id: "(select id from public.roles where name = 'Admissions Staff')" },

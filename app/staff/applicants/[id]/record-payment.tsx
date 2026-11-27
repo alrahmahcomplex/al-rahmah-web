@@ -39,18 +39,21 @@ function parseAmount(typed: string): number {
 // `canPayPreFormOne` the Pre-Form One fee, for a lead whose Pre-Form One tick
 // applies. `note` shows on the form and its review: what the payment
 // does while a Sibling request waits (#311). `beside` sits next to the
-// button, such as Edit fee.
+// button, such as Edit fee. `warning` shows on the form and its review too:
+// a Conditional result whose agreement isn't marked signed.
 export function RecordPayment({
   leadId,
   canWaive = false,
   canPayPreFormOne = false,
   note = null,
+  warning = null,
   beside = null,
 }: {
   leadId: string
   canWaive?: boolean
   canPayPreFormOne?: boolean
   note?: string | null
+  warning?: string | null
   beside?: ReactNode
 }) {
   const [today, setToday] = useState<string | null>(null)
@@ -80,6 +83,7 @@ export function RecordPayment({
         canWaive={canWaive}
         canPayPreFormOne={canPayPreFormOne}
         note={note}
+        warning={warning}
         onDone={(message, seat) => {
           setToday(null)
           setSaved(seat ? null : message)
@@ -126,6 +130,7 @@ function PaymentForm({
   canWaive,
   canPayPreFormOne,
   note,
+  warning,
   onDone,
 }: {
   leadId: string
@@ -133,6 +138,7 @@ function PaymentForm({
   canWaive: boolean
   canPayPreFormOne: boolean
   note: string | null
+  warning: string | null
   onDone: (saved: string | null, seat?: SeatNote) => void
 }) {
   const [type, setType] = useState<RecordablePaymentType | "">("")
@@ -187,7 +193,12 @@ function PaymentForm({
     })
   }
 
-  const siblingNote = note && <Note>{note}</Note>
+  const siblingNote = (
+    <>
+      {warning && <Note tone="wait">{warning}</Note>}
+      {note && <Note>{note}</Note>}
+    </>
+  )
   const refusalAlert = refusal && (
     <Note tone="bad" role="alert">
       {refusal.message}

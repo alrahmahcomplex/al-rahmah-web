@@ -109,6 +109,8 @@ export const AUDIT_TABLE_FIELDS: Readonly<Record<string, Readonly<Record<string,
     locked_amount: lead("locked_amount"),
     locked_discount_applied: lead("locked_discount_applied"),
     import_batch_id: leftOut("import"),
+    agreement_signed_at: leftOut("when"),
+    agreement_signed_by: leftOut("who"),
   },
   follow_ups: {
     id: leftOut("id"),

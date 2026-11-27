@@ -276,6 +276,7 @@ describe("reading a lead's interviews", () => {
           feeStatus: "Not Paid",
           amount: 50_000,
           discountApplied: false,
+          agreementSignedAt: null,
         },
       ],
     })

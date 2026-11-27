@@ -1,8 +1,9 @@
 import { ACCOUNT_COPY } from "@/app/discount-code/account-copy"
 import { COPY as DISCOUNT_COPY, discountWords } from "@/app/discount-code/copy"
-import { firstName, MAX_SHOWN, PAGE_SIZE, shownFrom, stepFrom, STUDENTS_COPY } from "@/app/discount-code/students/copy"
+import { firstName, MAX_SHOWN, PAGE_SIZE, RESULT_SW, shownFrom, stepFrom, STUDENTS_COPY } from "@/app/discount-code/students/copy"
 import type { Language } from "@/lib/language"
 import type { AgentStudentStatus, ReminderStep } from "@/lib/services/agent-students"
+import type { InterviewResult } from "@/lib/services/interviews"
 
 export { ACCOUNT_COPY, DISCOUNT_COPY, discountWords, firstName, MAX_SHOWN, PAGE_SIZE, shownFrom, stepFrom, STUDENTS_COPY }
 
@@ -26,7 +27,7 @@ type AgentsCopy = {
   classLabel: string
   interviewLabel: string
   changedLabel: string
-  resultValue: (outcome: "Passed" | "Failed", score: number) => string
+  resultValue: (outcome: InterviewResult, score: number) => string
   remindLine: Record<ReminderStep, string>
   remindPage: string
   stepNow: string
@@ -62,7 +63,7 @@ export const AGENTS_COPY: Record<Language, AgentsCopy> = {
     classLabel: "Darasa",
     interviewLabel: "Usaili",
     changedLabel: "Imebadilika mwisho",
-    resultValue: (outcome, score) => `${outcome === "Passed" ? "Amefaulu" : "Hakufaulu"} · alama ${score}%`,
+    resultValue: (outcome, score) => `${RESULT_SW[outcome]} · alama ${score}%`,
     remindLine: {
       Applied: "Mkumbushe mzazi kuhusu usaili.",
       Visited: "Mkumbushe mzazi kuhusu usaili.",

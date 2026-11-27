@@ -286,13 +286,14 @@ describe("the message and the channel", () => {
     expect(view.ok && view.data.offer?.whatsappMessage).toBe(expected.ok && expected.data.text)
   })
 
-  test("a Failed result's message gives the office phone, addressed to the direct phone when there is no WhatsApp number", async () => {
+  test("a Failed result's message gives the school's number for its level, addressed to the direct phone when there is no WhatsApp number", async () => {
     const view = await getResultRelease(await signedIn(MANAGER), SEEDED.directOnly.lead, OFFICE)
     expect(view).toMatchObject({ ok: true, data: { offer: { channel: "whatsapp", whatsappPhone: "+255700000603" } } })
     const message = view.ok ? view.data.offer?.whatsappMessage : null
     expect(message).toContain("Assalaam Alaykum Bakari Matokeo,")
     expect(message).toContain("*Alama:* 45%")
-    expect(message).toContain("+255 673 526 644")
+    expect(message).toContain("+255 677 330 099")
+    expect(message).not.toContain("+255 673 526 644")
     expect(message).not.toContain("STD 3")
   })
 
@@ -490,12 +491,12 @@ describe("sending by SMS", () => {
       number_used: "direct",
       result: "Failed",
       score: 45,
-      template_id: "sms_failed_v1",
+      template_id: "sms_failed_v2",
     })
     expect(JSON.stringify(entry)).not.toContain(phone.slice(1))
     expect(await getResultRelease(staff, leadId, OFFICE)).toMatchObject({
       ok: true,
-      data: { latestRelease: { channel: "sms", numberUsed: "direct", releasedBy: ADMISSIONS.name, templateId: "sms_failed_v1" }, releaseCount: 1 },
+      data: { latestRelease: { channel: "sms", numberUsed: "direct", releasedBy: ADMISSIONS.name, templateId: "sms_failed_v2" }, releaseCount: 1 },
     })
   })
 

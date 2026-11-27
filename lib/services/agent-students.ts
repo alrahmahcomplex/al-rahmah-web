@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 
 import { readWithClockRetry } from "./clock-retry"
+import type { InterviewResult } from "./interviews"
 import type { Result } from "./result"
 
 // The students using the signed-in agent's Discount code (#195), read through
@@ -23,7 +24,7 @@ export type AgentStudent = {
   declinedReason: string | null
   interviewRegistered: boolean
   // The latest interview's result, once its fee is Paid.
-  result: { outcome: "Passed" | "Failed"; score: number } | null
+  result: { outcome: InterviewResult; score: number } | null
 }
 
 // The steps a reminder can be for.
@@ -76,7 +77,7 @@ type Row = {
   last_change: string
   declined_reason: string | null
   interview_registered: boolean
-  interview_result: "Passed" | "Failed" | null
+  interview_result: InterviewResult | null
   interview_score: number | null
 }
 

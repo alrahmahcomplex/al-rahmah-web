@@ -1,5 +1,14 @@
 import type { Language } from "@/lib/language"
 import type { AgentStudent, AgentStudentStatus, ReminderStep } from "@/lib/services/agent-students"
+import type { InterviewResult } from "@/lib/services/interviews"
+
+// An interview result in Swahili, on a student's card. Conditional is the
+// wording the owner approved on 2026-11-27 (prototype v7).
+export const RESULT_SW: Readonly<Record<InterviewResult, string>> = {
+  Passed: "Amefaulu",
+  Conditional: "Amepokelewa kwa masharti",
+  Failed: "Hakufaulu",
+}
 
 // The words of the agent's students page on the Discount code pages (#195):
 // the dashboard of prototype v47 (#497, the owner's pick B), Swahili first.
@@ -42,7 +51,7 @@ type Copy = {
   notActive: string
   lastChange: (date: string) => string
   declinedReasons: Record<string, string>
-  result: (outcome: "Passed" | "Failed", score: number) => string
+  result: (outcome: InterviewResult, score: number) => string
   resultPending: string
   searchLabel: string
   search: string
@@ -107,7 +116,7 @@ export const STUDENTS_COPY: Record<Language, Copy> = {
       "School decision": "Uamuzi wa shule",
       Other: "Sababu nyingine",
     },
-    result: (outcome, score) => `Usaili: ${outcome === "Passed" ? "Amefaulu" : "Hakufaulu"}, alama ${score}%`,
+    result: (outcome, score) => `Usaili: ${RESULT_SW[outcome]}, alama ${score}%`,
     resultPending: "Matokeo bado hayajatoka",
     searchLabel: "Tafuta kwa jina la mwanafunzi",
     search: "Tafuta",

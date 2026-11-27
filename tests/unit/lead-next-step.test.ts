@@ -21,10 +21,12 @@ function lead(overrides: Partial<NextStepInput> = {}): NextStepInput {
   }
 }
 
-const UNPAID = { feeStatus: "Not Paid", amount: 50000, result: null } as const
-const PAID = { feeStatus: "Paid", amount: 50000, result: null } as const
-const PASSED = { feeStatus: "Paid", amount: 50000, result: "Passed" } as const
-const FAILED = { feeStatus: "Paid", amount: 50000, result: "Failed" } as const
+const UNPAID = { feeStatus: "Not Paid", amount: 50000, result: null, agreementSigned: false } as const
+const PAID = { feeStatus: "Paid", amount: 50000, result: null, agreementSigned: false } as const
+const PASSED = { feeStatus: "Paid", amount: 50000, result: "Passed", agreementSigned: false } as const
+const CONDITIONAL = { feeStatus: "Paid", amount: 50000, result: "Conditional", agreementSigned: false } as const
+const SIGNED = { ...CONDITIONAL, agreementSigned: true } as const
+const FAILED = { feeStatus: "Paid", amount: 50000, result: "Failed", agreementSigned: false } as const
 const SENT = { blocked: null, sent: true, changedSinceSent: false } as const
 
 describe("the next step on a lead", () => {
@@ -129,6 +131,33 @@ describe("the next step on a lead", () => {
     })
   })
 
+  it("waits for the agreement of a Conditional result once it went out, then collects the School fee", () => {
+    expect(nextStep(lead({ status: "Interviewed", interview: CONDITIONAL, release: SENT }))).toEqual({ kind: "sign-agreement" })
+    expect(nextStep(lead({ status: "Interviewed", interview: SIGNED, release: SENT }))).toEqual({ kind: "record-deposit" })
+    expect(nextStep(lead({ status: "Interviewed", interview: SIGNED, release: SENT, fee: { priority: "Deposit" } }))).toEqual({
+      kind: "collect-school-fee",
+      priority: "Deposit",
+    })
+  })
+
+  it("sends a Conditional result before asking for its agreement", () => {
+    const ready = { blocked: null, sent: false, changedSinceSent: false }
+    expect(nextStep(lead({ status: "Interviewed", interview: CONDITIONAL, release: ready }))).toEqual({
+      kind: "send-result",
+      corrected: false,
+    })
+  })
+
+  it("reads an agreement mark only with a Conditional result", () => {
+    expect(nextStep(lead({ status: "Interviewed", interview: { ...PASSED, agreementSigned: true }, release: SENT }))).toEqual({
+      kind: "record-deposit",
+    })
+    expect(nextStep(lead({ status: "Interviewed", interview: { ...FAILED, agreementSigned: true }, release: SENT }))).toEqual({
+      kind: "schedule-follow-up",
+      reason: "failed",
+    })
+  })
+
   it("collects the Initial deposit from a Passed lead with no Seat priority", () => {
     expect(nextStep(lead({ status: "Interviewed", interview: PASSED, release: SENT }))).toEqual({ kind: "record-deposit" })
   })
@@ -165,6 +194,7 @@ describe("the Next step card's text", () => {
     { kind: "record-result" },
     { kind: "send-result", corrected: false },
     { kind: "send-result", corrected: true },
+    { kind: "sign-agreement" },
     { kind: "wait-for-follow-up", dueOn: "2026-11-20" },
     { kind: "record-deposit" },
     { kind: "collect-school-fee", priority: "Deposit" },
@@ -202,10 +232,25 @@ describe("the Next step card's text", () => {
       "collect-interview-fee": "interview interview_payments.record",
       "record-result": "interview interviews.record",
       "send-result": "interview results.send",
+      "sign-agreement": null,
       "wait-for-follow-up": null,
       "record-deposit": "school-fee payments.record",
       "collect-school-fee": "school-fee payments.record",
       "school-fee-unknown": null,
+    })
+  })
+
+  it("asks a head of school to mark the agreement, and tells everyone else it waits on them", () => {
+    const step = { kind: "sign-agreement" } as const
+    expect(nextStepText(step, formatDate, { canMarkAgreement: true, schoolLevel: "secondary" })).toEqual({
+      title: "Get the agreement signed",
+      detail: "Conditional result: the family signs the agreement at the Head of Secondary School's office, then pays the School fee.",
+      action: { label: "Mark agreement signed", tab: "overview", anchor: "lead-next-step", permission: "agreements.mark" },
+    })
+    expect(nextStepText(step, formatDate, { schoolLevel: "primary" })).toEqual({
+      title: "Waiting for the agreement",
+      detail: "The family signs at the Head of Primary School's office. The head marks it signed here; you can't.",
+      action: null,
     })
   })
 

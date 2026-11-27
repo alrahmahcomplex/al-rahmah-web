@@ -6,6 +6,7 @@ import { Table, Tag } from "@/components/kit"
 import type { InterviewFeeStatus, InterviewResult } from "@/lib/services/interviews"
 
 import "./interviews.css"
+import { ResultTag } from "./result-tag"
 
 export type InterviewTableRow = {
   id: string
@@ -56,10 +57,8 @@ export function InterviewsTable({ label, rows }: { label: string; rows: Intervie
           cell: (row) =>
             row.result === null ? (
               <span className="iv-quiet iv-nowrap">No result yet</span>
-            ) : row.result === "Passed" ? (
-              <Tag tone="ok">Passed</Tag>
             ) : (
-              <span className="iv-nowrap">{row.result}</span>
+              <ResultTag result={row.result} />
             ),
         },
         {

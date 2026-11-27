@@ -20,13 +20,15 @@ export {
 
 // The single-number metrics the database counts. Later dashboard tickets add
 // theirs here and as a branch of dashboard_count. Interviewed leads counts
-// children; Passed and Failed interviews count sittings, retakes included.
+// children; Passed, Conditional and Failed interviews count sittings,
+// retakes included.
 // Enrolled students counts the leads Enrolled now, by the date slice 9 says
 // Enrolled was triggered.
 export const DASHBOARD_METRICS = [
   "visited_leads",
   "interviewed_leads",
   "passed_interviews",
+  "conditional_interviews",
   "failed_interviews",
   "enrolled_students",
 ] as const

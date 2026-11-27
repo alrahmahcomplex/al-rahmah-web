@@ -32,7 +32,7 @@ export type ResultReleaseRecord = {
   releasedBy: string
   channel: ResultChannel
   numberUsed: "whatsapp" | "direct"
-  result: "Passed" | "Failed"
+  result: InterviewOutcome
   score: number
   templateId: string
 }
@@ -74,7 +74,7 @@ export type ResultReleaseView = {
 type CommonError = "forbidden" | "not-found" | "unavailable"
 
 type MessageValues = {
-  result: "Passed" | "Failed"
+  result: InterviewOutcome
   score: number | string
   parent_name: string
   student_name: string
@@ -103,7 +103,7 @@ type ReleaseRow = {
   released_by: string | null
   channel: ResultChannel
   number_used: "whatsapp" | "direct"
-  result: "Passed" | "Failed"
+  result: InterviewOutcome
   score: number | string
   template_id: string
 }

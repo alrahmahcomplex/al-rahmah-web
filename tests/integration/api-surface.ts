@@ -534,10 +534,20 @@ export const FUNCTIONS: Record<string, FunctionEntry> = {
     args: {},
     agent: { refused: "forbidden" },
   },
+  "public.home_applications_by_day(from_day date, to_day date)": {
+    roles: ["authenticated"],
+    args: { from_day: "'2026-01-01'", to_day: "'2026-01-07'" },
+    agent: { returns: [] },
+  },
   "public.home_chart_counts(year integer)": {
     roles: ["authenticated"],
     args: { year: "2026" },
     agent: { refused: "forbidden" },
+  },
+  "public.home_interviews_by_day(from_day date, to_day date)": {
+    roles: ["authenticated"],
+    args: { from_day: "'2026-01-01'", to_day: "'2026-01-07'" },
+    agent: { returns: [] },
   },
   "public.import_batch_importers(batch_ids uuid[])": {
     roles: ["authenticated"],

@@ -38,8 +38,7 @@ async function countByDay(
  * both included): every child given an S/N, with a result or not, on the
  * interview date recorded with the result. Before a result, one a student
  * import brought in counts on the child's Visit date from the file, and any
- * other on the day the S/N was given. An imported record with no date of its
- * own is on no day, never the import day.
+ * other on the day the S/N was given.
  */
 export function countInterviewsByDay(supabase: SupabaseClient, from: string, to: string): Promise<Result<DayCounts, "unavailable">> {
   return countByDay(supabase, "home_interviews_by_day", "interview_count", from, to)
@@ -49,8 +48,7 @@ export function countInterviewsByDay(supabase: SupabaseClient, from: string, to:
  * The applications on each day from `from` to `to` (YYYY-MM-DD in Tanzania,
  * both included), by each student's own date: the day they were registered,
  * from the Admission form, the desk or an agent's code, or for one a student
- * import brought in, the Visit date from the file. An imported student with
- * no date of its own is on no day, never the import day.
+ * import brought in, the Visit date from the file.
  */
 export function countRegistrationsByDay(supabase: SupabaseClient, from: string, to: string): Promise<Result<DayCounts, "unavailable">> {
   return countByDay(supabase, "home_applications_by_day", "application_count", from, to)

@@ -16,8 +16,12 @@
 -- result or not, whatever happened to the child after. Its day is the
 -- interview date staff record with its result, the day the sitting was held,
 -- imported or not. Before a result: for one a student import brought in, the
--- child's Visit date from the file, never the import day; for any other, the
--- day the S/N was given. A retaken interview counts again on its own day.
+-- child's Visit date from the file; for any other, the day the S/N was given.
+-- A retaken interview counts again on its own day.
+--
+-- Never the import day: when the file gave no Visit date, the import fills
+-- in its own day (confirm_student_import), so an imported record whose Visit
+-- date is the day it was created has no date of its own and is on no day.
 create function public.home_interviews_by_day(from_day date, to_day date)
 returns table (day date, interview_count bigint)
 language sql
@@ -27,11 +31,11 @@ set search_path = ''
 as $$
     select d.day, count(*)
     from (
-        select coalesce(
-            i.interview_date,
-            case when i.import_batch_id is not null then l.visit_date end,
-            (i.registered_at at time zone 'Africa/Dar_es_Salaam')::date
-        ) as day
+        select case
+            when i.interview_date is not null then i.interview_date
+            when i.import_batch_id is not null then nullif(l.visit_date, (l.created_at at time zone 'Africa/Dar_es_Salaam')::date)
+            else (i.registered_at at time zone 'Africa/Dar_es_Salaam')::date
+        end as day
         from public.interviews i
         join public.leads l on l.id = i.lead
     ) d
@@ -41,8 +45,9 @@ $$;
 
 -- Applications on each day from from_day to to_day (Tanzania dates, both
 -- included), by each lead's own date: the day it was created, or for one a
--- student import brought in, its Visit date from the file (the import day
--- only when the file gave none). The same date Home's Months chart uses.
+-- student import brought in, its Visit date from the file. An imported lead
+-- with no date of its own (no Visit date, or the one the import filled in
+-- with its own day) is on no day.
 create function public.home_applications_by_day(from_day date, to_day date)
 returns table (day date, application_count bigint)
 language sql
@@ -53,7 +58,7 @@ as $$
     select d.day, count(*)
     from (
         select case
-            when l.import_batch_id is not null and l.visit_date is not null then l.visit_date
+            when l.import_batch_id is not null then nullif(l.visit_date, (l.created_at at time zone 'Africa/Dar_es_Salaam')::date)
             else (l.created_at at time zone 'Africa/Dar_es_Salaam')::date
         end as day
         from public.leads l

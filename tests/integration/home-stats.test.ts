@@ -86,14 +86,18 @@ describe("countRegistrationsByDay", () => {
     })
     // Imported today for a year long gone: counted on its Visit date from the file, never today.
     await importedLead(third, 2003)
-    // Imported with no Visit date: the import day is its own date.
+    // Imported with no date of its own: no Visit date, or the import day the import filled in. On no day.
     const undated = await importedLead(null, thisYear)
-    await asSystem((sql) => sql.query("update public.leads set created_at = $2 where id = $1", [undated.leadId, `${third}T09:00:00Z`]))
+    const filledIn = await importedLead(third, thisYear)
+    await asSystem(async (sql) => {
+      await sql.query("update public.leads set created_at = $2 where id = $1", [undated.leadId, `${third}T09:00:00Z`])
+      await sql.query("update public.leads set created_at = $2 where id = $1", [filledIn.leadId, `${third}T09:00:00Z`])
+    })
   })
 
   test("counts each student on their own Tanzania day, imported or not, whatever year they apply for", async () => {
     const counts = await countRegistrationsByDay(await signedIn(MANAGER), first, third)
-    expect(counts).toEqual({ ok: true, data: { [first]: 2, [second]: 1, [third]: 2 } })
+    expect(counts).toEqual({ ok: true, data: { [first]: 2, [second]: 1, [third]: 1 } })
   })
 
   test("reads only the days asked for", async () => {
@@ -130,11 +134,10 @@ describe("countInterviewsByDay", () => {
     const registered = await registerForInterview(await signedIn(ADMISSIONS), waiting)
     if (!registered.ok) throw new Error(`registration failed: ${registered.error}`)
     // The S/N's time never changes in the app (guard_interview_change), so the
-    // test moves it with triggers off for this one update.
+    // test moves it with triggers off for this one transaction.
     await asSystem(async (sql) => {
-      await sql.query("set session_replication_role = replica")
+      await sql.query("set local session_replication_role = replica")
       await sql.query("update public.interviews set registered_at = $2 where id = $1", [registered.data.interviewId, `${second}T06:00:00Z`])
-      await sql.query("set session_replication_role = default")
     })
 
     // Imported today as interviewed, with no result: counted on the child's Visit date from the file.
@@ -146,6 +149,18 @@ describe("countInterviewsByDay", () => {
         [imported.leadId, 900_000 + randomInt(0, 99_999), claim.year, MANAGER.id, imported.batchId],
       ),
     )
+
+    // Imported as interviewed with no Visit date in the file, so the import filled in its own day
+    // (the second, here): on no day.
+    const filledIn = await importedLead(second, claim.year)
+    await asSystem(async (sql) => {
+      await sql.query("update public.leads set created_at = $2 where id = $1", [filledIn.leadId, `${second}T09:00:00Z`])
+      await sql.query(
+        `insert into public.interviews (lead, serial_number, serial_year, registered_by, import_batch_id)
+         values ($1, $2, $3, $4, $5)`,
+        [filledIn.leadId, 900_000 + randomInt(0, 99_999), claim.year, MANAGER.id, filledIn.batchId],
+      )
+    })
 
     // Imported with a Visit date on the first day, its result later recorded as sat on the third:
     // the sitting's own date wins over the Visit date.
@@ -159,7 +174,7 @@ describe("countInterviewsByDay", () => {
     )
   })
 
-  test("counts every interview on its own day: the result's date, else an import's Visit date, else the S/N's day", async () => {
+  test("counts every interview on its own day: the result's date, else an import's Visit date, else the S/N's day; never the import day", async () => {
     expect(await countInterviewsByDay(await signedIn(MANAGER), first, third)).toEqual({ ok: true, data: { [first]: 2, [second]: 2, [third]: 2 } })
     expect(await countInterviewsByDay(await signedIn(MANAGER), second, second)).toEqual({ ok: true, data: { [second]: 2 } })
   })

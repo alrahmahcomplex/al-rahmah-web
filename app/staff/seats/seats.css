@@ -79,3 +79,8 @@
   .st-moves > li { grid-template-columns: 1.5rem minmax(0, 1fr); }
   .st-dest { grid-column: 2; }
 }
+
+/* Delete an empty stream (owner 2026-11-26): the pencil sheet's last part, and its confirm buttons. */
+.st-del { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding-top: 16px; border-top: 1px solid var(--gf-mist); }
+.st-del .st-hint { margin: 0; }
+.st-confirm { display: flex; flex-direction: column; gap: 10px; }

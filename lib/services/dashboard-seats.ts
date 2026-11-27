@@ -108,7 +108,7 @@ export async function getSeatFiguresByClass(
 type FiguresRow = {
   classes: {
     class_name: LeadClass
-    streams: { id: string; label: string; takes: StreamTakes; seats: number; full: number; first_instalment: number; deposit: number; free: number }[]
+    streams: { id: string; label: string | null; takes: StreamTakes; seats: number; full: number; first_instalment: number; deposit: number; free: number }[]
     full: number
     first_instalment: number
     deposit: number
@@ -129,7 +129,7 @@ async function yearSeatFigures(supabase: SupabaseClient, year: number): Promise<
       className: entry.class_name,
       streams: entry.streams.map((stream) => ({
         id: stream.id,
-        label: stream.label,
+        label: stream.label ?? "",
         takes: stream.takes,
         seats: Number(stream.seats),
         full: Number(stream.full),

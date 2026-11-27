@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { describe, expect, test, vi } from "vitest"
 
-import { changeStream } from "@/lib/services/streams"
+import { changeStream, deleteStream, openStream, streamName } from "@/lib/services/streams"
 
 // The streams service (#449; who a stream takes, 2026-11-26): a refusal below
 // the children placed carries the database's count, which may be higher than
@@ -66,5 +66,26 @@ describe("changeStream", () => {
         seatedFromWaiting: 1,
       },
     })
+  })
+})
+
+describe("an optional label and deleting a stream (owner 2026-11-26)", () => {
+  test("an empty label is sent as none, and read back as empty; a stream with none is named by its class", async () => {
+    const { supabase, rpc } = client({ data: { id: "s1", label: null, takes: "Mixed", seats: 40, position: 1, placed: 0, brought_up_from: null } })
+    const opened = await openStream(supabase, { year: 2027, className: "STD 1", label: " ", takes: "Mixed", seats: 40, requestId: "r1" })
+    expect(rpc).toHaveBeenCalledWith("open_stream", expect.objectContaining({ label: null }))
+    expect(opened).toMatchObject({ ok: true, data: { label: "" } })
+    const changed = client({ data: { stream: { id: "s1", label: null, takes: "Boys", seats: 9, position: 1, placed: 0, brought_up_from: null }, opened: null, moved: [], seated_from_waiting: 0 } })
+    await changeStream(changed.supabase, { ...change, label: "", open: { takes: "Girls", label: "", seats: 3, requestId: "r2" } })
+    expect(changed.rpc).toHaveBeenCalledWith("change_stream", expect.objectContaining({ label: null, open_label: null, open_takes: "Girls" }))
+    expect([streamName("STD 1", "", "Mixed"), streamName("FORM 1", "", "Girls"), streamName("FORM 1", "B", "Boys")]).toEqual(["STD 1", "FORM 1 (Girls)", "FORM 1 B (Boys)"])
+  })
+
+  test("a refused delete says how many children are placed in the stream", async () => {
+    const { supabase, rpc } = client({ error: { message: "not_empty", code: "P0001", details: '{"placed": 2}' } })
+    expect(await deleteStream(supabase, "s1")).toEqual({ ok: false, error: "not_empty", placed: 2 })
+    expect(rpc).toHaveBeenCalledWith("delete_stream", { stream_id: "s1" })
+    const gone = client({ error: { message: "not_found", code: "P0001" } })
+    expect(await deleteStream(gone.supabase, "s1")).toEqual({ ok: false, error: "not_found" })
   })
 })

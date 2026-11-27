@@ -7,12 +7,14 @@ const actions = vi.hoisted(() => ({
   change: vi.fn(),
   bringUp: vi.fn(),
   request: vi.fn(),
+  remove: vi.fn(),
 }))
 vi.mock("@/app/staff/seats/stream-actions", () => ({
   openStreamAction: actions.open,
   changeStreamAction: actions.change,
   bringUpAction: actions.bringUp,
   requestStreamAction: actions.request,
+  deleteStreamAction: actions.remove,
 }))
 
 import { StreamsView, type Who } from "@/app/staff/seats/streams-view"
@@ -156,8 +158,8 @@ describe("StreamsView", () => {
       name: "Open a new FORM 1 stream",
     })
     expect(within(sheet).getByLabelText("Label")).toHaveValue("A")
-    expect(within(sheet).getByLabelText("Seats for new students")).toHaveAttribute("placeholder", "20")
-    await userEvent.type(within(sheet).getByLabelText("Seats for new students"), "20")
+    expect(within(sheet).getByLabelText("Seats")).toHaveAttribute("placeholder", "20")
+    await userEvent.type(within(sheet).getByLabelText("Seats"), "20")
     await userEvent.click(screen.getByRole("button", { name: "Open the stream" }))
     await waitFor(() => expect(actions.open).toHaveBeenCalledTimes(1))
     expect(actions.open.mock.calls[0][0]).toMatchObject({
@@ -230,14 +232,64 @@ describe("StreamsView", () => {
     actions.change.mockResolvedValue({ status: "done", stream: { label: "A", takes: "Boys", seats: 20 }, opened: null, moved: [], seatedFromWaiting: 0 })
     const sheet = await changeToBoys()
     await userEvent.click(within(sheet).getByRole("radio", { name: /Open a new stream for girls/ }))
-    // A girls' A doesn't clash with the boys' A.
-    expect(within(sheet).getAllByLabelText("Label")[1]).toHaveValue("A")
+    // No other stream takes girls, so the new one may go without a label (owner 2026-11-26).
+    expect(within(sheet).getAllByLabelText("Label")[1]).toHaveValue("")
+    expect(sheet).toHaveTextContent("No label: shown as “FORM 1 (Girls)”")
     expect(sheet).toHaveTextContent("12 or more so nobody waits: the 12 girls moving.")
     await userEvent.type(within(sheet).getAllByLabelText("Seats")[1], "10")
     expect(sheet).toHaveTextContent("2 girls will have no seat.")
     await userEvent.click(screen.getByRole("button", { name: "Save: 10 move, 2 wait" }))
     await waitFor(() => expect(actions.change).toHaveBeenCalledTimes(1))
-    expect(actions.change.mock.calls[0][0]).toMatchObject({ takes: "Boys", open: { takes: "Girls", label: "A", seats: 10 }, raise: undefined })
+    expect(actions.change.mock.calls[0][0]).toMatchObject({ takes: "Boys", open: { takes: "Girls", label: "", seats: 10 }, raise: undefined })
+  })
+})
+
+describe("StreamsView, an optional label and deleting an empty stream (owner 2026-11-26)", () => {
+  const STD1: ClassStreams = {
+    className: "STD 1",
+    streams: [stream("one", "", "Mixed", 40, 30, 1), stream("two", "B", "Mixed", 40, 0, 2)],
+    freeForBoy: true,
+    freeForGirl: true,
+    freeForAny: true,
+    waiting: [],
+  }
+  const data: YearStreams = { year: 2027, classes: [STD1], requests: [] }
+
+  it("shows a stream with no label as its class alone, and a stream added next to it needs a label: A is skipped", async () => {
+    view(MANAGER, data)
+    const card = screen.getByRole("button", { name: "Change STD 1" }).closest("section") as HTMLElement
+    await userEvent.click(within(card).getByRole("button", { name: "Add a stream" }))
+    const sheet = await screen.findByRole("dialog", { name: "Open a new STD 1 stream" })
+    expect(within(sheet).getByLabelText("Label")).toHaveValue("C")
+    await userEvent.clear(within(sheet).getByLabelText("Label"))
+    expect(sheet).toHaveTextContent("STD 1 already has no label, so this stream needs one, for example C.")
+    await userEvent.type(within(sheet).getByLabelText("Seats"), "40")
+    await userEvent.click(screen.getByRole("button", { name: "Open the stream" }))
+    expect(actions.open).not.toHaveBeenCalled()
+  })
+
+  it("a stream with children can't be deleted, and says why", async () => {
+    view(MANAGER, data)
+    await userEvent.click(screen.getByRole("button", { name: "Change STD 1" }))
+    const sheet = await screen.findByRole("dialog", { name: "Change STD 1" })
+    expect(within(sheet).queryByRole("button", { name: "Delete this stream" })).toBeNull()
+    expect(sheet).toHaveTextContent("Only an empty stream can be deleted. 30 children are placed in STD 1.")
+  })
+
+  it("an empty stream is deleted after a second yes", async () => {
+    actions.remove.mockResolvedValue({ status: "done", message: "STD 1 B is deleted." })
+    view(MANAGER, data)
+    await userEvent.click(screen.getByRole("button", { name: "Change STD 1 B" }))
+    const sheet = await screen.findByRole("dialog", { name: "Change STD 1 B" })
+    await userEvent.click(within(sheet).getByRole("button", { name: "Delete this stream" }))
+    const confirm = await screen.findByRole("dialog", { name: "Delete STD 1 B?" })
+    expect(confirm).toHaveTextContent("STD 1 B goes for good")
+    await userEvent.click(within(confirm).getByRole("button", { name: "Keep it" }))
+    await screen.findByRole("dialog", { name: "Change STD 1 B" })
+    expect(actions.remove).not.toHaveBeenCalled()
+    await userEvent.click(screen.getByRole("button", { name: "Delete this stream" }))
+    await userEvent.click(screen.getByRole("button", { name: "Yes, delete STD 1 B" }))
+    await waitFor(() => expect(actions.remove).toHaveBeenCalledWith({ streamId: "two", name: "STD 1 B" }))
   })
 })
 

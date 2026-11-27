@@ -200,6 +200,23 @@ describe("getLeadHistory", () => {
     expect(result.ok && [result.data.leadNames, result.data.streamNames, result.data.streamOpenedAt]).toEqual([{}, {}, {}])
   })
 
+  it("names a stream deleted since from its delete row, marked deleted (owner 2026-11-26)", async () => {
+    const entries = [historyRow(1, "seat_placements", { stream_id: null }, { stream_id: placed })]
+    const { client } = fakeLookups(entries, { streams: [] })
+    const rpc = client.rpc as unknown as ReturnType<typeof vi.fn>
+    rpc.mockImplementation(async (name: string) =>
+      name === "deleted_stream_names"
+        ? { data: [{ id: placed, class_name: "STD 1", label: "B", takes: "Mixed", opened_at: "2026-02-01T09:00:00.123456+00:00" }], error: null }
+        : { data: entries, error: null },
+    )
+
+    const result = await getLeadHistory(client, row.row_id)
+
+    expect(result.ok && result.data.streamNames).toEqual({ [placed]: "STD 1 B (deleted)" })
+    expect(result.ok && result.data.streamOpenedAt).toEqual({ [placed]: "2026-02-01T09:00:00.123456+00:00" })
+    expect(rpc).toHaveBeenCalledWith("deleted_stream_names", { ids: [placed] })
+  })
+
   it("still returns the history when the contact names can't be read", async () => {
     const { client } = fakeHistory({ data: null, error: { message: "URI too long" } })
 

@@ -3,21 +3,23 @@
 import { useId, useState, useTransition } from "react"
 
 import { Icon } from "@/components/icons"
-import { Button, ChoiceTiles, Disclosure, Field, FieldError, NamedField, Note, Sheet, Tag, toast } from "@/components/kit"
+import { Button, ChoiceTiles, Disclosure, FieldError, NamedField, Note, Sheet, Tag, toast } from "@/components/kit"
 import type { LeadClass } from "@/lib/services/leads"
 import { streamName, STREAM_TAKES, type Stream, type StreamTakes } from "@/lib/services/streams"
 
 import "./seats.css"
 
-import { bringUpAction, changeStreamAction, openStreamAction, requestStreamAction, type ChangeOutcome } from "./stream-actions"
+import { bringUpAction, changeStreamAction, deleteStreamAction, openStreamAction, requestStreamAction, type ChangeOutcome } from "./stream-actions"
 import {
   clashingStream,
+  labelsClash,
   movingGender,
   NEW_STREAM,
   nextLabel,
   placeholderSeats,
   previewTakes,
   seatsSoNobodyWaits,
+  suggestedLabel,
   type BringUpRow,
   type SeatChild,
   type TakesExtra,
@@ -29,7 +31,6 @@ import {
 // prototype v42). Words are v42's.
 
 const LOST = "The change could not be saved just now. Try again in a moment."
-const takesLabel = (takes: StreamTakes) => (takes === "Mixed" ? "any child" : takes.toLowerCase())
 
 export function TakesTag({ takes }: { takes: StreamTakes }) {
   return (
@@ -63,7 +64,7 @@ export function OpenStreamButton({
 }) {
   const [open, setOpen] = useState(false)
   const [takes, setTakes] = useState<StreamTakes>(need)
-  const [name, setName] = useState(() => nextLabel(streams, need))
+  const [name, setName] = useState(() => suggestedLabel(streams, need))
   const [seats, setSeats] = useState("")
   const [problem, setProblem] = useState<string | null>(null)
   const [requestId, setRequestId] = useState(() => crypto.randomUUID())
@@ -76,7 +77,7 @@ export function OpenStreamButton({
     setOpen(next)
     if (next) {
       setTakes(need)
-      setName(nextLabel(streams, need))
+      setName(suggestedLabel(streams, need))
       setSeats("")
       setProblem(null)
       setRequestId(crypto.randomUUID())
@@ -86,16 +87,15 @@ export function OpenStreamButton({
   function pickTakes(value: string) {
     const picked = value as StreamTakes
     setTakes(picked)
-    setName(nextLabel(streams, picked))
+    setName(suggestedLabel(streams, picked))
   }
 
   function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
     const clean = name.trim()
     const count = Number(seats)
-    if (!clean) return setProblem("Type a label, for example C.")
     const clash = clashingStream(streams, clean, takes)
-    if (clash) return setProblem(`${streamName(className, clash.label, clash.takes)} already has the label ${clash.label}. Choose another label.`)
+    if (clash) return setProblem(clashText(className, clash, clean, nextLabel(streams, takes)))
     if (!/^\d+$/.test(seats.trim()) || count < 1) return setProblem("Type the number of seats, 1 or more.")
     setProblem(null)
     startTransition(async () => {
@@ -121,7 +121,8 @@ export function OpenStreamButton({
     })
   }
 
-  const shown = `${className} ${name.trim() || "…"}${takes === "Mixed" ? "" : ` (${takes})`}`
+  const typed = name.trim()
+  const clash = clashingStream(streams, typed, takes)
   return (
     <>
       <Button size={size} variant={variant} icon={variant === "ghost" ? "plus" : undefined} onClick={() => changeOpen(true)}>
@@ -142,7 +143,7 @@ export function OpenStreamButton({
         <form id={`${id}-form`} className="st-form" onSubmit={submit} noValidate>
           <ChoiceTiles
             name={`${id}-takes`}
-            legend={<span className="st-label">Who does it take?</span>}
+            legend={<span className="st-q">Who does it take?</span>}
             layout="three"
             big
             options={STREAM_TAKES.map((value) => ({ value, label: value }))}
@@ -150,27 +151,31 @@ export function OpenStreamButton({
             onChange={pickTakes}
           />
           <div className="st-field">
-            <label htmlFor={`${id}-label`} className="st-label">
-              Label
-            </label>
-            <Field
+            <NamedField
               id={`${id}-label`}
+              name="Label"
+              icon="tag"
               value={name}
               maxLength={20}
               autoComplete="off"
-              aria-describedby={`${id}-label-hint`}
+              placeholder={labelPlaceholder(streams, takes)}
+              invalid={clash !== null}
+              aria-describedby={clash ? `${id}-label-error` : `${id}-label-hint`}
               onChange={(e) => setName(e.target.value)}
             />
-            <p id={`${id}-label-hint`} className="st-hint">
-              Shown as “{shown}”. Suggested: the first free letter for {takesLabel(takes)}.
-            </p>
+            {clash ? (
+              <FieldError id={`${id}-label-error`} alignStart message={clashText(className, clash, typed, nextLabel(streams, takes))} />
+            ) : (
+              <p id={`${id}-label-hint`} className="st-hint">
+                {labelHint(className, typed, takes, streams)}
+              </p>
+            )}
           </div>
           <div className="st-field">
-            <label htmlFor={`${id}-seats`} className="st-label">
-              Seats for new students
-            </label>
-            <Field
+            <NamedField
               id={`${id}-seats`}
+              name="Seats"
+              icon="seats"
               inputMode="numeric"
               value={seats}
               placeholder={faint === null ? undefined : String(faint)}
@@ -224,6 +229,8 @@ export function ChangeStreamButton({
   const [raiseSeats, setRaiseSeats] = useState<Record<string, string>>({})
   const [problem, setProblem] = useState<string | null>(null)
   const [requestId, setRequestId] = useState(() => crypto.randomUUID())
+  // The delete step: asked once more before the stream goes for good.
+  const [deleting, setDeleting] = useState(false)
   const [pending, startTransition] = useTransition()
   const id = useId()
   const full = streamName(className, stream.label, stream.takes)
@@ -242,6 +249,7 @@ export function ChangeStreamButton({
       setRaiseSeats({})
       setProblem(null)
       setRequestId(crypto.randomUUID())
+      setDeleting(false)
     }
   }
 
@@ -257,9 +265,9 @@ export function ChangeStreamButton({
   const word = movingWord(gender, n)
   const needTakes: StreamTakes = gender === "Girl" ? "Girls" : gender === "Boy" ? "Boys" : "Mixed"
   const mustChoose = changed && n > 0 && base.stranded > 0
-  const after = streams.map((s) => (s.id === stream.id ? { ...s, takes, label: label || s.label } : s))
-  const suggested = nextLabel(after, needTakes)
-  const shownNew = newLabel.trim() || suggested
+  const after = streams.map((s) => (s.id === stream.id ? { ...s, takes, label } : s))
+  const suggested = suggestedLabel(after, needTakes)
+  const shownNew = pick === "open" ? newLabel.trim() : suggested
   // Streams that take at least one of the children moving, for "Add seats to".
   const raisable = others.filter((s) => base.leaving.some((m) => takesChild(s.takes, m.child.gender))).toSorted((a, b) => a.position - b.position)
 
@@ -278,23 +286,21 @@ export function ChangeStreamButton({
     const s = after.find((each) => each.id === streamId)
     return s ? streamName(className, s.label, s.takes) : ""
   }
-  const labelClash = label ? clashingStream(others, label, takes) : null
+  const labelClash = clashingStream(others, label, takes)
+  const newClash = clashingStream(after, newLabel.trim(), needTakes)
   const raising = pick?.startsWith("raise:") ? others.find((s) => s.id === pick.slice(6)) : undefined
 
   function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
     const issue = (() => {
-      if (!label) return "Type a label, for example A."
-      if (labelClash) return `${streamName(className, labelClash.label, labelClash.takes)} already has the label ${labelClash.label}. Choose another label.`
+      if (labelClash) return clashText(className, labelClash, label, nextLabel(others, takes))
       if (!isCount(seats)) return "Type the number of seats."
       if (Number(seats) < staying)
-        return `${staying} ${staying === 1 ? "child stays" : "children stay"} in ${className} ${label}, so the seats can’t go below ${staying}.`
+        return `${staying} ${staying === 1 ? "child stays" : "children stay"} in ${plainName(className, label)}, so the seats can’t go below ${staying}.`
       if (!mustChoose) return null
       if (pick === null) return `Choose where the ${n} ${word} go.`
       if (pick === "open") {
-        if (!newLabel.trim()) return "Type a label for the new stream."
-        const clash = clashingStream(after, newLabel, needTakes)
-        if (clash) return `${streamName(className, clash.label, clash.takes)} already has the label ${clash.label}. Choose another label for the new stream.`
+        if (newClash) return `New stream: ${clashText(className, newClash, newLabel.trim(), nextLabel(after, needTakes))}`
         if (!isCount(newSeats) || Number(newSeats) < 1) return "Type the seats for the new stream, 1 or more."
       }
       if (raising) {
@@ -330,6 +336,25 @@ export function ChangeStreamButton({
     })
   }
 
+  function remove() {
+    startTransition(async () => {
+      let outcome
+      try {
+        outcome = await deleteStreamAction({ streamId: stream.id, name: full })
+      } catch {
+        outcome = { status: "refused" as const, message: LOST }
+      }
+      if (outcome.status === "refused") {
+        setDeleting(false)
+        return setProblem(outcome.message)
+      }
+      setOpen(false)
+      toast(outcome.message)
+    })
+  }
+
+  const later = streams.filter((s) => s.position > stream.position).length
+
   const foot = !(changed && n > 0)
     ? "Save the changes"
     : preview.stranded === n
@@ -346,15 +371,39 @@ export function ChangeStreamButton({
       <Sheet
         open={open}
         onOpenChange={changeOpen}
-        title={`Change ${full}`}
+        title={deleting ? `Delete ${full}?` : `Change ${full}`}
         hint={`${className} · Enrollment year ${year} · position ${stream.position} of ${streams.length}`}
         closeLabel="Close"
         foot={
-          <Button type="submit" form={`${id}-form`} size="wide" disabled={pending}>
-            {pending ? "Saving…" : foot}
-          </Button>
+          deleting ? (
+            <div className="st-confirm">
+              <Button variant="bad" size="wide" pending={pending} onClick={remove}>
+                {pending ? "Deleting…" : `Yes, delete ${full}`}
+              </Button>
+              <Button variant="ghost" size="wide" disabled={pending} onClick={() => setDeleting(false)}>
+                Keep it
+              </Button>
+            </div>
+          ) : (
+            <Button type="submit" form={`${id}-form`} size="wide" disabled={pending}>
+              {pending ? "Saving…" : foot}
+            </Button>
+          )
         }
       >
+        {deleting ? (
+          <div className="st-form">
+            <Note tone="bad">
+              {full} goes for good: its label, who it takes and its {stream.seats} {stream.seats === 1 ? "seat" : "seats"}. This can’t be undone. Nobody is
+              placed in it.
+            </Note>
+            {later > 0 && (
+              <p className="st-hint">
+                The {later === 1 ? "stream" : `${later} streams`} after it {later === 1 ? "moves" : "move"} up one place.
+              </p>
+            )}
+          </div>
+        ) : (
         <form id={`${id}-form`} className="st-form" onSubmit={submit} noValidate>
           <ChoiceTiles
             name={`${id}-takes`}
@@ -377,7 +426,7 @@ export function ChangeStreamButton({
               value={name}
               maxLength={20}
               autoComplete="off"
-              placeholder="For example A"
+              placeholder={labelPlaceholder(others, takes)}
               invalid={labelClash !== null}
               aria-describedby={labelClash ? `${id}-label-error` : `${id}-label-hint`}
               onChange={(e) => setName(e.target.value)}
@@ -386,11 +435,11 @@ export function ChangeStreamButton({
               <FieldError
                 id={`${id}-label-error`}
                 alignStart
-                message={`${streamName(className, labelClash.label, labelClash.takes)} already has the label ${labelClash.label}. Choose another label, for example ${nextLabel(others, takes)}.`}
+                message={clashText(className, labelClash, label, nextLabel(others, takes))}
               />
             ) : (
               <p id={`${id}-label-hint`} className="st-hint">
-                Shown as “{streamName(className, label || "…", takes)}”.
+                {labelHint(className, label, takes, others)}
               </p>
             )}
           </div>
@@ -418,10 +467,10 @@ export function ChangeStreamButton({
           {changed && (
             <div className="st-out">
               {stream.placed === 0 && n === 0 ? (
-                <Note>Nobody is placed in {className} {stream.label} yet, so nobody moves.</Note>
+                <Note>Nobody is placed in {plainName(className, stream.label)} yet, so nobody moves.</Note>
               ) : n === 0 ? (
                 <Note tone="good">
-                  Nobody moves: every child in {className} {stream.label} can stay in a stream that takes {takesWord(takes)}.
+                  Nobody moves: every child in {plainName(className, stream.label)} can stay in a stream that takes {takesWord(takes)}.
                 </Note>
               ) : (
                 <>
@@ -430,7 +479,7 @@ export function ChangeStreamButton({
                       {n} {word} {n === 1 ? "has" : "have"} to move
                     </h3>
                     <p className="st-hint">
-                      A {takes.toLowerCase()} stream can’t keep the {word} placed in {className} {stream.label}. They take seats in the first {className} stream, in
+                      A {takes.toLowerCase()} stream can’t keep the {word} placed in {plainName(className, stream.label)}. They take seats in the first {className} stream, in
                       order, that takes them and has room.
                     </p>
                   </div>
@@ -481,12 +530,22 @@ export function ChangeStreamButton({
                               value={newLabel}
                               maxLength={20}
                               autoComplete="off"
-                              aria-describedby={`${id}-new-label-hint`}
+                              placeholder={labelPlaceholder(after, needTakes)}
+                              invalid={newClash !== null}
+                              aria-describedby={newClash ? `${id}-new-label-error` : `${id}-new-label-hint`}
                               onChange={(e) => setNewLabel(e.target.value)}
                             />
-                            <p id={`${id}-new-label-hint`} className="st-hint">
-                              Shown as “{streamName(className, newLabel.trim() || "…", needTakes)}”. It takes {takesWord(needTakes)} and comes last in the order.
-                            </p>
+                            {newClash ? (
+                              <FieldError
+                                id={`${id}-new-label-error`}
+                                alignStart
+                                message={clashText(className, newClash, newLabel.trim(), nextLabel(after, needTakes))}
+                              />
+                            ) : (
+                              <p id={`${id}-new-label-hint`} className="st-hint">
+                                {labelHint(className, newLabel.trim(), needTakes, after)} It takes {takesWord(needTakes)} and comes last in the order.
+                              </p>
+                            )}
                           </div>
                           <div className="st-field">
                             <NamedField
@@ -537,7 +596,7 @@ export function ChangeStreamButton({
                   )}
                 </>
               )}
-              {preview.fromWaiting.length > 0 && <Note>{seatedText(preview.fromWaiting, stream.id, className, label || stream.label, nameOf, n > 0 ? word : null)}</Note>}
+              {preview.fromWaiting.length > 0 && <Note>{seatedText(preview.fromWaiting, stream.id, className, label, nameOf, n > 0 ? word : null)}</Note>}
               {n > 0 && (
                 <Disclosure label={`See the ${n} ${word} and where they go`}>
                   <ol className="st-moves">
@@ -567,13 +626,54 @@ export function ChangeStreamButton({
               {problem}
             </Note>
           )}
+          <div className="st-del">
+            {stream.placed === 0 ? (
+              <Button
+                variant="bad"
+                size="small"
+                onClick={() => {
+                  setProblem(null)
+                  setDeleting(true)
+                }}
+              >
+                Delete this stream
+              </Button>
+            ) : (
+              <p className="st-hint">
+                Only an empty stream can be deleted. {stream.placed} {stream.placed === 1 ? "child is" : "children are"} placed in {full}.
+              </p>
+            )}
+          </div>
         </form>
+        )}
       </Sheet>
     </>
   )
 }
 
 const isCount = (value: string) => /^\d+$/.test(value.trim())
+
+/** A stream's name without who it takes: "STD 1 B", or the class alone with no label. */
+const plainName = (className: LeadClass, label: string) => (label ? `${className} ${label}` : className)
+
+/** Why a label can't be used: another stream has it, or (an empty label) another already has none. */
+function clashText(className: LeadClass, clash: { label: string; takes: StreamTakes }, label: string, next: string): string {
+  return label === ""
+    ? `${streamName(className, "", clash.takes)} already has no label, so this stream needs one, for example ${next}.`
+    : `${streamName(className, clash.label, clash.takes)} already has the label ${clash.label}. Choose another label, for example ${next}.`
+}
+
+/** The hint under a label box: how the stream will be shown. */
+function labelHint(className: LeadClass, label: string, takes: StreamTakes, others: readonly { label: string; takes: StreamTakes }[]): string {
+  if (label) return `Shown as “${streamName(className, label, takes)}”.`
+  return others.some((s) => labelsClash(s.takes, takes))
+    ? `No label: shown as “${streamName(className, "", takes)}”. You may type one.`
+    : `No label: shown as “${streamName(className, "", takes)}”, as the only ${className} stream${takes === "Mixed" ? "" : ` for ${takes.toLowerCase()}`}. You may type one.`
+}
+
+/** "None" while the stream may go without a label; otherwise an example letter. */
+const labelPlaceholder = (others: readonly { label: string; takes: StreamTakes }[], takes: StreamTakes) =>
+  clashingStream(others, "", takes) ? `For example ${nextLabel(others, takes)}` : "None"
 const takesWord = (takes: StreamTakes) => (takes === "Mixed" ? "boys and girls" : takes.toLowerCase())
 const takesChild = (takes: StreamTakes, gender: SeatChild["gender"]) =>
   takes === "Mixed" || (takes === "Boys" && gender === "Boy") || (takes === "Girls" && gender === "Girl")
@@ -615,7 +715,7 @@ function seatedText(
     const rest = here.length - boys - girls
     const who = [boys && `${boys} ${movingWord("Boy", boys)}`, girls && `${girls} ${movingWord("Girl", girls)}`, rest && `${rest} ${movingWord(null, rest)}`].filter(Boolean).join(" and ")
     parts.push(
-      `${who} waiting for a ${className} seat ${here.length === 1 ? "takes a place" : "take places"} in ${className} ${label}${leavingWord ? ` in the places the ${leavingWord} leave` : ""}`,
+      `${who} waiting for a ${className} seat ${here.length === 1 ? "takes a place" : "take places"} in ${plainName(className, label)}${leavingWord ? ` in the places the ${leavingWord} leave` : ""}`,
     )
   }
   if (elsewhere.length) {
@@ -711,7 +811,7 @@ export function BringUpButton({ year, rows }: { year: number; rows: BringUpRow[]
                 <span className="st-cap">0 seats</span>
                 {row.renamed && (
                   <small className="st-renamed">
-                    {row.toClass} {row.source.label} is taken in {year}, so it comes up as {row.toClass} {row.label}.
+                    {row.source.label ? `${streamName(row.toClass, row.source.label, row.source.takes)} is taken` : `${row.toClass} already has a stream with no label`} in {year}, so it comes up as {streamName(row.toClass, row.label, row.source.takes)}.
                   </small>
                 )}
               </li>

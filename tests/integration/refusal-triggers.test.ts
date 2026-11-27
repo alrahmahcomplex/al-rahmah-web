@@ -84,13 +84,18 @@ function enabled(trigger: Trigger | undefined): boolean {
   return trigger !== undefined && (trigger.enabled === "O" || trigger.enabled === "A")
 }
 
+// The audited tables whose delete refusal lets one named delete through:
+// streams lets delete_stream remove the empty stream it names (20270202100100).
+const DELETE_REFUSAL_FN: Readonly<Record<string, string>> = { streams: "refuse_stream_delete" }
+
 // `${table}.${name}` for every audited table whose trigger is missing,
-// disabled or not what `expected` describes.
-function wrong(name: string, expected: Omit<Trigger, "table" | "name" | "enabled">): string[] {
+// disabled or not what `expected` describes. `fn` may name a table's own
+// refusal function instead.
+function wrong(name: string, expected: Omit<Trigger, "table" | "name" | "enabled">, fn: (table: string) => string = () => expected.fn): string[] {
   return audited
     .filter((table) => {
       const trigger = find(table, name)
-      return !enabled(trigger) || trigger?.fn !== expected.fn || trigger.timing !== expected.timing || trigger.level !== expected.level || trigger.events !== expected.events
+      return !enabled(trigger) || trigger?.fn !== fn(table) || trigger.timing !== expected.timing || trigger.level !== expected.level || trigger.events !== expected.events
     })
     .map((table) => `${table}.${name}`)
 }
@@ -117,7 +122,9 @@ describe("refusal triggers", () => {
   })
 
   test("every audited table refuses DELETE and TRUNCATE", () => {
-    expect(wrong("refuse_delete", { fn: "refuse_delete", timing: "before", level: "row", events: "delete" })).toEqual([])
+    expect(
+      wrong("refuse_delete", { fn: "refuse_delete", timing: "before", level: "row", events: "delete" }, (table) => DELETE_REFUSAL_FN[table] ?? "refuse_delete"),
+    ).toEqual([])
     expect(wrong("refuse_truncate", { fn: "refuse_delete", timing: "before", level: "statement", events: "truncate" })).toEqual([])
   })
 

@@ -209,6 +209,8 @@ Because one rule has one threshold, each form gets its own allowance through its
 | Sign-in, staff and agents (`/auth`) | `sign-in:<ip>:<email hash>` | Live (#191; staff added in #264) |
 | Agent reset ("Umesahau nenosiri?") | `agent-reset:<ip>:<email hash>` | Live (#194) |
 | "Tuma kiungo kipya" on an expired link | `agent-new-link:<ip>:<email hash>` | Live (#194) |
+| The design site's lock screen, every try | `design-unlock:<ip>` | Design site |
+| A wrong key at llms.txt or the MCP server | `design-key:<ip>` | Design site |
 
 A hash is the first 32 hex characters of the SHA-256 of the trimmed, lowercased value, never the value itself. The contact is the parent's phone from the Admission form, in one form however it was typed (`0700 000 900` and `+255 700 000 900` give the same hash). With it in the key, families sending the form from one shared connection each get their own 20 tries. A form whose phone can't be read falls back to `admission:<ip>`. The code check stays IP-only: a code in the key would give each code its own allowance and let one IP try every code, so it relies on the higher threshold instead.
 

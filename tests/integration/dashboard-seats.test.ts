@@ -134,6 +134,13 @@ describe("Seats by class, for Home", () => {
     // Only classes with streams are listed; STD 4 has none, so no limit.
     expect(seats.streams?.classes.map((each) => each.className)).not.toContain("STD 4")
   })
+
+  test("reads the same counts by stream as Reports, for the Seats chart's paid and part-paid seats", async () => {
+    const seats = await home2031()
+    expect(seats.figures).toEqual(await figures2031())
+    // STD 3 A: one child paid in full and one a First instalment, so one seat free.
+    expect(entry(seats.figures ?? [], "STD 3").streams).toEqual([expect.objectContaining({ seats: 3, full: 1, firstInstalment: 1, deposit: 0, free: 1 })])
+  })
 })
 
 describe("the year shown", () => {

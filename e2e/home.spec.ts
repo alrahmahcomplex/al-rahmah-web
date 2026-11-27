@@ -203,38 +203,33 @@ test.describe("the chart card", () => {
   const charts = (page: Page) => page.getByRole("region", { name: "Charts" })
   const tab = (page: Page, name: string) => charts(page).getByRole("tab", { name })
 
-  test("its five tabs each show their chart, and See the numbers shows them as a table", async ({ page }) => {
+  test("its five tabs each show their chart with its own numbers, and the Seats key shows on Seats alone", async ({ page }) => {
     await signIn(page, MANAGER)
     await expect(charts(page).getByRole("tab")).toHaveText(["Sources", "Classes", "Months", "Status", "Seats"])
     await expect(tab(page, "Sources")).toHaveAttribute("aria-selected", "true")
     // The year list opens on the current admission year.
     await expect(charts(page).getByRole("combobox", { name: "Admission year" })).toHaveText(String(currentAdmissionYear(tanzaniaToday())))
-    const sources = charts(page).getByRole("listitem")
-    await expect(sources).toHaveText([/^Admission form/, /^Agents’ Discount codes/, /^Promo codes/, /^Walk-in at the desk/])
+    const panel = charts(page).getByRole("tabpanel")
+    await expect(panel.getByRole("listitem")).toHaveText([/^Admission form\d/, /^Agents’ Discount codes\d/, /^Promo codes\d/, /^Walk-in at the desk\d/])
+    await expect(charts(page).getByRole("button", { name: "See the numbers" })).toHaveCount(0)
+    await expect(charts(page).getByRole("list", { name: "Seats key" })).toHaveCount(0)
 
     await tab(page, "Classes").click()
-    await expect(charts(page).getByText(/ draws? the most students$/)).toBeVisible()
+    const classes = panel.getByRole("img", { name: / · students$/ })
+    await expect(classes).toHaveCount(14)
+    await expect(classes.first()).toHaveAccessibleName(/, DAY CARE · students$/)
 
-    await charts(page).getByRole("button", { name: "See the numbers" }).click()
-    const classes = charts(page).getByRole("table", { name: "Classes: the numbers" })
-    await expect(classes.getByRole("rowheader")).toHaveCount(14)
-    await expect(classes.getByRole("rowheader").first()).toHaveText("DAY CARE")
-    await charts(page).getByRole("button", { name: "Hide the numbers" }).click()
-    await expect(classes).toBeHidden()
-
+    // A month counts its applications in any calendar year, so the line always starts in January.
     await tab(page, "Months").click()
-    await expect(charts(page).getByText(/busiest month/)).toBeVisible()
-    const month = charts(page).getByRole("img", { name: /· applications$/ }).first()
-    await month.hover()
-    // The first month anyone in the year applied or visited, with its year.
-    await expect(charts(page).getByText(/^[A-Z][a-z]+ \d{4}( so far)? · applications$/)).toBeVisible()
+    await panel.getByRole("img", { name: /· applications$/ }).first().hover()
+    await expect(panel.getByText(/^January( so far)? · applications$/)).toBeVisible()
 
     await tab(page, "Status").click()
-    await charts(page).getByRole("button", { name: "See the numbers" }).click()
-    await expect(charts(page).getByRole("table", { name: "Status: the numbers" }).getByRole("rowheader")).toHaveText(["Applied", "Visited", "Interviewed", "Enrolled", "Declined"])
+    await expect(panel.getByRole("listitem")).toHaveText([/^Applied\d+$/, /^Visited\d+$/, /^Interviewed\d+$/, /^Enrolled\d+$/, /^Declined\d+$/])
 
     await tab(page, "Seats").click()
-    await expect(charts(page).getByText("Each capsule is the whole class. The fill is the seats held.")).toBeVisible()
+    await expect(panel.getByRole("img").first()).toHaveAccessibleName(/^\d+ of \d+, .+ · \d+ paid in full, \d+ partial payment$/)
+    await expect(charts(page).getByRole("list", { name: "Seats key" }).getByRole("listitem")).toHaveText(["Paid in full", "Partial payment", "Free"])
   })
 
   test("the arrow keys move along the tabs, and a mark shows its number on keyboard focus", async ({ page }) => {
@@ -288,16 +283,15 @@ for (const [label, size] of [
   ["a phone", { width: 390, height: 844 }],
 ] as const) {
   test(`axe finds nothing but the accepted findings on Home at ${label}`, { tag: "@nightly" }, async ({ page }) => {
-    // The page, then each chart tab with its numbers open: five scans.
+    // The page, then each other chart tab: five scans.
     test.slow()
     await page.setViewportSize(size)
     await signIn(page, MANAGER)
     expect(await axeProblems(page)).toEqual([])
     const charts = page.getByRole("region", { name: "Charts" })
-    for (const name of ["Sources", "Classes", "Months", "Seats"]) {
+    for (const name of ["Classes", "Months", "Status", "Seats"]) {
       await charts.getByRole("tab", { name }).click()
-      await charts.getByRole("button", { name: "See the numbers" }).click()
-      await expect(charts.getByRole("table", { name: `${name}: the numbers` })).toBeVisible()
+      await expect(charts.getByRole("tab", { name })).toHaveAttribute("aria-selected", "true")
       expect(await axeProblems(page, ".hm-chart"), `the ${name} tab`).toEqual([])
     }
   })

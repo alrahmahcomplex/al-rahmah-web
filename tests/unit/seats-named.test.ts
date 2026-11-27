@@ -3,10 +3,12 @@ import { describe, expect, it } from "vitest"
 import { activityView } from "@/app/staff/_home/activity"
 import { namedFullClasses, namedSeatsTab, needCaption } from "@/app/staff/_home/seats-named"
 import type { Permission } from "@/lib/permissions"
+import type { ClassStreamFigures, StreamSeatFigures } from "@/lib/services/dashboard"
 import type { ClassStreams, Stream, StreamRequest, StreamTakes, YearStreams } from "@/lib/services/streams"
 
-// Home once streams are on (#449, prototype v42): the Seats bars, the Seats
-// shortcut's caption and the "Class is full" rows, from the Seats screen's read.
+// Home once streams are on (#449, prototype v42): the Seats capsules, from
+// Reports' counts by stream, and the Seats shortcut's caption and the "Class
+// is full" rows, from the Seats screen's read.
 
 let ids = 0
 const stream = (label: string, takes: StreamTakes, seats: number, placed: number): Stream => {
@@ -29,19 +31,37 @@ const STD6 = cls("STD 6", [stream("A", "Mixed", 30, 30)], { freeForBoy: false, f
 const FORM1 = cls("FORM 1", [stream("A", "Girls", 20, 12), stream("B", "Boys", 20, 20)], { freeForBoy: false })
 const KG2 = cls("KG 2", [stream("A", "Mixed", 25, 10)])
 
-describe("the Seats bars", () => {
-  it("add up each class's streams, and read Full only when no stream has a free seat", () => {
-    const tab = namedSeatsTab(year([FORM1, STD6, KG2]))
-    expect(tab?.points.map((p) => [p.label, p.value, p.seats, p.full, p.tip.words])).toEqual([
-      ["KG 2", 10, 25, false, "KG 2 · 15 free"],
-      ["STD 6", 30, 30, true, "STD 6 · Full"],
-      ["FORM 1", 32, 40, false, "FORM 1 · 8 free"],
+// The same year as Reports counts it: each stream's placed children by Seat priority.
+const figure = (seats: number, full: number, firstInstalment: number, deposit: number): StreamSeatFigures => {
+  ids += 1
+  return { id: `f${ids}`, label: "A", takes: "Mixed", seats, full, firstInstalment, deposit, free: Math.max(0, seats - full - firstInstalment - deposit) }
+}
+const figures = (className: ClassStreamFigures["className"], streams: StreamSeatFigures[]): ClassStreamFigures => ({
+  className,
+  streams,
+  full: 0,
+  firstInstalment: 0,
+  deposit: 0,
+  waiting: 0,
+})
+
+describe("the Seats capsules", () => {
+  it("add up each class's streams, in class order, paid in full apart from a Deposit or First instalment, Full only when no stream has a free seat", () => {
+    const tab = namedSeatsTab([
+      figures("FORM 1", [figure(20, 8, 2, 2), figure(20, 15, 5, 0)]),
+      figures("STD 6", [figure(30, 20, 6, 4)]),
+      figures("KG 2", [figure(25, 6, 0, 4)]),
     ])
-    expect(tab?.heading).toBe("STD 6 is full. KG 2 has the most free seats, 15")
+    expect(tab?.points.map((p) => [p.label, p.value, p.paid, p.partial, p.seats, p.free, p.full])).toEqual([
+      ["KG 2", 10, 6, 4, 25, 15, false],
+      ["STD 6", 30, 20, 10, 30, 0, true],
+      ["FORM 1", 32, 23, 9, 40, 8, false],
+    ])
   })
 
-  it("show nothing for a year with no streams", () => {
-    expect(namedSeatsTab(year([]))).toBeNull()
+  it("leave out a class with seat holders but no streams, and show nothing for a year with no streams", () => {
+    expect(namedSeatsTab([figures("STD 1", [])])).toBeNull()
+    expect(namedSeatsTab([])).toBeNull()
   })
 })
 

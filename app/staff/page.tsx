@@ -102,8 +102,8 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
     counts && sourcesTab(counts),
     counts && classesTab(counts),
     counts && monthsTab(counts, today, open),
-    counts && statusTab(counts, open),
-    canSeeSeats && seats?.ok && seats.data.streams ? namedSeatsTab(seats.data.streams) : null,
+    counts && statusTab(counts),
+    canSeeSeats && seats?.ok && seats.data.figures ? namedSeatsTab(seats.data.figures) : null,
   ].filter((tab): tab is ChartTab => !!tab)
 
   return (

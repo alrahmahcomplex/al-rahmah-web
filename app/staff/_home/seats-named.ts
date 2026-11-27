@@ -1,3 +1,4 @@
+import type { ClassStreamFigures } from "@/lib/services/dashboard"
 import type { FullClass } from "@/lib/services/home-activity"
 import { LEAD_CLASSES } from "@/lib/services/leads"
 import { streamName, type YearStreams } from "@/lib/services/streams"
@@ -5,31 +6,33 @@ import { streamName, type YearStreams } from "@/lib/services/streams"
 import { afterQueue, seatNeeds } from "../seats/stream-rules"
 import { seatsTabOf, type SeatsTab } from "./charts"
 
-// Home's seats in streams (#449, prototype v42), from the same read and the
-// same notices as the Seats screen, so the two never disagree.
+// Home's seats in streams (#449, prototype v42), from the same reads and the
+// same notices as the Seats screen and Reports, so they never disagree.
 
-const free = (stream: { seats: number; placed: number }) => Math.max(0, stream.seats - stream.placed)
+const sum = <T>(items: readonly T[], value: (item: T) => number) => items.reduce((total, item) => total + value(item), 0)
 
 /**
- * One bar per class with streams, adding its streams up. A class reads Full
- * only when none of its streams has a free seat, so FORM 1 still shows seats
- * while its Girls stream has some.
+ * One capsule per class with streams, adding its streams up: the children
+ * placed in them who paid in full, and those who paid part (a Deposit or a
+ * First instalment). A class reads Full only when none of its streams has a
+ * free seat, so FORM 1 still shows seats while its Girls stream has some.
  */
-export function namedSeatsTab(data: YearStreams): SeatsTab | null {
-  const classes = data.classes
-    .filter((entry) => entry.streams.length > 0)
-    .toSorted((a, b) => LEAD_CLASSES.indexOf(a.className) - LEAD_CLASSES.indexOf(b.className))
+export function namedSeatsTab(classes: readonly ClassStreamFigures[]): SeatsTab | null {
   return seatsTabOf(
-    classes.map(({ className, streams }) => {
-      const left = streams.reduce((sum, stream) => sum + free(stream), 0)
-      return {
-        className,
-        seats: streams.reduce((sum, stream) => sum + stream.seats, 0),
-        held: streams.reduce((sum, stream) => sum + stream.placed, 0),
-        full: left === 0,
-        free: left,
-      }
-    }),
+    classes
+      .filter((entry) => entry.streams.length > 0)
+      .toSorted((a, b) => LEAD_CLASSES.indexOf(a.className) - LEAD_CLASSES.indexOf(b.className))
+      .map(({ className, streams }) => {
+        const free = sum(streams, (stream) => stream.free)
+        return {
+          className,
+          seats: sum(streams, (stream) => stream.seats),
+          paid: sum(streams, (stream) => stream.full),
+          partial: sum(streams, (stream) => stream.firstInstalment + stream.deposit),
+          free,
+          full: free === 0,
+        }
+      }),
   )
 }
 

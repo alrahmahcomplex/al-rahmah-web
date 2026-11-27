@@ -1,13 +1,17 @@
 import type { ApplicationSource, HomeChartCounts } from "@/lib/services/home-charts"
 import type { LeadClass } from "@/lib/services/leads"
 
-// Home's chart card (#405), measured from prototype v38 → Home: what each tab
-// draws and the sentence over it, worked out from the counts. A tab with
-// nothing to draw is left out, so no tab ever needs words for "none yet".
+import { smoothLine } from "./spark"
 
-/** One mark on a chart: a dot, a column, a capsule or a row of the ring's list. */
+// Home's chart card (#405), as the owner's chart-card prototype
+// (24tWDhYZ28Qs6CsJowG1h9, approved 2026-11-27) draws it: what each tab
+// draws, worked out from the counts. No sentence sits over a chart; each
+// chart shows its own numbers. A tab with nothing to draw is left out, so no
+// tab ever needs words for "none yet".
+
+/** One mark on a chart: a column, a dot, a bar, a capsule or a row of the ring's list. */
 export type ChartPoint = {
-  /** The name in full, for the table and the tooltip. */
+  /** The name in full, for the tooltip. */
   label: string
   /** The label under the mark. */
   short: string
@@ -18,196 +22,114 @@ export type ChartPoint = {
   tip: { number: string; words: string }
 }
 
-export type ClassesTab = { kind: "classes"; heading: string; points: ChartPoint[]; groups: AxisGroup[] }
-export type MonthsTab = { kind: "months"; heading: string; points: ChartPoint[]; note: string | null }
-export type StatusTab = { kind: "status"; heading: string; points: ChartPoint[]; note: null }
-export type SeatsTab = { kind: "seats"; heading: string; points: (ChartPoint & { seats: number; full: boolean; fill: number })[] }
-export type SourcesTab = { kind: "sources"; heading: string; points: (ChartPoint & { percent: number })[]; total: number }
+export type ClassesTab = { kind: "classes"; points: ChartPoint[] }
+/** All twelve months, January first; the line runs through the first `drawn` of them. */
+export type MonthsTab = { kind: "months"; points: ChartPoint[]; drawn: number }
+export type StatusTab = { kind: "status"; points: ChartPoint[] }
+export type SeatsTab = { kind: "seats"; points: (ChartPoint & { seats: number; full: boolean; paid: number; partial: number; free: number })[] }
+export type SourcesTab = { kind: "sources"; points: (ChartPoint & { percent: number })[]; total: number }
 export type ChartTab = ClassesTab | MonthsTab | SeatsTab | SourcesTab | StatusTab
 
-/** A run of classes of one school level under the axis. */
-export type AxisGroup = { label: string; short: string; span: number }
-
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
-const applications = (n: number) => `${n} application${n === 1 ? "" : "s"}`
 
-/** "A", "A and B". */
-const both = (names: string[]) => names.join(" and ")
-
-// The first of the largest, so a tie goes to the earlier one in the list's order.
-function largest<T>(items: T[], value: (item: T) => number): T | undefined {
-  let best: T | undefined
-  for (const item of items) if (best === undefined || value(item) > value(best)) best = item
-  return best
-}
-
-const classShort = (name: LeadClass) => (name === "DAY CARE" ? "DC" : name === "KG 1" ? "KG1" : name === "KG 2" ? "KG2" : name.replace(/^(STD|FORM) /, ""))
-const classGroup = (name: LeadClass) => (name.startsWith("STD") ? "Primary · STD" : name.startsWith("FORM") ? "Secondary · FORM" : "Nursery")
-
-/** Students per class: the smooth glow line, the axis grouped Nursery / STD / FORM. */
+/** Students per class: a column a class, named in full. */
 export function classesTab(counts: HomeChartCounts): ClassesTab | null {
   if (counts.total === 0) return null
-  const top = counts.classes
-    .filter((row) => row.count > 0)
-    .toSorted((a, b) => b.count - a.count)
-    .slice(0, 2)
-    .map((row) => row.className)
-  const groups: AxisGroup[] = []
-  for (const { className } of counts.classes) {
-    const label = classGroup(className)
-    const last = groups.at(-1)
-    if (last?.label === label) last.span++
-    else groups.push({ label, short: label.split(" · ").pop()!, span: 1 })
-  }
   return {
     kind: "classes",
-    heading: `${both(top)} ${top.length === 1 ? "draws" : "draw"} the most students`,
     points: counts.classes.map(({ className, count }) => ({
       label: className,
-      short: classShort(className),
+      short: className,
       value: count,
       tip: { number: String(count), words: `${className} · students` },
     })),
-    groups,
   }
 }
 
 /**
- * Applications per month for the year shown, from the first month anyone in
- * it applied or visited to the last (owner, 2026-11-26): an imported record
- * counts in its own Visit date's month like any other. While the year is
- * still taking applicants, the columns run on to this month, drawn lighter.
- * Every applicant is in a column, so the columns add up to the total.
- * Months with none are drawn as zeros only across a span of at most
- * MONTHS_FILLED; a longer one (a mistyped visit date years back) draws just
- * the months with applicants, so the mistake shows as its own column.
+ * Applications per month of the calendar year, January to December, for
+ * the year shown (owner, 2026-11-27). A month counts that month's
+ * applications in any calendar year, so a family that came late (September
+ * 2026 for 2026) or early still shows, and the months add up to the total.
+ * Once the year is over the line runs through all twelve months. While it
+ * is still taking applicants it runs from January to this month, drawn
+ * lighter, or on to a later month that already has applicants; the months
+ * after are left empty.
  */
 export function monthsTab(counts: HomeChartCounts, today: string, open: boolean): MonthsTab | null {
   if (counts.total === 0) return null
-  const now = today.slice(0, 7)
-  const first = counts.months[0].month
-  const latest = counts.months.at(-1)!.month
-  const last = open && now > latest ? now : latest
-  const byMonth = new Map(counts.months.map((row) => [row.month, row.count]))
-  const columns = monthsBetween(first, last) <= MONTHS_FILLED ? everyMonth(first, last) : [...byMonth.keys(), ...(last === now && !byMonth.has(now) ? [now] : [])]
-  const points: ChartPoint[] = []
-  for (const month of columns) {
-    const name = MONTHS[Number(month.slice(5, 7)) - 1]
-    const label = `${name} ${month.slice(0, 4)}`
-    const value = byMonth.get(month) ?? 0
-    const part = open && month === now
-    points.push({
-      label,
+  const byMonth = Array<number>(12).fill(0)
+  for (const row of counts.months) byMonth[Number(row.month.slice(5, 7)) - 1] += row.count
+  const now = Number(today.slice(5, 7)) - 1
+  const last = byMonth.findLastIndex((count) => count > 0)
+  const drawn = open ? Math.max(now, last) + 1 : 12
+  const points = MONTHS.map((name, i) => {
+    const part = open && i === now
+    return {
+      label: name,
       short: name.slice(0, 3),
-      value,
+      value: byMonth[i],
       part,
-      tip: { number: String(value), words: `${part ? `${label} so far` : label} · applications` },
-    })
-  }
-  const busiest = largest(points, (point) => point.value)!
-  return {
-    kind: "months",
-    heading: busiest.part
-      ? `${busiest.label} is the busiest month so far, with ${applications(busiest.value)}`
-      : `${busiest.label} was the busiest month, with ${applications(busiest.value)}`,
-    points,
-    note: points.some((point) => point.part) ? `${MONTHS[Number(now.slice(5, 7)) - 1]} so far, shown lighter.` : null,
-  }
+      tip: { number: String(byMonth[i]), words: `${part ? `${name} so far` : name} · applications` },
+    }
+  })
+  return { kind: "months", points, drawn }
 }
 
 /**
- * Where the year's applicants are now, by status in the order a family moves
- * through them, imported records with the rest. While the year is open the
- * heading says just that; once it is over, how many enrolled.
+ * Where the year's applicants are now, a bar a status from Applied at the
+ * top to Enrolled and Declined, imported records with the rest.
  */
-export function statusTab(counts: HomeChartCounts, open: boolean): StatusTab | null {
+export function statusTab(counts: HomeChartCounts): StatusTab | null {
   if (counts.total === 0) return null
-  const enrolled = counts.statuses.find((row) => row.status === "Enrolled")?.count ?? 0
   return {
     kind: "status",
-    heading: open ? "Where the year’s applicants are now" : `${enrolled} of ${counts.total} applicants enrolled`,
     points: counts.statuses.map(({ status, count }) => ({
       label: status,
       short: status,
       value: count,
       tip: { number: String(count), words: `${status} · applicants` },
     })),
-    note: null,
   }
 }
 
-/** The most columns Months fills with zero months: two school years. */
-export const MONTHS_FILLED = 24
+/**
+ * One class on the Seats tab: its seats, the children placed in it by how
+ * much they paid (in full; part, a Deposit or First instalment), its free
+ * seats, and whether it is full.
+ */
+export type SeatsTabClass = { className: LeadClass; seats: number; paid: number; partial: number; free: number; full: boolean }
 
-// The month after a YYYY-MM month.
-function nextMonth(month: string): string {
-  const [y, m] = month.split("-").map(Number)
-  return m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, "0")}`
-}
-
-// How many months from `first` to `last`, both counted.
-function monthsBetween(first: string, last: string): number {
-  const [fy, fm] = first.split("-").map(Number)
-  const [ly, lm] = last.split("-").map(Number)
-  return (ly - fy) * 12 + (lm - fm) + 1
-}
-
-// Every month from `first` to `last`, in order.
-function everyMonth(first: string, last: string): string[] {
-  const months: string[] = []
-  for (let month = first; month <= last; month = nextMonth(month)) months.push(month)
-  return months
-}
-
-/** One class on the Seats tab: its seats and seats held, whether it is full, and its free seats. */
-export type SeatsTabClass = { className: LeadClass; seats: number; held: number; full: boolean; free: number }
-
-/** The Seats tab from each class’s figures, in class order. */
+/** The Seats tab from each class’s figures, in the order given. */
 export function seatsTabOf(rows: readonly SeatsTabClass[]): SeatsTab | null {
   if (rows.length === 0) return null
-
-  const points = rows.map(({ className, seats, held, full, free }) => {
-    return {
+  return {
+    kind: "seats",
+    points: rows.map(({ className, seats, paid, partial, free, full }) => ({
       label: className,
-      short: className === "DAY CARE" ? "DC" : className,
-      value: held,
+      short: className,
+      value: paid + partial,
       seats,
+      paid,
+      partial,
+      free,
       full,
-      fill: seats === 0 ? 100 : Math.min(100, (held / seats) * 100),
-      tip: { number: `${held} of ${seats}`, words: `${className} · ${full ? "Full" : `${free} free`}` },
-    }
-  })
-
-  const full = points.filter((point) => point.full).map((point) => point.label)
-  const freeOf = new Map(rows.map((row) => [row.className as string, row.free]))
-  const roomy = largest(
-    points.filter((point) => !point.full),
-    (point) => freeOf.get(point.label) ?? point.seats - point.value,
-  )
-  const fullLine =
-    full.length === 0
-      ? null
-      : full.length === points.length && full.length > 2
-        ? "Every class is full"
-        : full.length > 2
-          ? `${full.length} classes are full`
-          : `${both(full)} ${full.length === 1 ? "is" : "are"} full`
-  const roomyLine = roomy ? `${roomy.label} has the most free seats, ${freeOf.get(roomy.label) ?? roomy.seats - roomy.value}` : null
-  return { kind: "seats", heading: [fullLine, roomyLine].filter(Boolean).join(". "), points }
+      tip: { number: `${paid + partial} of ${seats}`, words: `${className} · ${paid} paid in full, ${partial} partial payment` },
+    })),
+  }
 }
 
-const SOURCE_NAMES: Record<ApplicationSource, { label: string; short: string; heading: string }> = {
-  admission_form: { label: "Admission form", short: "Admission form", heading: "Most families apply through the Admission form" },
-  agent_code: { label: "Agents’ Discount codes", short: "Agents", heading: "Most families apply with an agent’s Discount code" },
-  promo_code: { label: "Promo codes", short: "Promo codes", heading: "Most families apply with a Promo code" },
-  walk_in: { label: "Walk-in at the desk", short: "Walk-in", heading: "Most families apply at the desk" },
+const SOURCE_NAMES: Record<ApplicationSource, { label: string; short: string }> = {
+  admission_form: { label: "Admission form", short: "Admission form" },
+  agent_code: { label: "Agents’ Discount codes", short: "Agents" },
+  promo_code: { label: "Promo codes", short: "Promo codes" },
+  walk_in: { label: "Walk-in at the desk", short: "Walk-in" },
 }
 
 /** Applications by where they came from: the ring with the total in the middle, and its list. */
 export function sourcesTab(counts: HomeChartCounts): SourcesTab | null {
   if (counts.total === 0) return null
-  const rows = counts.sources
-  const points = rows.map(({ source, count }) => {
+  const points = counts.sources.map(({ source, count }) => {
     const percent = Math.round((count / counts.total) * 100)
     return {
       label: SOURCE_NAMES[source].label,
@@ -217,55 +139,104 @@ export function sourcesTab(counts: HomeChartCounts): SourcesTab | null {
       tip: { number: `${count} · ${percent}%`, words: SOURCE_NAMES[source].label },
     }
   })
-  const top = largest(rows, (row) => row.count)!
-  return { kind: "sources", heading: SOURCE_NAMES[top.source].heading, points, total: counts.total }
+  return { kind: "sources", points, total: counts.total }
 }
 
-/** The Sources ring as prototype v40 draws it, in the SVG's own units. */
-export const RING = { radius: 54, width: 15, gap: 4 } as const
+/**
+ * The Sources ring in the SVG's own units (a 140 box, centred at 70): its
+ * middle radius, its width, the gap between slices along the middle, and the
+ * small round corners every slice has instead of a round end.
+ */
+export const RING = { centre: 70, radius: 54, width: 15, gap: 4, corner: 3 } as const
 
-export type RingArc = { index: number; dash: number; rest: number; offset: number }
+const INNER = RING.radius - RING.width / 2 + RING.corner
+const OUTER = RING.radius + RING.width / 2 - RING.corner
+
+/** One source's share of the ring, in radians clockwise from the top, its gaps included. */
+export type RingSlice = { index: number; start: number; end: number }
 
 /**
- * The ring's arcs, one per source with a number, each with soft round ends
- * and the same small gap to its neighbours. A round end reaches half the
- * stroke's width past its dash, so every dash is shortened by the gap and one
- * stroke width and starts half of that in. A source too small for its round
- * ends is given just enough of the ring to show as a dot with its gaps, taken
- * from the others in proportion, so no arc is drawn over its neighbour. With
- * one source, or none, the ring is whole: `full` names the shade to draw it
- * in.
+ * The ring's slices, one per source with a number, each its true share of
+ * the ring. A source too small to show past its gaps and corners is given
+ * just enough to show as a thin sliver, taken from the others in
+ * proportion. With one source, or none, the ring is whole: `full` names the
+ * shade to draw it in.
  */
-export function ringArcs(values: readonly number[]): { full: number | null; arcs: RingArc[] } {
-  const around = 2 * Math.PI * RING.radius
+export function ringSlices(values: readonly number[]): { full: number | null; slices: RingSlice[] } {
   const live = values.flatMap((value, index) => (value > 0 ? [index] : []))
-  if (live.length < 2) return { full: live[0] ?? 0, arcs: [] }
-  const inset = RING.gap + RING.width
-  // The least of the ring an arc can take: its two round ends and its gap.
-  const least = inset + 0.01
-  const lengths = new Map<number, number>()
+  if (live.length < 2) return { full: live[0] ?? 0, slices: [] }
+  const around = 2 * Math.PI
+  // The least a slice can take: its gap, its two corners on the inside edge, and a sliver.
+  const least = RING.gap / RING.radius + (2 * RING.corner) / INNER + 2 / RING.radius
+  const angles = new Map<number, number>()
   const small = new Set<number>()
   for (;;) {
     const rest = live.filter((index) => !small.has(index))
     const room = around - small.size * least
     const sum = rest.reduce((total, index) => total + values[index], 0)
-    for (const index of rest) lengths.set(index, (values[index] / sum) * room)
-    const tooSmall = rest.filter((index) => lengths.get(index)! < least)
+    for (const index of rest) angles.set(index, (values[index] / sum) * room)
+    const tooSmall = rest.filter((index) => angles.get(index)! < least)
     if (tooSmall.length === 0) break
     for (const index of tooSmall) {
       small.add(index)
-      lengths.set(index, least)
+      angles.set(index, least)
     }
   }
   let start = 0
-  const arcs = live.map((index) => {
-    const length = lengths.get(index)!
-    const dash = length - inset
-    const arc = { index, dash, rest: around - dash, offset: start + inset / 2 }
-    start += length
-    return arc
+  const slices = live.map((index) => {
+    const slice = { index, start, end: start + angles.get(index)! }
+    start = slice.end
+    return slice
   })
-  return { full: null, arcs }
+  return { full: null, slices }
+}
+
+const at = (r: number, angle: number) =>
+  `${(RING.centre + r * Math.sin(angle)).toFixed(2)},${(RING.centre - r * Math.cos(angle)).toFixed(2)}`
+
+/**
+ * A slice as a filled ring piece, its gap taken off both ends and pulled in
+ * by its corner, to be drawn with a round-joined stroke of twice the corner:
+ * the stroke grows it back to the full width with small round corners.
+ */
+export function slicePath({ start, end }: RingSlice): string {
+  const a0 = start + RING.gap / 2 / RING.radius
+  const a1 = end - RING.gap / 2 / RING.radius
+  const o0 = a0 + RING.corner / OUTER
+  const o1 = a1 - RING.corner / OUTER
+  const i0 = a0 + RING.corner / INNER
+  const i1 = a1 - RING.corner / INNER
+  // Each edge spans its own angle, so each takes its own large-arc flag: a slice just over half the ring can have one edge past π and the other not.
+  const outerLarge = o1 - o0 > Math.PI ? 1 : 0
+  const innerLarge = i1 - i0 > Math.PI ? 1 : 0
+  return `M${at(OUTER, o0)} A${OUTER},${OUTER} 0 ${outerLarge} 1 ${at(OUTER, o1)} L${at(INNER, i1)} A${INNER},${INNER} 0 ${innerLarge} 0 ${at(INNER, i0)} Z`
+}
+
+/**
+ * Months' line through its points, January first, split for drawing: the
+ * solid line, the piece into the month still running (dashed), and the
+ * glow under the line. The running month's piece is dashed wherever it
+ * falls, also when later months already have applicants; the glow stops
+ * before it only when it ends the line. `part` is the running month's
+ * index among the points, or -1.
+ */
+export function monthLine(points: readonly (readonly [number, number])[], part: number, height: number): { solid: string; dashed: string | null; area: string } | null {
+  if (points.length < 2) return null
+  const line = smoothLine(points)
+  // smoothLine's pieces: piece k runs from point k to point k + 1.
+  const pieces = line.split(" C").slice(1).map((piece) => `C${piece}`)
+  const start = line.slice(0, line.indexOf(" C"))
+  const ends = [start.slice(1), ...pieces.map((piece) => piece.slice(piece.lastIndexOf(" ") + 1))]
+  const into = part > 0 ? part - 1 : -1
+  let solid = ""
+  pieces.forEach((piece, k) => {
+    if (k === into) return
+    solid += solid === "" || k === into + 1 ? `${solid === "" ? "" : " "}M${ends[k]} ${piece}` : ` ${piece}`
+  })
+  const last = into === pieces.length - 1
+  const glow = last ? pieces.slice(0, -1) : pieces
+  const area = glow.length > 0 ? `${start} ${glow.join(" ")} L${ends[glow.length].split(",")[0]},${height} L${ends[0].split(",")[0]},${height} Z` : ""
+  return { solid, dashed: into >= 0 ? `M${ends[into]} ${pieces[into]}` : null, area }
 }
 
 /** A round top for the scale and the step between its lines, at most five steps. */

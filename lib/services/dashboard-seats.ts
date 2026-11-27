@@ -45,8 +45,12 @@ type ShownYear = {
   years: number[]
 }
 
-/** Home's seats: the year's streams as Seats reads them; null when `year` is. */
-export type SeatsByClass = ShownYear & { streams: YearStreams | null }
+/**
+ * Home's seats: the year's streams as Seats reads them, and the counts by
+ * stream that Reports reads, for the Seats chart's paid and part-paid
+ * seats; both null when `year` is.
+ */
+export type SeatsByClass = ShownYear & { streams: YearStreams | null; figures: ClassStreamFigures[] | null }
 
 /** Reports' seats: counts by stream, every class in class order; empty when `year` is null. */
 export type SeatFiguresByClass = ShownYear & { classes: ClassStreamFigures[] }
@@ -85,10 +89,10 @@ export async function getSeatsByClass(
 ): Promise<Result<SeatsByClass, "forbidden" | "unavailable">> {
   const shown = await shownYear(supabase, year, today)
   if (!shown.ok) return shown
-  if (shown.data.year === null) return { ok: true, data: { ...shown.data, streams: null } }
-  const streams = await getYearStreams(supabase, shown.data.year)
-  if (!streams.ok) return { ok: false, error: "unavailable" }
-  return { ok: true, data: { ...shown.data, streams: streams.data } }
+  if (shown.data.year === null) return { ok: true, data: { ...shown.data, streams: null, figures: null } }
+  const [streams, figures] = await Promise.all([getYearStreams(supabase, shown.data.year), yearSeatFigures(supabase, shown.data.year)])
+  if (!streams.ok || !figures.ok) return { ok: false, error: "unavailable" }
+  return { ok: true, data: { ...shown.data, streams: streams.data, figures: figures.data } }
 }
 
 /** Reports' counts by stream in `year` (see shownYear). Counts only. */

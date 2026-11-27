@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest"
 
-import { classesTab, monthsTab, niceScale, RING, ringArcs, seatsTabOf, sourcesTab, statusTab, type SeatsTabClass } from "@/app/staff/_home/charts"
+import { classesTab, monthLine, monthsTab, niceScale, RING, ringSlices, seatsTabOf, slicePath, sourcesTab, statusTab, type SeatsTabClass } from "@/app/staff/_home/charts"
 import { APPLICATION_SOURCES, type ApplicationSource, type HomeChartCounts } from "@/lib/services/home-charts"
 import { LEAD_CLASSES, LEAD_STATUSES, type LeadClass, type LeadStatus } from "@/lib/services/leads"
 
-// Home's chart card (#405, #518): the tabs and their sentences, from v38's numbers.
+// Home's chart card (#405, #518), as the owner's chart-card prototype
+// (24tWDhYZ28Qs6CsJowG1h9) draws it.
 
 // `months` are consecutive months from `from` (YYYY-MM). A month with none is
 // left out, as the database leaves it out.
@@ -43,32 +44,16 @@ const V38 = counts({
 })
 const NONE = counts({})
 
-// One class's bar as namedSeatsTab adds it up from the class's streams.
-function seat(className: LeadClass, seats: number, held: number): SeatsTabClass {
-  return { className, seats, held, full: held >= seats, free: Math.max(0, seats - held) }
+const seat = (className: LeadClass, seats: number, paid: number, partial: number): SeatsTabClass => {
+  const free = Math.max(0, seats - paid - partial)
+  return { className, seats, paid, partial, free, full: free === 0 }
 }
 
 describe("Classes", () => {
-  it("names the two classes with the most students, as v38 does", () => {
-    expect(classesTab(V38)?.heading).toBe("FORM 1 and STD 1 draw the most students")
-  })
-
-  it("names one class when only one has any", () => {
-    expect(classesTab(counts({ classes: { "KG 2": 3 }, months: [3] }))?.heading).toBe("KG 2 draws the most students")
-  })
-
-  it("draws every class, zeros included, with short labels and the tooltip's words", () => {
+  it("draws every class, zeros included, named in full, with the tooltip's words", () => {
     const tab = classesTab(V38)!
-    expect(tab.points.map((point) => point.short)).toEqual(["DC", "KG1", "KG2", "1", "2", "3", "4", "5", "6", "7", "1", "2", "3", "4"])
+    expect(tab.points.map((point) => point.short)).toEqual([...LEAD_CLASSES])
     expect(tab.points[10].tip).toEqual({ number: "21", words: "FORM 1 · students" })
-  })
-
-  it("groups the axis Nursery / STD / FORM", () => {
-    expect(classesTab(V38)!.groups).toEqual([
-      { label: "Nursery", short: "Nursery", span: 3 },
-      { label: "Primary · STD", short: "STD", span: 7 },
-      { label: "Secondary · FORM", short: "FORM", span: 4 },
-    ])
   })
 
   it("is left out when no one has applied this year", () => {
@@ -77,75 +62,42 @@ describe("Classes", () => {
 })
 
 describe("Months", () => {
-  it("names the busiest month with its year", () => {
-    expect(monthsTab(V38, "2026-11-15", true)?.heading).toBe("September 2026 was the busiest month, with 21 applications")
-  })
+  const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 
-  it("draws from the first month anyone applied to the month running, which is lighter and says so", () => {
+  it("always has the twelve months, January first, and runs the line from January to the month running", () => {
     const tab = monthsTab(V38, "2026-11-15", true)!
-    expect(tab.points.map((point) => point.short)).toEqual(["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov"])
-    expect(tab.points.filter((point) => point.part).map((point) => point.label)).toEqual(["November 2026"])
-    expect(tab.note).toBe("November so far, shown lighter.")
-    expect(tab.points.at(-1)!.tip).toEqual({ number: "11", words: "November 2026 so far · applications" })
-    expect(tab.points[8].tip).toEqual({ number: "21", words: "September 2026 · applications" })
+    expect(tab.points.map((point) => point.short)).toEqual(MONTHS)
+    expect(tab.drawn).toBe(11)
+    expect(tab.points.filter((point) => point.part).map((point) => point.label)).toEqual(["November"])
+    expect(tab.points[10].tip).toEqual({ number: "11", words: "November so far · applications" })
+    expect(tab.points[8].tip).toEqual({ number: "21", words: "September · applications" })
   })
 
-  it("draws every applicant, imported or not, so the columns add up to the total", () => {
-    const tab = monthsTab(V38, "2026-11-15", true)!
-    expect(tab.points.reduce((sum, point) => sum + point.value, 0)).toBe(V38.total)
-  })
-
-  it("runs on to this month while the year is open, drawing a month with none as zero", () => {
+  it("draws a month with none as zero from January, as the line starts there", () => {
     const tab = monthsTab(counts({ months: [3, 0, 2], from: "2026-06" }), "2026-09-01", true)!
-    expect(tab.points.map((point) => [point.short, point.value])).toEqual([
-      ["Jun", 3],
-      ["Jul", 0],
-      ["Aug", 2],
-      ["Sep", 0],
-    ])
+    expect(tab.drawn).toBe(9)
+    expect(tab.points.slice(0, 9).map((point) => point.value)).toEqual([0, 0, 0, 0, 0, 3, 0, 2, 0])
   })
 
-  it("stops at the last month with an applicant once the year is over, with nothing lighter", () => {
+  it("adds the same month of different calendar years together, so every applicant is counted", () => {
+    // 2026's applicants: from June 2025 to May 2026, and one late in September 2026.
+    const year = counts({ months: [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 0, 0, 0, 2], from: "2025-06" })
+    const tab = monthsTab(year, "2026-11-15", false)!
+    expect(tab.points.map((point) => point.value)).toEqual([11, 12, 13, 14, 15, 4, 5, 6, 7 + 2, 8, 9, 10])
+    expect(tab.points.reduce((sum, point) => sum + point.value, 0)).toBe(year.total)
+  })
+
+  it("runs through all twelve months once the year is over, with nothing lighter", () => {
     const tab = monthsTab(counts({ months: [8, 14, 0, 2], from: "2025-07" }), "2026-11-15", false)!
-    expect(tab.points.map((point) => point.label)).toEqual(["July 2025", "August 2025", "September 2025", "October 2025"])
+    expect(tab.drawn).toBe(12)
     expect(tab.points.some((point) => point.part)).toBe(false)
-    expect(tab.note).toBeNull()
-    expect(tab.heading).toBe("August 2025 was the busiest month, with 14 applications")
   })
 
-  it("runs across the calendar year, however many months the year's applicants span", () => {
-    const tab = monthsTab(counts({ months: Array(15).fill(1), from: "2025-03" }), "2026-05-20", true)!
-    expect(tab.points).toHaveLength(15)
-    expect(tab.points[0].label).toBe("March 2025")
-    expect(tab.points.at(-1)!.label).toBe("May 2026")
-    expect(tab.note).toBe("May so far, shown lighter.")
-  })
-
-  it("draws only the months with applicants when a mistyped date stretches the span past two years", () => {
-    const typo = counts({ months: [1], from: "2002-03" })
-    const year = counts({ months: [4, 0, 6], from: "2026-08" })
-    const tab = monthsTab({ ...year, months: [...typo.months, ...year.months], total: typo.total + year.total }, "2026-11-15", true)!
-    expect(tab.points.map((point) => [point.label, point.value])).toEqual([
-      ["March 2002", 1],
-      ["August 2026", 4],
-      ["October 2026", 6],
-      ["November 2026", 0],
-    ])
-    expect(tab.points.reduce((sum, point) => sum + point.value, 0)).toBe(11)
-    expect(tab.note).toBe("November so far, shown lighter.")
-  })
-
-  it("still fills the months with none across a span of two years", () => {
-    const tab = monthsTab(counts({ months: [1, ...Array(22).fill(0), 1], from: "2025-01" }), "2026-12-01", false)!
-    expect(tab.points).toHaveLength(24)
-  })
-
-  it("says so far when the month running is the busiest, and counts one application as one", () => {
-    expect(monthsTab(counts({ months: [1], from: "2026-06" }), "2026-06-04", true)?.heading).toBe("June 2026 is the busiest month so far, with 1 application")
-  })
-
-  it("gives a tie to the earlier month", () => {
-    expect(monthsTab(counts({ months: [5, 0, 5, 2] }), "2026-04-10", true)?.heading).toBe("January 2026 was the busiest month, with 5 applications")
+  it("runs on past the month running to a later month that already has applicants", () => {
+    // The admission year 2027 in February 2027: applicants since June 2026.
+    const tab = monthsTab(counts({ months: [3, 4, 5, 6, 7, 8, 9, 1, 2], from: "2026-06" }), "2027-02-10", true)!
+    expect(tab.drawn).toBe(12)
+    expect(tab.points.filter((point) => point.part).map((point) => point.label)).toEqual(["February"])
   })
 
   it("is left out when no one has applied for the year", () => {
@@ -154,10 +106,8 @@ describe("Months", () => {
 })
 
 describe("Status", () => {
-  const YEAR = counts({ months: [113], statuses: { Applied: 40, Visited: 31, Interviewed: 22, Enrolled: 15, Declined: 5 } })
-
-  it("draws every status in the order a family moves through them, zeros included", () => {
-    const tab = statusTab(counts({ months: [3], statuses: { Applied: 2, Enrolled: 1 } }), true)!
+  it("draws every status from Applied to Enrolled and Declined, zeros included", () => {
+    const tab = statusTab(counts({ months: [3], statuses: { Applied: 2, Enrolled: 1 } }))!
     expect(tab.points.map((point) => [point.label, point.value])).toEqual([
       ["Applied", 2],
       ["Visited", 0],
@@ -168,56 +118,23 @@ describe("Status", () => {
     expect(tab.points[3].tip).toEqual({ number: "1", words: "Enrolled · applicants" })
   })
 
-  it("says where the applicants are while the year is open, and how many enrolled once it is over", () => {
-    expect(statusTab(YEAR, true)?.heading).toBe("Where the year’s applicants are now")
-    expect(statusTab(YEAR, false)?.heading).toBe("15 of 113 applicants enrolled")
-  })
-
   it("is left out when no one has applied for the year", () => {
-    expect(statusTab(NONE, true)).toBeNull()
+    expect(statusTab(NONE)).toBeNull()
   })
 })
 
 describe("Seats", () => {
-  const V38_SEATS = [seat("DAY CARE", 15, 9), seat("KG 2", 25, 18), seat("STD 1", 40, 31), seat("STD 4", 30, 22), seat("STD 6", 35, 35), seat("FORM 1", 60, 44)]
-
-  it("names the full class and the one with the most free seats, as v38 does", () => {
-    expect(seatsTabOf(V38_SEATS)?.heading).toBe("STD 6 is full. FORM 1 has the most free seats, 16")
-  })
-
-  it("puts N free or Full on each capsule, and the tooltip's words", () => {
-    const tab = seatsTabOf(V38_SEATS)!
-    expect(tab.points.map((point) => [point.short, point.full ? "Full" : `${point.seats - point.value} free`])).toEqual([
-      ["DC", "6 free"],
-      ["KG 2", "7 free"],
-      ["STD 1", "9 free"],
-      ["STD 4", "8 free"],
-      ["STD 6", "Full"],
-      ["FORM 1", "16 free"],
+  it("holds each class's paid and part-paid seats, its free seats, and the tooltip's words", () => {
+    const tab = seatsTabOf([seat("DAY CARE", 20, 9, 5), seat("STD 6", 35, 30, 5)])!
+    expect(tab.points.map((point) => [point.short, point.value, point.paid, point.partial, point.free, point.full])).toEqual([
+      ["DAY CARE", 14, 9, 5, 6, false],
+      ["STD 6", 35, 30, 5, 0, true],
     ])
-    expect(tab.points[4].tip).toEqual({ number: "35 of 35", words: "STD 6 · Full" })
-    expect(tab.points[5].tip).toEqual({ number: "44 of 60", words: "FORM 1 · 16 free" })
+    expect(tab.points[0].tip).toEqual({ number: "14 of 20", words: "DAY CARE · 9 paid in full, 5 partial payment" })
   })
 
   it("shows a class set to zero seats as Full", () => {
-    const tab = seatsTabOf([seat("FORM 4", 0, 0), seat("FORM 3", 10, 3)])!
-    expect(tab.points[0]).toMatchObject({ label: "FORM 4", full: true, fill: 100, tip: { number: "0 of 0", words: "FORM 4 · Full" } })
-    expect(tab.heading).toBe("FORM 4 is full. FORM 3 has the most free seats, 7")
-  })
-
-  it("keeps an over-full class full, its capsule filled to the top", () => {
-    const tab = seatsTabOf([seat("STD 6", 10, 12), seat("STD 7", 10, 2)])!
-    expect(tab.points[0]).toMatchObject({ full: true, fill: 100 })
-    expect(tab.heading).toBe("STD 6 is full. STD 7 has the most free seats, 8")
-  })
-
-  it("names two full classes, counts more, and says when every class is full", () => {
-    expect(seatsTabOf([seat("STD 5", 5, 5), seat("STD 6", 5, 5), seat("STD 7", 5, 1)])?.heading).toBe("STD 5 and STD 6 are full. STD 7 has the most free seats, 4")
-    expect(seatsTabOf([seat("STD 4", 5, 5), seat("STD 5", 5, 5), seat("STD 6", 5, 5), seat("STD 7", 5, 1)])?.heading).toBe(
-      "3 classes are full. STD 7 has the most free seats, 4",
-    )
-    expect(seatsTabOf([seat("STD 5", 5, 5), seat("STD 6", 5, 6), seat("STD 7", 5, 5)])?.heading).toBe("Every class is full")
-    expect(seatsTabOf([seat("STD 6", 5, 5)])?.heading).toBe("STD 6 is full")
+    expect(seatsTabOf([seat("FORM 4", 0, 0, 0)])!.points[0]).toMatchObject({ full: true, value: 0, tip: { number: "0 of 0" } })
   })
 
   it("is left out when no class has streams", () => {
@@ -226,10 +143,6 @@ describe("Seats", () => {
 })
 
 describe("Sources", () => {
-  it("says most families apply through the Admission form, as v38 does", () => {
-    expect(sourcesTab(V38)?.heading).toBe("Most families apply through the Admission form")
-  })
-
   it("lists the four sources with number and percent, and the total for the middle", () => {
     const tab = sourcesTab(V38)!
     expect(tab.total).toBe(128)
@@ -240,14 +153,6 @@ describe("Sources", () => {
       ["Walk-in at the desk", 11, 9],
     ])
     expect(tab.points[0].tip).toEqual({ number: "74 · 58%", words: "Admission form" })
-  })
-
-  it("names whichever source is largest", () => {
-    const at = (sources: Partial<Record<ApplicationSource, number>>) =>
-      sourcesTab(counts({ months: [Object.values(sources).reduce((sum, n) => sum + n, 0)], sources }))?.heading
-    expect(at({ agent_code: 3, admission_form: 1 })).toBe("Most families apply with an agent’s Discount code")
-    expect(at({ promo_code: 3 })).toBe("Most families apply with a Promo code")
-    expect(at({ walk_in: 3, promo_code: 1 })).toBe("Most families apply at the desk")
   })
 
   it("is left out when no one has applied this year", () => {
@@ -266,58 +171,103 @@ describe("niceScale", () => {
 })
 
 describe("the Sources ring", () => {
-  const around = 2 * Math.PI * RING.radius
-  // A round end reaches half the stroke's width past its dash.
-  const reach = RING.width / 2
+  const around = 2 * Math.PI
+  const inner = RING.radius - RING.width / 2 + RING.corner
+  // The least a slice takes: its gap, its two corners on the inside edge, and a sliver.
+  const least = RING.gap / RING.radius + (2 * RING.corner) / inner + 2 / RING.radius
 
-  // The space between each arc's round end and the next arc's, all the way round.
-  const gaps = (arcs: ReturnType<typeof ringArcs>["arcs"]) => {
-    const ends = arcs.map((arc) => ({ from: arc.offset - reach, to: arc.offset + arc.dash + reach }))
-    return ends.map((end, i) => {
-      const next = ends[(i + 1) % ends.length]
-      return (i + 1 === ends.length ? next.from + around : next.from) - end.to
-    })
-  }
-
-  it("draws one soft-ended arc per source, with the same gap between neighbours all the way round", () => {
+  it("gives each source its true share of the ring, slice after slice all the way round", () => {
     const values = [74, 31, 12, 11]
-    const { full, arcs } = ringArcs(values)
+    const { full, slices } = ringSlices(values)
     expect(full).toBeNull()
-    expect(arcs.map((arc) => arc.index)).toEqual([0, 1, 2, 3])
-    for (const gap of gaps(arcs)) expect(gap).toBeCloseTo(RING.gap, 6)
-    // Each arc, with its gap, takes its share of the ring.
-    arcs.forEach((arc, i) => expect(arc.dash + RING.width + RING.gap).toBeCloseTo((values[i] / 128) * around, 6))
-    arcs.forEach((arc) => expect(arc.dash + arc.rest).toBeCloseTo(around, 6))
+    expect(slices.map((slice) => slice.index)).toEqual([0, 1, 2, 3])
+    slices.forEach((slice, i) => expect(slice.end - slice.start).toBeCloseTo((values[i] / 128) * around, 6))
+    slices.forEach((slice, i) => expect(slice.start).toBeCloseTo(i === 0 ? 0 : slices[i - 1].end, 9))
+    expect(slices.at(-1)!.end).toBeCloseTo(around, 9)
   })
 
-  it("leaves out a source with no applications, and keeps each arc's own shade", () => {
-    const { full, arcs } = ringArcs([40, 0, 0, 10])
+  it("leaves out a source with no applications, and keeps each slice's own shade", () => {
+    const { full, slices } = ringSlices([40, 0, 0, 10])
     expect(full).toBeNull()
-    expect(arcs.map((arc) => arc.index)).toEqual([0, 3])
+    expect(slices.map((slice) => slice.index)).toEqual([0, 3])
   })
 
   it("is one whole ring, in that source's shade, when only one source has applications", () => {
-    expect(ringArcs([0, 0, 7, 0])).toEqual({ full: 2, arcs: [] })
-    expect(ringArcs([5])).toEqual({ full: 0, arcs: [] })
+    expect(ringSlices([0, 0, 7, 0])).toEqual({ full: 2, slices: [] })
+    expect(ringSlices([5])).toEqual({ full: 0, slices: [] })
   })
 
-  it("gives a source too small for its round ends a dot of its own, never drawn over its neighbours", () => {
+  it("gives a source too small to show a thin sliver, taken from the others, and still fills the ring", () => {
     for (const values of [
       [1000, 1],
       [1, 500, 1, 498],
-      [3, 0, 0, 64],
+      [2, 38, 9, 52],
       [1, 1, 1, 5000],
     ]) {
-      const { arcs } = ringArcs(values)
-      expect(arcs).toHaveLength(values.filter((value) => value > 0).length)
-      for (const arc of arcs) expect(arc.dash).toBeGreaterThan(0)
-      // Every gap is the same, so no round end reaches its neighbour.
-      for (const gap of gaps(arcs)) expect(gap).toBeCloseTo(RING.gap, 6)
-      // The arcs and their gaps still add up to the whole ring.
-      expect(arcs.reduce((sum, arc) => sum + arc.dash + RING.width + RING.gap, 0)).toBeCloseTo(around, 6)
+      const { slices } = ringSlices(values)
+      expect(slices).toHaveLength(values.filter((value) => value > 0).length)
+      for (const slice of slices) expect(slice.end - slice.start).toBeGreaterThanOrEqual(least - 1e-9)
+      expect(slices.at(-1)!.end).toBeCloseTo(around, 9)
     }
     // The larger sources keep their order of size.
-    const [small, large] = ringArcs([1000, 1]).arcs.map((arc) => arc.dash).sort((a, b) => a - b)
-    expect(large).toBeGreaterThan(small * 100)
+    const [small, large] = ringSlices([1000, 1]).slices.map((slice) => slice.end - slice.start).sort((a, b) => a - b)
+    expect(large).toBeGreaterThan(small * 10)
+  })
+
+  // The large-arc flags of a slice's outer and inner edges.
+  const flags = (d: string) => [...d.matchAll(/A[\d.]+,[\d.]+ 0 (\d) [01] /g)].map((m) => Number(m[1]))
+
+  it("draws a slice as one closed ring piece inside the ring's width", () => {
+    const d = slicePath({ index: 0, start: 0, end: Math.PI / 2 })
+    expect(d).toMatch(/^M[\d.]+,[\d.]+ A[\d.]+,[\d.]+ 0 0 1 [\d.]+,[\d.]+ L[\d.]+,[\d.]+ A[\d.]+,[\d.]+ 0 0 0 [\d.]+,[\d.]+ Z$/)
+    expect(flags(slicePath({ index: 0, start: 0, end: 1.5 * Math.PI }))).toEqual([1, 1])
+  })
+
+  it("gives each edge of a slice just over half the ring its own large-arc flag", () => {
+    // 53 of 100: the outer edge spans just over π, the inner, pulled in further by its corners, just under.
+    const [big] = ringSlices([53, 47, 0, 0]).slices
+    expect(flags(slicePath(big))).toEqual([1, 0])
+  })
+})
+
+describe("the Months line", () => {
+  const H = 220
+  // Twelve months, evenly along a 600-wide plot.
+  const at = (values: number[]) => values.map((value, i) => [((i + 0.5) / 12) * 600, H - value * 10] as const)
+  const moves = (d: string) => (d.match(/M/g) ?? []).length
+  const pieces = (d: string) => (d.match(/C/g) ?? []).length
+
+  it("is one solid line with its glow when no month is running", () => {
+    const line = monthLine(at([1, 2, 3, 4]), -1, H)!
+    expect(line.dashed).toBeNull()
+    expect([moves(line.solid), pieces(line.solid)]).toEqual([1, 3])
+    expect(pieces(line.area)).toBe(3)
+  })
+
+  it("runs dashed into the running month when it ends the line, the glow stopping before it", () => {
+    const line = monthLine(at([1, 2, 3, 4]), 3, H)!
+    expect([moves(line.solid), pieces(line.solid)]).toEqual([1, 2])
+    expect(line.dashed).toMatch(/^M[\d.]+,[\d.]+ C/)
+    expect(pieces(line.dashed!)).toBe(1)
+    expect(pieces(line.area)).toBe(2)
+  })
+
+  it("runs dashed into the running month in the middle of the line too, solid again after it", () => {
+    // February running, with December's applicants already in: the line runs through December.
+    const xy = at([2, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5])
+    const line = monthLine(xy, 1, H)!
+    // The dashed piece runs from January into February.
+    expect(line.dashed!.startsWith(`M${Math.round(xy[0][0] * 10) / 10},`)).toBe(true)
+    expect(line.dashed!.endsWith(` ${Math.round(xy[1][0] * 10) / 10},${Math.round(xy[1][1] * 10) / 10}`)).toBe(true)
+    expect(pieces(line.dashed!)).toBe(1)
+    // The solid line starts again at February and runs on through December: 10 pieces.
+    expect(line.solid.startsWith(`M${Math.round(xy[1][0] * 10) / 10},`)).toBe(true)
+    expect([moves(line.solid), pieces(line.solid)]).toEqual([1, 10])
+    // The glow lies under the whole line, as the running month is not its end.
+    expect(pieces(line.area)).toBe(11)
+  })
+
+  it("is nothing to draw for a single month", () => {
+    expect(monthLine(at([3]), 0, H)).toBeNull()
   })
 })

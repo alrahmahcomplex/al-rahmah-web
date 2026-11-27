@@ -1,23 +1,27 @@
-/* Home's chart card (#405), measured from prototype v40 → Home. One indigo
-   hue: --gf-indigo and its lighter steps (--gf-chart-*), the glow in
-   --gf-confetti-violet. */
+/* Home's chart card (#405), as the owner's chart-card prototype
+   (24tWDhYZ28Qs6CsJowG1h9) draws it. One indigo hue: --gf-indigo and its
+   lighter steps (--gf-chart-*), the glow in --gf-confetti-violet. */
 
 /* The card ends level with the last stat card (v40's bento): it fills its
-   grid cell, and the chart takes the height left under the tabs. */
-.hm-chart { flex: 1; display: flex; flex-direction: column; padding: 18px 20px; box-shadow: none; }
-.hm-ch-year { display: flex; align-items: center; justify-content: flex-end; gap: 10px; margin-bottom: 12px; font-size: 13px; color: var(--gf-ink-soft); }
-.hm-ch-yearpick { width: 120px; }
-.hm-ch-none { margin: 0 0 12px; color: var(--gf-ink-soft); }
+   grid cell, and the chart takes the height left under the tabs. Its own
+   width, not the window's, decides when labels stand up. */
+.hm-chart { flex: 1; display: flex; flex-direction: column; padding: 18px 20px; box-shadow: none; container: hm-chart / inline-size; }
+.hm-ch-none { margin: 12px 0 0; color: var(--gf-ink-soft); }
 .hm-ch-tabs { flex: 1; display: flex; flex-direction: column; min-height: 0; }
 /* The kit's track flexes along a row; in this column it keeps its own height. */
 .hm-ch-tabs .kit-track { flex: none; margin-bottom: 4px; }
 .hm-ch-tabs .kit-tabpanel { flex: 1; display: flex; flex-direction: column; }
 
+/* ---------- along the bottom: the Seats key, and the year list on the right ---------- */
+.hm-ch-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 14px; }
+.hm-ch-foot > :first-child { flex: 1 1 auto; min-width: 0; }
+.hm-ch-year { flex: none; }
+.hm-ch-yearpick { width: auto; padding: 0 14px 0 18px; }
+.hm-ch-key { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 0; padding: 0; list-style: none; font-size: 11px; color: var(--gf-ink-soft); }
+.hm-ch-key li { display: flex; align-items: center; gap: 6px; }
+.hm-ch-key i { width: 10px; height: 10px; border-radius: 3px; }
+
 .hm-ch { position: relative; flex: 1; display: flex; flex-direction: column; gap: 14px; padding-top: 4px; }
-.hm-ch-h { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 14px; }
-.hm-ch-head { margin: 0; font-weight: 600; font-size: 15px; color: var(--gf-ink); }
-.hm-ch-note { margin: 0; font-size: 13px; color: var(--gf-ink-soft); }
-.hm-ch-tbl { font-size: 13px; }
 
 /* ---------- the plot: a light grid with its numbers on the left ---------- */
 .hm-ch-plot { position: relative; flex: 1 0 auto; height: 220px; padding: 22px 0 0 30px; }
@@ -27,24 +31,22 @@
 .hm-ch-grid span { position: relative; border-top: var(--gf-stroke) solid var(--gf-mist); }
 .hm-ch-grid small { position: absolute; left: 0; top: -8px; padding-right: 4px; font-size: 11px; color: var(--gf-quiet); background: var(--gf-paper); }
 
-/* ---------- the axis, and the school levels under the classes ---------- */
+/* ---------- the axis: one label per mark, a long class name on two lines ---------- */
 .hm-ch-xw { margin-left: 30px; }
 .hm-ch-x {
   display: grid; grid-template-columns: repeat(var(--n), minmax(0, 1fr)); gap: var(--gap); margin-top: 6px;
-  font-size: 11.5px; color: var(--gf-ink-soft); text-align: center;
+  font-size: 11.5px; line-height: 1.25; color: var(--gf-ink-soft); text-align: center;
 }
-.hm-ch-x span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.hm-ch-xg { margin-top: 4px; font-size: 11px; color: var(--gf-quiet); }
-.hm-ch-xg span { margin: 0 3px; padding-top: 3px; border-top: var(--gf-stroke) solid var(--gf-mist); }
-.hm-ch-xg b { font-weight: 400; }
-.hm-ch-sm { display: none; }
+.hm-ch-x span { min-width: 0; overflow-wrap: normal; }
 
-/* ---------- Classes: the glow line ---------- */
+/* ---------- Months: the glow line ---------- */
 .hm-ch-area { position: relative; height: 100%; }
 .hm-ch-area svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
 .hm-ch-glow { stop-color: var(--gf-confetti-violet); stop-opacity: 0.32; }
 .hm-ch-fade { stop-color: var(--gf-confetti-violet); stop-opacity: 0; }
 .hm-ch-stroke { fill: none; stroke: var(--gf-indigo); stroke-width: 2.5; stroke-linecap: round; }
+/* Into the month still running: lighter and dashed. */
+.hm-ch-stroke[data-part] { stroke: var(--gf-chart-3); stroke-dasharray: 5 5; }
 .hm-ch-hits { position: absolute; inset: 0; display: grid; grid-template-columns: repeat(var(--n), minmax(0, 1fr)); }
 .hm-ch-hits span { position: relative; border-radius: 8px; outline-offset: -2px; }
 .hm-ch-hits span::before {
@@ -56,40 +58,56 @@
   position: absolute; left: 50%; width: 9px; height: 9px; margin: -4.5px 0 0 -4.5px; border-radius: 50%;
   background: var(--gf-paper); border: 2px solid var(--gf-indigo); transition: transform var(--gf-t-fast);
 }
+.hm-ch-hits i[data-part] { border-color: var(--gf-chart-3); }
 .hm-ch-hits span[data-on] i {
   transform: scale(1.35); background: var(--gf-indigo); box-shadow: 0 0 0 3px var(--gf-paper), 0 4px 12px rgb(9 0 187 / 0.35);
 }
 
-/* ---------- Months: thin columns ---------- */
+/* ---------- Classes: thin columns ---------- */
 .hm-ch-cols { position: relative; height: 100%; display: grid; grid-template-columns: repeat(var(--n), minmax(0, 1fr)); gap: 8px; align-items: end; }
 .hm-ch-col { position: relative; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; }
 .hm-ch-bar {
   display: block; width: min(28px, 70%); border-radius: 4px 4px 0 0; background: var(--gf-indigo); outline-offset: 3px;
   transition: opacity var(--gf-t-fast);
 }
-.hm-ch-bar[data-part] { background: var(--gf-chart-part); }
 .hm-ch-bar:hover, .hm-ch-bar[data-on] { opacity: 0.8; }
 
-/* ---------- Seats: capsules ---------- */
+/* ---------- Status: a bar a row, fading in from the left ---------- */
+.hm-ch-rows { flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 14px; margin: 8px 0 0; padding: 0; list-style: none; }
+.hm-ch-rows li { display: grid; grid-template-columns: 96px minmax(0, 1fr); align-items: center; gap: 12px; font-size: 13px; color: var(--gf-ink-soft); }
+.hm-ch-run { display: flex; align-items: center; gap: 8px; min-width: 0; }
+/* --f: the bar's share of the longest; 40px is kept for the number past its end. */
+.hm-ch-run i {
+  flex: none; display: block; height: 26px; width: calc((100% - 40px) * var(--f)); border-radius: 0 7px 7px 0;
+  background: linear-gradient(90deg, rgb(9 0 187 / 0), var(--gf-indigo));
+}
+.hm-ch-rows li[data-off] .hm-ch-run i { background: linear-gradient(90deg, rgb(143 137 245 / 0), var(--gf-chart-3)); }
+.hm-ch-run b { font-weight: 600; color: var(--gf-ink); }
+
+/* ---------- Seats: capsules, the seats held stacked flat on top ---------- */
 .hm-ch-caps { flex: 1 0 auto; display: grid; grid-template-columns: repeat(var(--n), minmax(0, 1fr)); gap: 10px; height: 230px; padding-top: 6px; }
 .hm-ch-cap { display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 0; }
 .hm-ch-cap em { font-style: normal; font-size: 12px; font-weight: 700; color: var(--gf-ink); white-space: nowrap; }
 .hm-ch-cap em[data-full] { color: var(--gf-red); }
+/* The capsule's own round ends clip the stack's foot, and its top once the class is full. */
 .hm-ch-track {
   position: relative; flex: 1; width: min(34px, 100%); border-radius: 999px; background: var(--gf-whisper); overflow: hidden;
   outline-offset: 3px;
 }
-.hm-ch-track i {
-  position: absolute; left: 0; right: 0; bottom: 0; border-radius: 999px; background: linear-gradient(180deg, var(--gf-chart-2), var(--gf-indigo));
-  box-shadow: 0 -6px 16px -6px rgb(123 115 255 / 0.7); transition: opacity var(--gf-t-fast);
-}
-.hm-ch-track[data-on] i { opacity: 0.8; }
+.hm-ch-stack { position: absolute; left: 0; right: 0; bottom: 0; display: flex; flex-direction: column-reverse; gap: 2px; transition: opacity var(--gf-t-fast); }
+.hm-ch-stack i { display: block; flex-basis: 0; min-height: 0; }
+.hm-ch-track[data-on] .hm-ch-stack { opacity: 0.8; }
+:is(.hm-ch-stack, .hm-ch-key) i[data-k="paid"] { background: var(--gf-indigo); }
+:is(.hm-ch-stack, .hm-ch-key) i[data-k="partial"] { background: var(--gf-chart-3); }
+.hm-ch-key i[data-k="free"] { background: var(--gf-whisper); box-shadow: inset 0 0 0 1px var(--gf-mist); }
 
 /* ---------- Sources: the ring and its list ---------- */
 .hm-ch-ring { flex: 1; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; align-content: center; gap: 22px 40px; padding: 8px 0 4px; }
 .hm-ch-rw { position: relative; width: 200px; height: 200px; }
 .hm-ch-rw svg { width: 100%; height: 100%; filter: drop-shadow(0 10px 18px rgb(9 0 187 / 0.22)); }
 .hm-ch-arc { fill: none; stroke-width: 15; }
+/* A slice and its round-joined stroke in one shade: the stroke grows it to full width with small round corners. */
+.hm-ch-slice { stroke-linejoin: round; }
 .hm-ch-total { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; }
 .hm-ch-total b { font: italic 800 34px/1 var(--font-exo), "Exo", system-ui, sans-serif; color: var(--gf-indigo); }
 /* Ink Soft, about 7:1 on the ring's shadow (#444). */
@@ -103,10 +121,14 @@
 .hm-ch-legend i { width: 12px; height: 12px; border-radius: 4px; }
 .hm-ch-legend b { font-weight: 600; }
 .hm-ch-legend small { color: var(--gf-quiet-on-tint); text-align: right; }
-:is(.hm-ch-arc, .hm-ch-legend i)[data-shade="0"] { stroke: var(--gf-indigo); background: var(--gf-indigo); }
-:is(.hm-ch-arc, .hm-ch-legend i)[data-shade="1"] { stroke: var(--gf-chart-2); background: var(--gf-chart-2); }
-:is(.hm-ch-arc, .hm-ch-legend i)[data-shade="2"] { stroke: var(--gf-chart-3); background: var(--gf-chart-3); }
-:is(.hm-ch-arc, .hm-ch-legend i)[data-shade="3"] { stroke: var(--gf-chart-4); background: var(--gf-chart-4); }
+.hm-ch-arc[data-shade="0"] { stroke: var(--gf-indigo); }
+.hm-ch-arc[data-shade="1"] { stroke: var(--gf-chart-2); }
+.hm-ch-arc[data-shade="2"] { stroke: var(--gf-chart-3); }
+.hm-ch-arc[data-shade="3"] { stroke: var(--gf-chart-4); }
+:is(.hm-ch-slice, .hm-ch-legend i)[data-shade="0"] { fill: var(--gf-indigo); stroke: var(--gf-indigo); background: var(--gf-indigo); }
+:is(.hm-ch-slice, .hm-ch-legend i)[data-shade="1"] { fill: var(--gf-chart-2); stroke: var(--gf-chart-2); background: var(--gf-chart-2); }
+:is(.hm-ch-slice, .hm-ch-legend i)[data-shade="2"] { fill: var(--gf-chart-3); stroke: var(--gf-chart-3); background: var(--gf-chart-3); }
+:is(.hm-ch-slice, .hm-ch-legend i)[data-shade="3"] { fill: var(--gf-chart-4); stroke: var(--gf-chart-4); background: var(--gf-chart-4); }
 
 /* ---------- the tooltip: the light kit tooltip's look ---------- */
 .hm-ch-tip {
@@ -116,24 +138,27 @@
 .hm-ch-tip b { display: block; font-weight: 700; font-size: 14px; line-height: 1.2; color: var(--gf-indigo-night); }
 .hm-ch-tip small { display: block; margin-top: 2px; font-size: 11.5px; font-weight: 500; color: var(--gf-quiet); }
 
-.hm-ch :is([data-on], .hm-ch-hits span, .hm-ch-bar, .hm-ch-track, .hm-ch-legend li):focus-visible { outline: 3px solid var(--gf-focus-ring); }
+.hm-ch :is([data-on], .hm-ch-hits span, .hm-ch-bar, .hm-ch-track, .hm-ch-legend li):focus-visible { outline: 3px solid var(--gf-focus-ring); outline-offset: 3px; }
 
-@media (max-width: 560px) {
+/* A narrow card (phones): the labels under the marks stand up, one per mark,
+   hanging from the axis, and so do "N free" and "Full" over the capsules. */
+@container hm-chart (max-width: 520px) {
   .hm-ch-tabs .kit-track-tab { font-size: 11.5px; padding: 0 2px; }
-  .hm-ch-lg { display: none; }
-  .hm-ch-sm { display: inline; }
   .hm-ch-x, .hm-ch-cols { gap: 3px; }
-  .hm-ch-x { font-size: 9.5px; }
-  .hm-ch-x span { overflow: visible; text-overflow: clip; letter-spacing: -0.02em; }
-  .hm-ch-xg span { overflow: hidden; }
+  .hm-ch-x span {
+    justify-self: center; align-self: start; writing-mode: vertical-rl; transform: rotate(180deg); text-align: left;
+    font-size: 10px; line-height: 1; white-space: nowrap;
+  }
   .hm-ch-caps { gap: 4px; }
-  .hm-ch-cap em { font-size: 10px; }
+  /* A fixed height keeps every capsule's top level, the words sitting on it. */
+  .hm-ch-cap em { flex: none; height: 44px; writing-mode: vertical-rl; transform: rotate(180deg); text-align: left; font-size: 10px; line-height: 1; }
   .hm-ch-plot { padding-left: 24px; }
   .hm-ch-plot > :is(.hm-ch-area, .hm-ch-cols) { left: 24px; }
   .hm-ch-xw { margin-left: 24px; }
   .hm-ch-legend { min-width: 0; width: 100%; }
+  .hm-ch-rows li { grid-template-columns: 80px minmax(0, 1fr); font-size: 12px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .hm-ch-hits span::before, .hm-ch-hits i, .hm-ch-bar, .hm-ch-track i { transition: none; }
+  .hm-ch-hits span::before, .hm-ch-hits i, .hm-ch-bar, .hm-ch-stack { transition: none; }
 }

@@ -49,7 +49,7 @@ describe("getSeatsByClass and getSeatFiguresByClass", () => {
 
   test("with no Fee schedule they show no year and ask for no seats", async () => {
     const home = client(true)
-    expect(await getSeatsByClass(home.supabase)).toEqual({ ok: true, data: { year: null, years: [], streams: null } })
+    expect(await getSeatsByClass(home.supabase)).toEqual({ ok: true, data: { year: null, years: [], streams: null, figures: null } })
     expect(home.rpc).toHaveBeenCalledTimes(1)
     const reports = client(true)
     expect(await getSeatFiguresByClass(reports.supabase)).toEqual({ ok: true, data: { year: null, years: [], classes: [] } })

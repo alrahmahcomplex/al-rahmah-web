@@ -33,6 +33,9 @@ export const PERMISSIONS = [
   // leads.export; its full columns only the Super Admin, never a permission.
   "leads.import",
   "leads.export",
+  // Marking the agreement of a Conditional interview result signed: the
+  // heads of school hold the agreements (owner decision of 2026-11-27).
+  "agreements.mark",
 ] as const
 
 // Never offered on a role, so the Roles tab leaves it out.

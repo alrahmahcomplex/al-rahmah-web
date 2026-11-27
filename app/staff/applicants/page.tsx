@@ -94,11 +94,12 @@ export default async function ApplicantsPage({
   // The words the side sheet uses, by lead id. A closed lead has none: the
   // record shows its closed banner instead.
   const today = tanzaniaToday()
+  const canMarkAgreement = staff.permissions.includes("agreements.mark")
   const nextSteps = facts?.ok
     ? Object.fromEntries(
         [...facts.data].map(([id, each]) => {
           const step = nextStep({ ...each, today })
-          return [id, step.kind === "closed" ? null : nextStepText(step, formatDate).title]
+          return [id, step.kind === "closed" ? null : nextStepText(step, formatDate, { canMarkAgreement }).title]
         }),
       )
     : null

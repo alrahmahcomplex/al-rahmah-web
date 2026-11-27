@@ -27,6 +27,7 @@ type InputRow = {
   interview_fee_status: InterviewFeeStatus | null
   interview_amount: number | null
   interview_result: InterviewResult | null
+  interview_agreement_signed: boolean
   registration: string | null
   enrol_without_retake: boolean
   release_blocked: ReleaseBlocker | null
@@ -67,7 +68,12 @@ export async function listNextStepFacts(
           interview:
             row.interview_fee_status === null
               ? null
-              : { feeStatus: row.interview_fee_status, amount: row.interview_amount ?? STANDARD_INTERVIEW_FEE, result: row.interview_result },
+              : {
+                  feeStatus: row.interview_fee_status,
+                  amount: row.interview_amount ?? STANDARD_INTERVIEW_FEE,
+                  result: row.interview_result,
+                  agreementSigned: row.interview_agreement_signed === true,
+                },
           registration: row.registration === "first" || row.registration === "retake" ? row.registration : null,
           enrolWithoutRetake: row.enrol_without_retake,
           release: { blocked: row.release_blocked, sent: row.release_sent, changedSinceSent: row.release_changed },

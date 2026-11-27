@@ -9,8 +9,18 @@ type SearchParams = { [key: string]: string | string[] | undefined }
 
 export type InterviewScreenSearch = Omit<InterviewListSearch, "enrollmentYear"> & { enrollmentYear?: number }
 
-const RESULT_PARAMS: Record<string, InterviewResultFilter> = { none: "none", passed: "Passed", failed: "Failed" }
-const RESULT_PARAM: Record<InterviewResultFilter, string> = { none: "none", Passed: "passed", Failed: "failed" }
+const RESULT_PARAMS: Record<string, InterviewResultFilter> = {
+  none: "none",
+  passed: "Passed",
+  conditional: "Conditional",
+  failed: "Failed",
+}
+const RESULT_PARAM: Record<InterviewResultFilter, string> = {
+  none: "none",
+  Passed: "passed",
+  Conditional: "conditional",
+  Failed: "failed",
+}
 const FEE_PARAMS: Record<string, InterviewFeeStatus> = { paid: "Paid", "not-paid": "Not Paid" }
 const FEE_PARAM: Record<InterviewFeeStatus, string> = { Paid: "paid", "Not Paid": "not-paid" }
 

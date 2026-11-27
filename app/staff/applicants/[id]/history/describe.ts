@@ -180,7 +180,8 @@ export const LEAD_HISTORY_LABELS: Record<string, string> = {
 export const LEAD_HISTORY_HIDDEN: Record<string, ReadonlySet<string>> = {
   // Read by nothing since each child holds the custodian’s relationship (#312).
   lead: new Set(["declined_at", "declined_by", "closed_at", "closed_by", "custodian_relationship_own", IMPORT_HIDDEN]),
-  interviews: new Set(["lead", "registered_at", "registered_by", IMPORT_HIDDEN]),
+  // The summary says the agreement was marked; who and when are the entry's own.
+  interviews: new Set(["lead", "registered_at", "registered_by", "agreement_signed_at", "agreement_signed_by", IMPORT_HIDDEN]),
   // The follow-up a date change replaced shows as the earlier date instead.
   follow_ups: new Set(["lead_id", "replaces_id", "replaced_due_on"]),
   reopening_requests: REOPENING_HIDDEN,
@@ -416,6 +417,7 @@ function summarize(
     if (["interview_date", "result", "score"].some((field) => changed.get(field) && changed.get(field)?.from !== null)) {
       return "corrected the interview result"
     }
+    if (changed.get("agreement_signed_at")?.to) return "marked the agreement signed"
     // The amount paid shows as its own change: locked on Paid, released on
     // Not Paid.
     const fee = changed.get("fee_status")?.to

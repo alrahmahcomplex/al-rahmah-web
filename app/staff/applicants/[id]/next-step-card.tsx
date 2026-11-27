@@ -1,11 +1,13 @@
 import { ButtonLink } from "@/components/kit"
 import { nextStepText } from "@/lib/lead-next-step"
+import { schoolLevelOf } from "@/lib/result-messages"
 import { formatDate } from "@/lib/school-calendar"
 import type { Lead } from "@/lib/services/leads"
 import type { StaffMember } from "@/lib/services/staff-auth"
 
 import { LEAD_CARD } from "./lead-card"
-import { readFee } from "./lead-reads"
+import { readFee, readInterviews } from "./lead-reads"
+import { MarkAgreement } from "./mark-agreement"
 import { readNextStep } from "./next-step-read"
 import { RecordVisit } from "./record-visit"
 import { LEAD_TABS, leadTabHref, type LeadTab } from "./tabs"
@@ -13,7 +15,7 @@ import { LEAD_TABS, leadTabHref, type LeadTab } from "./tabs"
 // The one thing that should happen next on an open lead (lib/lead-next-step),
 // under the header. Its button takes staff who may do it to the tab where it
 // is done; anyone else gets a plain link to that tab, unless it is the tab
-// already open. Record visit works in place here.
+// already open. Record visit and Mark agreement signed work in place here.
 export async function NextStepCard({
   lead,
   staff,
@@ -27,10 +29,16 @@ export async function NextStepCard({
   const step = await readNextStep(lead, staff.permissions.includes("payments.view") ? readFee(lead.id) : null)
   if (step?.kind === "closed") return null
 
-  const text = step && nextStepText(step, formatDate)
+  const canMarkAgreement = staff.permissions.includes("agreements.mark")
+  const text = step && nextStepText(step, formatDate, { canMarkAgreement, schoolLevel: schoolLevelOf(lead.className) })
   const action = text?.action ?? null
   const mayAct = action !== null && staff.permissions.includes(action.permission)
-  const link = action !== null && step?.kind !== "record-visit" && (mayAct || action.tab !== tab)
+  const inPlace = step?.kind === "record-visit" || step?.kind === "sign-agreement"
+  const link = action !== null && !inPlace && (mayAct || action.tab !== tab)
+  // The Conditional interview whose agreement waits, read only for a head
+  // of school on that step.
+  const agreementInterview =
+    canMarkAgreement && step?.kind === "sign-agreement" ? await readInterviews(lead.id).then((read) => (read.ok ? (read.data[0]?.id ?? null) : null)) : null
 
   return (
     <section
@@ -54,6 +62,7 @@ export async function NextStepCard({
           {mayAct ? action.label : `Open ${LEAD_TABS.find((each) => each.key === action.tab)?.label}`}
         </ButtonLink>
       )}
+      {canMarkAgreement && <MarkAgreement key={lead.id} leadId={lead.id} interviewId={agreementInterview} />}
       {staff.permissions.includes("visits.record") && (
         // Mounted for everyone who may record visits, so its confirmation
         // outlasts the refresh that moves the step on. It offers its button

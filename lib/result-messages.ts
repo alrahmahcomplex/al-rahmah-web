@@ -6,12 +6,39 @@ import { WHATSAPP_TEXT_MAX_LENGTH } from "@/lib/whatsapp"
 // so this module stays importable anywhere, tests included.
 
 export type ResultChannel = "whatsapp" | "sms"
-export type InterviewResult = "passed" | "failed"
-export type ResultTemplateId = `${ResultChannel}_${InterviewResult}_v1`
+export type InterviewResult = "passed" | "conditional" | "failed"
 
-// The four templates the human approved on #11, byte for byte. A wording
-// change is a code change with the human's approval and gets a new id, so the
-// id recorded with an older release still says which text it carried.
+// The version of each result's message sent now. release_result records the
+// same id (supabase/migrations/20270205100200_conditional_agreement.sql).
+const CURRENT_VERSION: Readonly<Record<InterviewResult, "v1" | "v2">> = { passed: "v1", conditional: "v1", failed: "v2" }
+
+export type ResultTemplateId =
+  | `${ResultChannel}_passed_v1`
+  | `${ResultChannel}_conditional_v1`
+  | `${ResultChannel}_failed_v1`
+  | `${ResultChannel}_failed_v2`
+
+export type SchoolLevel = "primary" | "secondary"
+
+// The school's own number, and the head's office a family goes to, by level
+// (owner decisions of 2026-11-27). Day Care and KG come under the Head of
+// Primary School.
+export const SCHOOL_CONTACTS: Readonly<Record<SchoolLevel, { phone: string; headOffice: string }>> = Object.freeze({
+  primary: { phone: "+255 677 330 099", headOffice: "Mkuu wa Shule ya Msingi" },
+  secondary: { phone: "+255 677 990 033", headOffice: "Mkuu wa Shule ya Sekondari" },
+})
+
+// FORM 1 to FORM 4 are secondary; every other class is primary.
+export function schoolLevelOf(className: string): SchoolLevel {
+  return className.startsWith("FORM ") ? "secondary" : "primary"
+}
+
+// Every template the human approved, byte for byte: #11's four, then the
+// Conditional messages and the Failed messages' version 2 (prototype v7,
+// 2026-11-27), which give the school's number by level instead of the
+// admissions office's. A wording change is a code change with the human's
+// approval and gets a new id, so the id recorded with an older release still
+// says which text it carried. Only CURRENT_VERSION's ids are sent now.
 export const RESULT_TEMPLATES: Readonly<Record<ResultTemplateId, string>> = Object.freeze({
   whatsapp_passed_v1: `Assalaam Alaykum {parent_name},
 
@@ -47,6 +74,41 @@ _Ofisi ya Udahili, Al-Rahmah Schools_`,
 
   sms_failed_v1:
     "Assalaam Alaykum {parent_name}. Asante kwa kumleta {student_name} kwenye usaili wa Al-Rahmah Schools. Kwa masikitiko, hakufaulu; alama {score}%. Namba ya Udahili: {admission_number}. Tafadhali wasiliana na ofisi ya udahili: {office_phone}. - Ofisi ya Udahili",
+
+  whatsapp_conditional_v1: `Assalaam Alaykum {parent_name},
+
+Asante kwa kumleta *{student_name}* kufanya usaili wa kujiunga na Al-Rahmah Schools.
+
+{student_name} hakufikia alama za kufaulu usaili, lakini tunafurahi kukujulisha kwamba *tutampokea kwa masharti*.
+
+- *Matokeo:* Amepokelewa kwa masharti
+- *Alama:* {score}%
+- *Darasa:* {class}, {enrollment_year}
+- *Namba ya Udahili:* {admission_number}
+
+*Hatua inayofuata:* Fika ofisi ya {head_office} kusaini mkataba. Baada ya hapo, kamilisha usajili kwa kulipa ada ya shule. Kwa maswali piga {school_phone}.
+
+_Ofisi ya Udahili, Al-Rahmah Schools_`,
+
+  sms_conditional_v1:
+    "Assalaam Alaykum {parent_name}. {student_name} hakufaulu usaili wa Al-Rahmah Schools (alama {score}%), lakini tutampokea kwa masharti. Namba ya Udahili: {admission_number}. Hatua inayofuata: fika ofisi ya {head_office} kusaini mkataba, kisha ulipe ada. Simu: {school_phone}. - Ofisi ya Udahili",
+
+  whatsapp_failed_v2: `Assalaam Alaykum {parent_name},
+
+Asante kwa kumleta *{student_name}* kufanya usaili wa kujiunga na Al-Rahmah Schools. Tunathamini sana imani yenu kwetu.
+
+Kwa masikitiko, safari hii {student_name} hakufaulu usaili.
+
+- *Matokeo:* Hakufaulu
+- *Alama:* {score}%
+- *Namba ya Udahili:* {admission_number}
+
+*Hatua inayofuata:* Tafadhali wasiliana na shule kupitia {school_phone} ili tuzungumze pamoja kuhusu njia bora kwa {student_name}.
+
+_Ofisi ya Udahili, Al-Rahmah Schools_`,
+
+  sms_failed_v2:
+    "Assalaam Alaykum {parent_name}. Asante kwa kumleta {student_name} kwenye usaili wa Al-Rahmah Schools. Kwa masikitiko, hakufaulu; alama {score}%. Namba ya Udahili: {admission_number}. Tafadhali wasiliana na shule: {school_phone}. - Ofisi ya Udahili",
 })
 
 export type ResultMessageInput = {
@@ -66,7 +128,8 @@ export type ResultMessage =
   | { channel: "sms"; templateId: ResultTemplateId; text: string; gsm7: boolean; segments: number }
 
 export function renderResultMessage(input: ResultMessageInput): Result<ResultMessage, "too_long"> {
-  const templateId: ResultTemplateId = `${input.channel}_${input.result}_v1`
+  const templateId = `${input.channel}_${input.result}_${CURRENT_VERSION[input.result]}` as ResultTemplateId
+  const school = SCHOOL_CONTACTS[schoolLevelOf(input.className)]
   const values: Record<string, string> = {
     parent_name: oneLine(input.parentName),
     student_name: oneLine(input.studentName),
@@ -75,6 +138,8 @@ export function renderResultMessage(input: ResultMessageInput): Result<ResultMes
     class: input.className,
     enrollment_year: String(input.enrollmentYear),
     office_phone: input.officePhone,
+    school_phone: school.phone,
+    head_office: school.headOffice,
   }
   // One pass with a function replacer, so a `$` or a `{…}` inside a name is
   // copied as typed and never read as a placeholder.

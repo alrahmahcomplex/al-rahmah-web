@@ -1,6 +1,7 @@
 import type {
   FeeStatusChange,
   FeeStatusError,
+  MarkAgreementError,
   RecordedResult,
   RecordResultError,
   RegisterError,
@@ -62,7 +63,7 @@ export function recordOutcome(error: RecordResultError): RecordOutcome {
       return {
         status: "refused",
         field: null,
-        message: "Enter the interview date, choose Passed or Failed, and enter the score. A result is saved only with all three.",
+        message: "Enter the interview date, choose Passed, Conditional or Failed, and enter the score. A result is saved only with all three.",
       }
     case "score_out_of_range":
       return { status: "refused", field: "score", message: "Enter a score from 0 to 100." }
@@ -120,5 +121,29 @@ export function feeOutcome(error: FeeStatusError): FeeOutcome {
         status: "refused",
         message: "The fee status could not be saved. Nothing was changed. Try again in a moment.",
       }
+  }
+}
+
+// What the Next step card is told after Mark agreement signed.
+export type AgreementOutcome = { status: "saved"; message: string } | { status: "refused"; message: string }
+
+export function agreementMarkedOutcome({ alreadySigned }: { alreadySigned: boolean }): AgreementOutcome {
+  return { status: "saved", message: alreadySigned ? "The agreement was already marked signed." : "Agreement marked signed." }
+}
+
+export function agreementOutcome(error: MarkAgreementError): AgreementOutcome {
+  switch (error) {
+    case "not_conditional":
+      return { status: "refused", message: "The result is no longer Conditional, so there is no agreement to mark. Reload the page." }
+    case "not_current":
+      return { status: "refused", message: "This applicant has a newer interview. Reload the page." }
+    case "lead_closed":
+      return { status: "refused", message: "This application is closed, so its agreement can't be marked." }
+    case "forbidden":
+      return { status: "refused", message: "Your role can't mark agreements signed." }
+    case "not_found":
+      return { status: "refused", message: "This interview could not be found. Reload the page." }
+    case "unavailable":
+      return { status: "refused", message: "The agreement could not be marked. Nothing was changed. Try again in a moment." }
   }
 }

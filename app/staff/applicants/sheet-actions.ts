@@ -1,6 +1,7 @@
 "use server"
 
 import { nextStepText } from "@/lib/lead-next-step"
+import { schoolLevelOf } from "@/lib/result-messages"
 import { formatDate } from "@/lib/school-calendar"
 import { getLeadFatherAndSchool } from "@/lib/services/lead-details"
 import { getLead, isClosed } from "@/lib/services/leads"
@@ -45,7 +46,13 @@ export async function loadApplicantSheet(leadId: string): Promise<ApplicantSheet
     open && lead.data.status === "Applied" ? checkInRouteFor(supabase, leadId, staff.permissions) : null,
   ])
 
-  const text = step && step.kind !== "closed" ? nextStepText(step, formatDate) : null
+  const text =
+    step && step.kind !== "closed"
+      ? nextStepText(step, formatDate, {
+          canMarkAgreement: staff.permissions.includes("agreements.mark"),
+          schoolLevel: schoolLevelOf(lead.data.className),
+        })
+      : null
   const byHand = sibling && setByHandLine(sibling.fee)
   return {
     status: "ready",

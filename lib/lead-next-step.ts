@@ -1,4 +1,5 @@
 import type { Permission } from "@/lib/permissions"
+import type { SchoolLevel } from "@/lib/result-messages"
 import type { LeadFollowUps } from "@/lib/services/follow-ups"
 import type { InterviewFeeStatus, InterviewResult, LeadInterview, RegistrationKind } from "@/lib/services/interviews"
 import type { LeadFee } from "@/lib/services/lead-fees"
@@ -22,6 +23,8 @@ export type NextStepInput = {
     // Whole TZS still to pay while Not Paid.
     amount: number
     result: InterviewResult | null
+    // Whether the agreement of a Conditional result is marked signed.
+    agreementSigned: boolean
   } | null
   // Which interview registration the lead takes now: "retake" after a
   // reopening for a retaken interview. Null when none, or unreadable.
@@ -53,6 +56,8 @@ export type NextStep =
   | { kind: "collect-interview-fee"; amount: number }
   | { kind: "record-result" }
   | { kind: "send-result"; corrected: boolean }
+  // Conditional, and the head of school hasn't marked the agreement signed.
+  | { kind: "sign-agreement" }
   | { kind: "wait-for-follow-up"; dueOn: string }
   | { kind: "record-deposit" }
   | { kind: "collect-school-fee"; priority: SeatPriority }
@@ -81,6 +86,8 @@ export function nextStep(input: NextStepInput): NextStep {
     return { kind: "send-result", corrected: release.sent }
   }
 
+  // The family signs the agreement before paying the School fee.
+  if (interview.result === "Conditional" && !interview.agreementSigned) return { kind: "sign-agreement" }
   if (interview.result === "Failed") {
     return dueOn !== null ? { kind: "wait-for-follow-up", dueOn } : { kind: "schedule-follow-up", reason: "failed" }
   }
@@ -145,7 +152,12 @@ export async function readNextStepInput(
   return {
     status: lead.status,
     closure: lead.closure,
-    interview: current && { feeStatus: current.feeStatus, amount: current.amount, result: current.result },
+    interview: current && {
+      feeStatus: current.feeStatus,
+      amount: current.amount,
+      result: current.result,
+      agreementSigned: current.agreementSignedAt !== null,
+    },
     registration: registration.ok ? registration.data : null,
     enrolWithoutRetake: reopenings.ok && enrolsWithoutRetake(reopenings.data.decided),
     release: release.ok ? releaseInput(release.data, status?.ok && sentFor ? (status.data.get(sentFor) ?? null) : null) : null,
@@ -187,9 +199,18 @@ function tzs(amount: number) {
   return `TZS ${amount.toLocaleString("en-US")}`
 }
 
+// The English name of the head whose office a level's families go to.
+const HEAD_OF: Readonly<Record<SchoolLevel, string>> = { primary: "Head of Primary School", secondary: "Head of Secondary School" }
+
 // What the Next step card says for a step. `formatDate` turns YYYY-MM-DD into
-// the page's date format.
-export function nextStepText(step: Exclude<NextStep, { kind: "closed" }>, formatDate: (date: string) => string): NextStepText {
+// the page's date format. `viewer` words the agreement step: for staff who
+// may mark it, and the level that names the head; without it the step reads
+// as it does to everyone else.
+export function nextStepText(
+  step: Exclude<NextStep, { kind: "closed" }>,
+  formatDate: (date: string) => string,
+  viewer: { canMarkAgreement?: boolean; schoolLevel?: SchoolLevel } = {},
+): NextStepText {
   switch (step.kind) {
     case "enrolled":
       return {
@@ -250,6 +271,20 @@ export function nextStepText(step: Exclude<NextStep, { kind: "closed" }>, format
           : "The result is recorded and the fee is Paid, so it can go to the family now.",
         action: { label: "Send result", tab: "interview", anchor: "result-release", permission: "results.send" },
       }
+    case "sign-agreement": {
+      const head = viewer.schoolLevel ? HEAD_OF[viewer.schoolLevel] : "head of school"
+      return viewer.canMarkAgreement
+        ? {
+            title: "Get the agreement signed",
+            detail: `Conditional result: the family signs the agreement at the ${head}'s office, then pays the School fee.`,
+            action: { label: "Mark agreement signed", tab: "overview", anchor: "lead-next-step", permission: "agreements.mark" },
+          }
+        : {
+            title: "Waiting for the agreement",
+            detail: `The family signs at the ${head}'s office. The head marks it signed here; you can't.`,
+            action: null,
+          }
+    }
     case "wait-for-follow-up":
       return {
         title: `Follow up on ${formatDate(step.dueOn)}`,

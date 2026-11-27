@@ -10,9 +10,11 @@ import type { Result } from "./result"
 // permission itself and refuses a closed lead, so these calls only translate
 // what the database answers.
 
-export type InterviewResult = "Passed" | "Failed"
+// Conditional: below the pass mark, taken on an agreement the family signs
+// with the head of school before paying the School fee.
+export type InterviewResult = "Passed" | "Conditional" | "Failed"
 export type InterviewFeeStatus = "Paid" | "Not Paid"
-export type NextAction = "Complete enrollment" | "Contact the admissions office"
+export type NextAction = "Complete enrollment" | "Sign the agreement, then complete enrollment" | "Contact the admissions office"
 
 // ---------------------------------------------------------------------------
 // Registering a lead for interview.
@@ -166,6 +168,62 @@ export async function recordInterviewResult(
 }
 
 // ---------------------------------------------------------------------------
+// The agreement of a Conditional result.
+// ---------------------------------------------------------------------------
+
+export type MarkAgreementError =
+  // The interview's result isn't Conditional.
+  | "not_conditional"
+  // An earlier interview of a lead with a retaken one.
+  | "not_current"
+  | "lead_closed"
+  | "forbidden"
+  | "not_found"
+  | "unavailable"
+
+const MARK_REFUSALS: ReadonlySet<string> = new Set<MarkAgreementError>(["not_conditional", "not_current", "lead_closed"])
+
+// Marks the agreement of the lead's current, Conditional interview signed.
+// Marking one already marked changes nothing (alreadySigned). Needs
+// agreements.mark, which the heads of school hold.
+export async function markAgreementSigned(
+  supabase: SupabaseClient,
+  interviewId: string,
+): Promise<Result<{ alreadySigned: boolean }, MarkAgreementError>> {
+  const { data, error } = await supabase.rpc("mark_agreement_signed", { interview_id: interviewId })
+  if (error) {
+    if (error.message === "not_permitted" || error.code === "42501") return { ok: false, error: "forbidden" }
+    if (error.message === "not_found" || error.code === "22P02") return { ok: false, error: "not_found" }
+    if (MARK_REFUSALS.has(error.message)) return { ok: false, error: error.message as MarkAgreementError }
+    console.error("Could not mark an agreement signed", error)
+    return { ok: false, error: "unavailable" }
+  }
+  return { ok: true, data: { alreadySigned: (data as { already_signed: boolean }).already_signed === true } }
+}
+
+export type InterviewAgreement = {
+  signedAt: string
+  // The name of who marked it, or null for a staff record that can't be read.
+  signedBy: string | null
+}
+
+// When an interview's agreement was marked signed and by whom, or null while
+// it is not. Needs leads.view.
+export async function getInterviewAgreement(
+  supabase: SupabaseClient,
+  interviewId: string,
+): Promise<Result<InterviewAgreement | null, "forbidden" | "unavailable">> {
+  const { data, error } = await supabase.rpc("interview_agreement", { interview_id: interviewId })
+  if (error) {
+    if (error.message === "forbidden" || error.code === "42501") return { ok: false, error: "forbidden" }
+    console.error("Could not read an interview's agreement", error)
+    return { ok: false, error: "unavailable" }
+  }
+  const [row] = (data ?? []) as { signed_at: string; signed_by: string | null }[]
+  return { ok: true, data: row ? { signedAt: row.signed_at, signedBy: row.signed_by } : null }
+}
+
+// ---------------------------------------------------------------------------
 // Marking the interview fee Paid or Not Paid.
 // ---------------------------------------------------------------------------
 
@@ -244,6 +302,10 @@ export type LeadInterview = {
   // Whether the amount includes an Approved Referral code's discount. For a
   // locked amount, whether it was the discounted fee.
   discountApplied: boolean
+  // When the agreement of a Conditional result was marked signed; null while
+  // it is not. Kept if the result is corrected away from Conditional, so read
+  // it only with a Conditional result.
+  agreementSignedAt: string | null
 }
 
 export type LeadInterviewsError = "forbidden" | "not_found" | "unavailable"
@@ -259,10 +321,12 @@ type InterviewRow = {
   fee_status: InterviewFeeStatus
   locked_amount: number | null
   locked_discount_applied: boolean | null
+  agreement_signed_at: string | null
 }
 
 export function nextActionOf(result: InterviewResult | null): NextAction | null {
   if (result === "Passed") return "Complete enrollment"
+  if (result === "Conditional") return "Sign the agreement, then complete enrollment"
   if (result === "Failed") return "Contact the admissions office"
   return null
 }
@@ -276,7 +340,7 @@ export async function getLeadInterviews(
 ): Promise<Result<LeadInterview[], LeadInterviewsError>> {
   const { data, error } = await supabase
     .from("interviews")
-    .select("id, serial_number, serial_year, registered_at, interview_date, result, score, fee_status, locked_amount, locked_discount_applied")
+    .select("id, serial_number, serial_year, registered_at, interview_date, result, score, fee_status, locked_amount, locked_discount_applied, agreement_signed_at")
     .eq("lead", leadId)
     .order("registered_at", { ascending: false })
     .order("serial_number", { ascending: false })
@@ -325,6 +389,7 @@ export async function getLeadInterviews(
         feeStatus: row.fee_status,
         amount: fee.amount,
         discountApplied: fee.discountApplied,
+        agreementSignedAt: row.agreement_signed_at,
       }
     }),
   }

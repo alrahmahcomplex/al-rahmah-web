@@ -29,6 +29,10 @@ const TEMPLATES: Readonly<Record<string, string>> = {
   whatsapp_failed_v1: "WhatsApp, Failed (version 1)",
   sms_passed_v1: "SMS, Passed (version 1)",
   sms_failed_v1: "SMS, Failed (version 1)",
+  whatsapp_conditional_v1: "WhatsApp, Conditional (version 1)",
+  sms_conditional_v1: "SMS, Conditional (version 1)",
+  whatsapp_failed_v2: "WhatsApp, Failed (version 2)",
+  sms_failed_v2: "SMS, Failed (version 2)",
 }
 
 export function isResultRelease(entry: Pick<LeadHistoryEntry, "record" | "action">): boolean {

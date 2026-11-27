@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest"
 
-import { formatScore, renderResultMessage, type ResultMessageInput } from "@/lib/result-messages"
+import {
+  formatScore,
+  renderResultMessage,
+  RESULT_TEMPLATES,
+  SCHOOL_CONTACTS,
+  schoolLevelOf,
+  type ResultMessageInput,
+} from "@/lib/result-messages"
 
 // Invented values only. The office phone is passed as a value, as callers pass
 // OFFICE_PHONE, so these tests never import the server-only module.
@@ -20,7 +27,10 @@ function render(input: Partial<ResultMessageInput> & Pick<ResultMessageInput, "c
   return rendered.data
 }
 
-// The four templates as approved on #11, filled in by hand with VALUES.
+// The templates sent now, filled in by hand with VALUES: #11's Passed
+// messages, and the Conditional and Failed (version 2) messages the owner
+// approved on 2026-11-27. FORM 1 is secondary, so they give the secondary
+// school's number.
 const WHATSAPP_PASSED = `Assalaam Alaykum Mwanaidi Juma Hassan,
 
 *Hongera sana!* 🎉 Tuna furaha kubwa kukujulisha kwamba *Zawadi Salim* amefaulu usaili wa kujiunga na Al-Rahmah Schools.
@@ -46,7 +56,7 @@ Kwa masikitiko, safari hii Zawadi Salim hakufaulu usaili.
 - *Alama:* 78.5%
 - *Namba ya Udahili:* ADMSN-40719
 
-*Hatua inayofuata:* Tafadhali wasiliana na ofisi yetu ya udahili kupitia +255 673 526 644 ili tuzungumze pamoja kuhusu njia bora kwa Zawadi Salim.
+*Hatua inayofuata:* Tafadhali wasiliana na shule kupitia +255 677 990 033 ili tuzungumze pamoja kuhusu njia bora kwa Zawadi Salim.
 
 _Ofisi ya Udahili, Al-Rahmah Schools_`
 
@@ -54,16 +64,36 @@ const SMS_PASSED =
   "Assalaam Alaykum Mwanaidi Juma Hassan. Hongera! Zawadi Salim amefaulu usaili wa Al-Rahmah Schools kwa alama 78.5%. Namba ya Udahili: ADMSN-40719. Hatua inayofuata: kamilisha usajili kwa kulipa ada ofisini. - Ofisi ya Udahili"
 
 const SMS_FAILED =
-  "Assalaam Alaykum Mwanaidi Juma Hassan. Asante kwa kumleta Zawadi Salim kwenye usaili wa Al-Rahmah Schools. Kwa masikitiko, hakufaulu; alama 78.5%. Namba ya Udahili: ADMSN-40719. Tafadhali wasiliana na ofisi ya udahili: +255 673 526 644. - Ofisi ya Udahili"
+  "Assalaam Alaykum Mwanaidi Juma Hassan. Asante kwa kumleta Zawadi Salim kwenye usaili wa Al-Rahmah Schools. Kwa masikitiko, hakufaulu; alama 78.5%. Namba ya Udahili: ADMSN-40719. Tafadhali wasiliana na shule: +255 677 990 033. - Ofisi ya Udahili"
+
+const WHATSAPP_CONDITIONAL = `Assalaam Alaykum Mwanaidi Juma Hassan,
+
+Asante kwa kumleta *Zawadi Salim* kufanya usaili wa kujiunga na Al-Rahmah Schools.
+
+Zawadi Salim hakufikia alama za kufaulu usaili, lakini tunafurahi kukujulisha kwamba *tutampokea kwa masharti*.
+
+- *Matokeo:* Amepokelewa kwa masharti
+- *Alama:* 78.5%
+- *Darasa:* FORM 1, 2027
+- *Namba ya Udahili:* ADMSN-40719
+
+*Hatua inayofuata:* Fika ofisi ya Mkuu wa Shule ya Sekondari kusaini mkataba. Baada ya hapo, kamilisha usajili kwa kulipa ada ya shule. Kwa maswali piga +255 677 990 033.
+
+_Ofisi ya Udahili, Al-Rahmah Schools_`
+
+const SMS_CONDITIONAL =
+  "Assalaam Alaykum Mwanaidi Juma Hassan. Zawadi Salim hakufaulu usaili wa Al-Rahmah Schools (alama 78.5%), lakini tutampokea kwa masharti. Namba ya Udahili: ADMSN-40719. Hatua inayofuata: fika ofisi ya Mkuu wa Shule ya Sekondari kusaini mkataba, kisha ulipe ada. Simu: +255 677 990 033. - Ofisi ya Udahili"
 
 const EMOJI = /\p{Extended_Pictographic}/gu
 
 describe("renderResultMessage", () => {
   it.each([
     ["whatsapp", "passed", WHATSAPP_PASSED, "whatsapp_passed_v1"],
-    ["whatsapp", "failed", WHATSAPP_FAILED, "whatsapp_failed_v1"],
+    ["whatsapp", "conditional", WHATSAPP_CONDITIONAL, "whatsapp_conditional_v1"],
+    ["whatsapp", "failed", WHATSAPP_FAILED, "whatsapp_failed_v2"],
     ["sms", "passed", SMS_PASSED, "sms_passed_v1"],
-    ["sms", "failed", SMS_FAILED, "sms_failed_v1"],
+    ["sms", "conditional", SMS_CONDITIONAL, "sms_conditional_v1"],
+    ["sms", "failed", SMS_FAILED, "sms_failed_v2"],
   ] as const)("renders the approved %s %s message exactly", (channel, result, expected, templateId) => {
     const message = render({ channel, result })
     expect(message.text).toBe(expected)
@@ -81,10 +111,45 @@ describe("renderResultMessage", () => {
     )
   })
 
-  it("gives the office phone on Failed and never the class or year", () => {
+  it("sends a Conditional family to their level's head of school, with that school's number", () => {
+    for (const channel of ["whatsapp", "sms"] as const) {
+      const primary = render({ channel, result: "conditional", className: "KG 1" }).text
+      expect(primary).toContain("Mkuu wa Shule ya Msingi")
+      expect(primary).toContain("+255 677 330 099")
+      const secondary = render({ channel, result: "conditional", className: "FORM 4" }).text
+      expect(secondary).toContain("Mkuu wa Shule ya Sekondari")
+      expect(secondary).toContain("+255 677 990 033")
+      expect(secondary).not.toContain("+255 673 526 644")
+      expect(secondary).not.toMatch(/\{\w+\}/)
+    }
+  })
+
+  it("never writes the one-year rule or another school's exam into a Conditional message", () => {
+    for (const channel of ["whatsapp", "sms"] as const) {
+      const { text } = render({ channel, result: "conditional" })
+      expect(text.toLowerCase()).not.toMatch(/mwaka|mtihani|taifa|nyingine/)
+    }
+  })
+
+  it("keeps the earlier Failed texts for the releases that carried them", () => {
+    expect(RESULT_TEMPLATES.whatsapp_failed_v1).toContain("ofisi yetu ya udahili kupitia {office_phone}")
+    expect(RESULT_TEMPLATES.sms_failed_v1).toContain("ofisi ya udahili: {office_phone}")
+  })
+
+  it("treats FORM 1 to FORM 4 as secondary and every other class as primary", () => {
+    expect(["FORM 1", "FORM 2", "FORM 3", "FORM 4"].map(schoolLevelOf)).toEqual(Array(4).fill("secondary"))
+    for (const className of ["DAY CARE", "KG 1", "KG 2", "STD 1", "STD 7"]) expect(schoolLevelOf(className)).toBe("primary")
+    expect(SCHOOL_CONTACTS).toEqual({
+      primary: { phone: "+255 677 330 099", headOffice: "Mkuu wa Shule ya Msingi" },
+      secondary: { phone: "+255 677 990 033", headOffice: "Mkuu wa Shule ya Sekondari" },
+    })
+  })
+
+  it("gives the school's number by level on Failed, never the office phone, the class or the year", () => {
     for (const channel of ["whatsapp", "sms"] as const) {
       const { text } = render({ channel, result: "failed", className: "STD 5", enrollmentYear: 2028 })
-      expect(text).toContain("+255 673 526 644")
+      expect(text).toContain("+255 677 330 099")
+      expect(text).not.toContain("+255 673 526 644")
       expect(text).not.toContain("STD 5")
       expect(text).not.toContain("2028")
       expect(text).not.toMatch(/\{\w+\}/)
@@ -101,16 +166,20 @@ describe("renderResultMessage", () => {
   it("carries the Next action as fixed text", () => {
     expect(render({ channel: "whatsapp", result: "passed" }).text).toContain("*Hatua inayofuata:* Kamilisha usajili")
     expect(render({ channel: "whatsapp", result: "failed" }).text).toContain(
-      "*Hatua inayofuata:* Tafadhali wasiliana na ofisi yetu ya udahili",
+      "*Hatua inayofuata:* Tafadhali wasiliana na shule kupitia",
     )
+    expect(render({ channel: "whatsapp", result: "conditional" }).text).toContain("*Hatua inayofuata:* Fika ofisi ya Mkuu wa Shule")
     expect(render({ channel: "sms", result: "passed" }).text).toContain("Hatua inayofuata: kamilisha usajili")
   })
 
   it("puts the only emoji, one 🎉, on the WhatsApp Passed message", () => {
     expect(render({ channel: "whatsapp", result: "passed" }).text.match(EMOJI)).toEqual(["🎉"])
-    expect(render({ channel: "whatsapp", result: "failed" }).text.match(EMOJI)).toBeNull()
-    expect(render({ channel: "sms", result: "passed" }).text.match(EMOJI)).toBeNull()
-    expect(render({ channel: "sms", result: "failed" }).text.match(EMOJI)).toBeNull()
+    for (const result of ["conditional", "failed"] as const) {
+      expect(render({ channel: "whatsapp", result }).text.match(EMOJI)).toBeNull()
+    }
+    for (const result of ["passed", "conditional", "failed"] as const) {
+      expect(render({ channel: "sms", result }).text.match(EMOJI)).toBeNull()
+    }
   })
 
   it("fills a name with $ characters literally", () => {
@@ -132,9 +201,30 @@ describe("renderResultMessage", () => {
 
   it("keeps the WhatsApp message under 1,000 characters with 100-character names", () => {
     const longName = "M".repeat(100)
-    for (const result of ["passed", "failed"] as const) {
+    for (const result of ["passed", "conditional", "failed"] as const) {
       const { text } = render({ channel: "whatsapp", result, parentName: longName, studentName: longName })
       expect(text.length).toBeLessThan(1000)
+    }
+  })
+
+  // result_message_fits, which release_result asks before it records a
+  // release, allows 520 characters for everything but the names and counts
+  // the student's name at most three times.
+  it("keeps every WhatsApp message within what release_result allows for", () => {
+    for (const result of ["passed", "conditional", "failed"] as const) {
+      for (const className of ["DAY CARE", "FORM 4"]) {
+        const { text, templateId } = render({
+          channel: "whatsapp",
+          result,
+          parentName: "",
+          studentName: "",
+          score: 99.5,
+          admissionNumber: "ADMSN-999999",
+          className,
+        })
+        expect(text.length, `${result} ${className}`).toBeLessThanOrEqual(520)
+        expect(RESULT_TEMPLATES[templateId].split("{student_name}").length - 1, result).toBeLessThanOrEqual(3)
+      }
     }
   })
 
@@ -157,10 +247,14 @@ describe("renderResultMessage", () => {
       expect(message.gsm7).toBe(true)
       expect(message.segments).toBeLessThanOrEqual(2)
     }
+    // The Conditional text names the head's office, so long names can take a third.
+    const conditional = render({ channel: "sms", result: "conditional", parentName: longName, studentName: longName })
+    if (conditional.channel !== "sms") throw new Error("expected an SMS")
+    expect(conditional).toMatchObject({ gsm7: true, segments: 3 })
   })
 
   it("counts the approved SMS texts as GSM-7 in two segments", () => {
-    for (const result of ["passed", "failed"] as const) {
+    for (const result of ["passed", "conditional", "failed"] as const) {
       const message = render({ channel: "sms", result })
       if (message.channel !== "sms") throw new Error("expected an SMS")
       expect(message).toMatchObject({ gsm7: true, segments: 2 })

@@ -64,7 +64,10 @@ Once payment is **Paid**, staff may release the result through a **Send through 
 The result message is written in Swahili, uses warm and expressive language, congratulates the family when the result is **Passed**, and responds empathetically when the result is **Failed**. The message is structured for WhatsApp readability using appropriate bold, italics, and bullets.
 
 **Result message**:
-The prepared Swahili message that releases an interview result, one for **Passed** and one for **Failed**. It greets the parent or guardian it is sent to by name and gives the student's name, interview result, percentage score, **Admission Number** and **Next action**; the **Passed** message also gives the class and enrollment year, and the **Failed** message gives the admissions office phone number. It is signed by the admissions office, never by a staff member. Its wording is fixed: staff release it as prepared and cannot edit it in the system. It never mentions a retaken interview, which only a reopening can lead to.
+The prepared Swahili message that releases an interview result, one for each of **Passed**, **Conditional** and **Failed**. It greets the parent or guardian it is sent to by name and gives the student's name, interview result, percentage score, **Admission Number** and **Next action**. The **Passed** and **Conditional** messages also give the class and enrollment year. The **Conditional** message sends the family to sign the **Conditional agreement** at the office of their level's head of school (the Head of Primary School for Day Care to STD 7, the Head of Secondary School for FORM 1 to FORM 4), then to pay the School fee. The **Conditional** and **Failed** messages give the **School phone** of the student's level. It is signed by the admissions office, never by a staff member. Its wording is fixed: staff release it as prepared and cannot edit it in the system. It never mentions a retaken interview, which only a reopening can lead to, and the **Conditional** message never states the agreement's terms: the head of school explains them in person or by phone, never in writing.
+
+**School phone**:
+The school's own number for a level, given in the **Conditional** and **Failed** result messages instead of the admissions office number: +255 677 330 099 for primary (Day Care to STD 7) and +255 677 990 033 for secondary (FORM 1 to FORM 4).
 
 **Send SMS** uses a separate, shorter plain-text version of each message with no formatting or emoji, so it fits in two SMS segments.
 
@@ -77,9 +80,12 @@ Staff may send a result again, for a parent who lost the message or changed numb
 **Next action**:
 A required selection from a fixed list that tells the parent or guardian what to do after receiving the interview result. It is included in the prepared Swahili result message.
 
-The initial choices are **Complete enrollment** and **Contact the admissions office**.
+The choices are **Complete enrollment**, **Sign the agreement, then complete enrollment** and **Contact the admissions office**.
 
-The system restricts the next action automatically: **Passed** leads to **Complete enrollment**, while **Failed** leads to **Contact the admissions office**.
+The system restricts the next action automatically: **Passed** leads to **Complete enrollment**, **Conditional** to **Sign the agreement, then complete enrollment**, and **Failed** to **Contact the admissions office**.
+
+**Conditional agreement**:
+The agreement a family signs with the head of school when the student's interview result is **Conditional**. The heads of school hold the agreements, not the admissions office. A head marks it signed on the student's record with **Mark agreement signed** (`agreements.mark`); the record keeps when and by whom. Until it is marked, the lead's Next step waits for it, and the Accountant's payment form warns that it isn't marked yet; the warning never refuses a payment. A mark is never undone, and a retaken interview needs its own.
 
 **School fee**:
 The annual fee a student owes for their **Enrollment year**, taken from the **Fee schedule** for their class and **Day or boarding** choice, less any **School-fee discount**. It is paid in three instalments: 40%, 40% and 20% of the discounted fee, each with its due date. This is separate from the interview fee.
@@ -91,7 +97,7 @@ The school's fees for one **Enrollment year**. It groups the classes into fee ba
 Whether the student will be a day scholar or a boarder. Every lead records it; the **Admission form** and staff registration both ask it, and staff may correct it.
 
 **School-fee payment**:
-Money the Accountant records against a student's **School fee**, with its amount, payment type, payment date, and the accountant who entered it. The payment types are **Full payment**, **Initial deposit**, **First instalment**, **Second instalment** and **Third instalment**, plus **Fee waived**, which carries no amount and may be recorded only while the lead has an approved 100% **School-fee discount**. Every other payment is above zero. School-fee payments may be recorded only for a lead whose current interview result is **Passed**, or a reopened lead the Admissions Manager approved to enrol without a retaken interview.
+Money the Accountant records against a student's **School fee**, with its amount, payment type, payment date, and the accountant who entered it. The payment types are **Full payment**, **Initial deposit**, **First instalment**, **Second instalment** and **Third instalment**, plus **Fee waived**, which carries no amount and may be recorded only while the lead has an approved 100% **School-fee discount**. Every other payment is above zero. School-fee payments may be recorded only for a lead whose current interview result is **Passed** or **Conditional**, or a reopened lead the Admissions Manager approved to enrol without a retaken interview.
 
 **Initial deposit**:
 An advance a parent or guardian pays, at least the schedule's minimum, to hold the child's place before paying the first instalment. It counts toward the **School fee**. Refunding a deposit is outside the system.
@@ -208,6 +214,7 @@ The permissions are:
 | `discount_codes.manage` | Setting the **Standard discount** and each Marketing Agent's own interview discount, and creating, editing, pausing, resuming and ending **Promo codes**. Needs `leads.view`. |
 | `leads.import` | Importing applicants from a CSV. Needs `leads.create`. |
 | `leads.export` | Exporting applicants with their parents' names and phone numbers. Needs `leads.view`. |
+| `agreements.mark` | Marking a **Conditional agreement** signed. Meant for the heads of school, who hold the agreements; they need `leads.view` too to open the record. |
 | `audit.view` | Reading the audit history: every lead's History page, the Staff and roles history and the system-wide **Audit** screen. Held only by the **Super Admin**; no role may be given it. |
 
 No role holds `reports.view`, `discount_codes.manage` or `leads.export` without `leads.view`, `leads.import` without `leads.create`, or `visits.record` without `payments.view`. The database keeps each pair together on every write and records the implied change in the same audit entry as the role change.
@@ -320,15 +327,15 @@ Searching by exact **Admission Number** always finds the lead, whatever its stat
 
 ## Reporting
 
-The dashboard reports **Visited leads** and **Interviewed leads**, each filterable by date, week, month, and year. It also reports **Passed interviews**, **Failed interviews**, **Enrolled students**, and **Leads by enrollment class**.
+The dashboard reports **Visited leads** and **Interviewed leads**, each filterable by date, week, month, and year. It also reports **Passed interviews**, **Conditional interviews**, **Failed interviews**, **Enrolled students**, and **Leads by enrollment class**.
 
 Each dashboard metric opens on **All time** for the **Current admission year** by default, with a filter icon and dropdowns allowing the user to choose a date, week, month, or year reporting period and any **Enrollment year** (or **All years**).
 
 **Leads by enrollment class** shows the number of leads in each fixed class for the selected reporting period.
 
-The reporting period says when something happened, in calendar terms and Tanzania time; a week starts on Monday. Each metric counts by its own date: **Visited leads** by **Visit date**, **Interviewed leads**, **Passed interviews** and **Failed interviews** by interview date, **Enrolled students** by the date **Enrolled** was triggered, and **Leads by enrollment class** by the date the lead was created. A separate **Enrollment year** filter on every metric says which intake is counted, because one intake's visits run into the next's.
+The reporting period says when something happened, in calendar terms and Tanzania time; a week starts on Monday. Each metric counts by its own date: **Visited leads** by **Visit date**, **Interviewed leads**, **Passed interviews**, **Conditional interviews** and **Failed interviews** by interview date, **Enrolled students** by the date **Enrolled** was triggered, and **Leads by enrollment class** by the date the lead was created. A separate **Enrollment year** filter on every metric says which intake is counted, because one intake's visits run into the next's.
 
-**Interviewed leads** counts children: a child who sat a retaken interview in the same period counts once. **Passed interviews** and **Failed interviews** count sittings, so a retake counts as an interview of its own. An interview counts only once its result is recorded, and whether its fee is paid makes no difference.
+**Interviewed leads** counts children: a child who sat a retaken interview in the same period counts once. **Passed interviews**, **Conditional interviews** and **Failed interviews** count sittings, so a retake counts as an interview of its own. An interview counts only once its result is recorded, and whether its fee is paid makes no difference.
 
 **Enrolled students** counts the leads that are **Enrolled** now, by the date **Enrolled** was triggered as the lead's School fee records it. A lead that went back below the line through a payment adjustment or a fee change, or was **Declined** after it was Enrolled, is left out. An Enrolled lead marked **Inactive** or **Archived** still counts, since a closure mark isn't a status. A lead enrolled on the **Academic-year start** counts on the start date, and an adjustment that moves the trigger date moves the lead to that date's period.
 
@@ -365,7 +372,7 @@ Every payment adjustment requires a reason selected from a fixed list explaining
 The fixed adjustment reasons are **Wrong amount**, **Wrong payment type**, **Wrong payment date**, **Duplicate entry**, and **Data-entry correction**. No general **Other** option is available.
 
 **Interview result**:
-The outcome of an admission interview. It must be either **Passed** or **Failed**.
+The outcome of an admission interview: **Passed**, **Conditional** or **Failed**. **Conditional** means the student is below the pass mark but the school takes them on a **Conditional agreement** the family signs with the head of school before paying the School fee. A **Conditional** result may pay and enrol as **Passed** does.
 
 **Interview score**:
 The required score assigned to every lead with **Interviewed** status. It is recorded as a percentage alongside the interview result.

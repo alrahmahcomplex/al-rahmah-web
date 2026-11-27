@@ -9,8 +9,8 @@ import type { Result } from "./result"
 // session, so row-level security decides what they see: staff with
 // leads.view see every registration, anyone else sees none.
 
-// Which results the list shows: no result yet, Passed or Failed.
-export const INTERVIEW_RESULT_FILTERS = ["none", "Passed", "Failed"] as const
+// Which results the list shows: no result yet, Passed, Conditional or Failed.
+export const INTERVIEW_RESULT_FILTERS = ["none", "Passed", "Conditional", "Failed"] as const
 export type InterviewResultFilter = (typeof INTERVIEW_RESULT_FILTERS)[number]
 
 export const INTERVIEW_FEE_FILTERS = ["Paid", "Not Paid"] as const satisfies readonly InterviewFeeStatus[]

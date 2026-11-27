@@ -17,7 +17,7 @@ const LOST_REQUEST: RecordOutcome = {
   message: "The result could not be confirmed. Check your connection, reload the page and see whether it was saved.",
 }
 
-const RESULTS: readonly InterviewResult[] = ["Passed", "Failed"]
+const RESULTS: readonly InterviewResult[] = ["Passed", "Conditional", "Failed"]
 
 export type RecordedInterview = {
   id: string
@@ -150,13 +150,16 @@ function ResultForm({
         <ChoiceTiles
           name={`interview-result-${interview.id}`}
           legend={<span className="lr-label">Result</span>}
-          layout="two"
+          layout="three"
           required
           options={RESULTS.map((choice) => ({ value: choice, label: choice }))}
           value={result}
           onChange={(choice) => setResult(choice as InterviewResult)}
         />
       </div>
+      {result === "Conditional" && (
+        <Note tone="wait">Below the pass mark, taken on an agreement. The family signs it before paying the School fee.</Note>
+      )}
       <Field label="Score (%)" hint="From 0 to 100, with one decimal place at most.">
         {({ id, describedBy }) => (
           <Input

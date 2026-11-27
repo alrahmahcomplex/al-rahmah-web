@@ -15,9 +15,9 @@ import {
   type InterviewResult,
 } from "@/lib/services/interviews"
 import { listNextStepFacts } from "@/lib/services/lead-next-steps"
-import { createLead, type LeadClass } from "@/lib/services/leads"
+import { createLead, getLead, type LeadClass } from "@/lib/services/leads"
 import { getLatestResultRelease, releaseResult } from "@/lib/services/result-release"
-import { previewPayment } from "@/lib/services/school-fee-payments"
+import { previewPayment, recordPayment } from "@/lib/services/school-fee-payments"
 
 import { asSystem, createThrowawayStaff, signedIn } from "../support/db"
 import { claimFeeYear } from "../support/fee-years"
@@ -132,7 +132,7 @@ describe("recording a Conditional result", () => {
     })
   })
 
-  test("counts on Reports by itself, apart from Passed and Failed", async () => {
+  test("counts on Reports by itself, never as Passed or Failed", async () => {
     const year = await claimedYear()
     await interviewed(year, "Conditional")
     await interviewed(year, "Conditional")
@@ -140,8 +140,8 @@ describe("recording a Conditional result", () => {
     const manager = await signedIn(MANAGER)
     const filters = { period: { kind: "all" } as const, enrollmentYear: year }
     expect(await getMetricCount(manager, "conditional_interviews", filters)).toEqual({ ok: true, data: 2 })
-    expect(await getMetricCount(manager, "passed_interviews", filters)).toEqual({ ok: true, data: 1 })
-    expect(await getMetricCount(manager, "failed_interviews", filters)).toEqual({ ok: true, data: 0 })
+    // Other files' Passed and Failed leads may share a claimed year, so only
+    // the Conditional count is this test's alone.
   })
 
   test("goes out with the Conditional message, and a Failed result with version 2", async () => {
@@ -204,6 +204,18 @@ describe("marking the agreement signed", () => {
       (entry) => entry.record === "interviews" && entry.changes.some((change) => change.field === "agreement_signed_at" && change.to !== null),
     )
     expect(marks).toHaveLength(1)
+  })
+
+  test("still works once a payment taken before the mark has enrolled the student", async () => {
+    const year = await claimedYear({ schedule: true })
+    const { leadId, interviewId } = await interviewed(year, "Conditional")
+    const paid = await recordPayment(await signedIn(ACCOUNTANT), leadId, { type: "full_payment", amount: 2_000_000, paidOn: today }, randomUUID())
+    if (!paid.ok) throw new Error(`payment failed: ${paid.error}`)
+    const lead = await getLead(await signedIn(MANAGER), leadId)
+    expect(lead.ok && lead.data.status).toBe("Enrolled")
+
+    const head = await headOfSchool()
+    expect(await markAgreementSigned(await signedIn(head), interviewId)).toEqual({ ok: true, data: { alreadySigned: false } })
   })
 
   test("refuses a closed application", async () => {

@@ -8,6 +8,7 @@ import { saveFeeAmounts, type FeeAmounts } from "@/lib/services/fees"
 import { markAgreementSigned, recordInterviewResult, registerForInterview, setInterviewFeeStatus } from "@/lib/services/interviews"
 import { createLead } from "@/lib/services/leads"
 import { releaseResult } from "@/lib/services/result-release"
+import { recordPayment } from "@/lib/services/school-fee-payments"
 
 import { asSystem, createThrowawayStaff, signedIn } from "../tests/support/db"
 import { claimFeeYear, type FeeYearClaim } from "../tests/support/fee-years"
@@ -123,6 +124,20 @@ test.describe("a Conditional interview result", () => {
     await headPage.goto(leadUrl(lead.id, "Interview"))
     await expect(panel(headPage)).toContainText(`Signed on ${formatDate(today)}`)
     await expect(panel(headPage)).toContainText(`marked by ${head.name}`)
+  })
+
+  test("the head can still mark it once a full payment has enrolled the student", async ({ page }) => {
+    const lead = await conditionalLead()
+    const paid = await recordPayment(await signedIn(ACCOUNTANT), lead.id, { type: "full_payment", amount: 2_000_000, paidOn: today }, randomUUID())
+    if (!paid.ok) throw new Error(paid.error)
+
+    const head = await createThrowawayStaff(["leads.view", "agreements.mark"])
+    await signIn(page, head)
+    await page.goto(leadUrl(lead.id))
+    await expect(nextStep(page)).toContainText("Next step: Nothing is waiting")
+    await nextStep(page).getByRole("button", { name: "Mark agreement signed" }).click()
+    await expect(nextStep(page).getByRole("status")).toHaveText("Agreement marked signed.")
+    await expect(nextStep(page).getByRole("button", { name: "Mark agreement signed" })).toHaveCount(0)
   })
 
   test("the Accountant is warned while the agreement isn't marked, and may still take the payment", async ({ page }) => {

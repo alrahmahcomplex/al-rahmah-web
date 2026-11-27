@@ -14,11 +14,22 @@ const LOST_REQUEST: AgreementOutcome = {
 }
 
 // Mark agreement signed, in the lead's Next step card, for the heads of
-// school (prototype v7). `interviewId` is the Conditional interview whose
-// agreement is unmarked while that is the step, else null. Mounted for
-// everyone who may mark agreements, so its confirmation outlasts the refresh
-// that moves the step on to the School fee.
-export function MarkAgreement({ leadId, interviewId }: { leadId: string; interviewId: string | null }) {
+// school (prototype v7). `interviewId` is the current interview while it is
+// Conditional with its agreement unmarked, else null. `offer` is "step" when
+// marking is the Next step, and gets the step's orange button; "secondary"
+// when something else comes first, such as an enrolment by a payment taken
+// before the mark, and gets a ghost button beside it, as Record visit does.
+// Mounted for everyone who may mark agreements, so its confirmation outlasts
+// the refresh that moves the step on.
+export function MarkAgreement({
+  leadId,
+  interviewId,
+  offer,
+}: {
+  leadId: string
+  interviewId: string | null
+  offer: "step" | "secondary"
+}) {
   const [outcome, setOutcome] = useState<AgreementOutcome | null>(null)
   const [pending, startTransition] = useTransition()
 
@@ -44,7 +55,7 @@ export function MarkAgreement({ leadId, interviewId }: { leadId: string; intervi
 
   return (
     <>
-      <Button variant="go" chevron onClick={mark} pending={pending}>
+      <Button variant={offer === "step" ? "go" : "ghost"} chevron={offer === "step"} onClick={mark} pending={pending}>
         {pending ? "Marking…" : "Mark agreement signed"}
       </Button>
       {outcome?.status === "refused" && (

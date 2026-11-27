@@ -35,10 +35,13 @@ export async function NextStepCard({
   const mayAct = action !== null && staff.permissions.includes(action.permission)
   const inPlace = step?.kind === "record-visit" || step?.kind === "sign-agreement"
   const link = action !== null && !inPlace && (mayAct || action.tab !== tab)
-  // The Conditional interview whose agreement waits, read only for a head
-  // of school on that step.
-  const agreementInterview =
-    canMarkAgreement && step?.kind === "sign-agreement" ? await readInterviews(lead.id).then((read) => (read.ok ? (read.data[0]?.id ?? null) : null)) : null
+  // The current interview while it is Conditional with its agreement
+  // unmarked, read only for a head of school. Its button is the step's own
+  // while that is the step, and a secondary one when something else comes
+  // first, such as a due follow-up or an enrolment by a payment taken before
+  // the mark: the mark never stops a payment, so it can come after one.
+  const current = canMarkAgreement ? await readInterviews(lead.id).then((read) => (read.ok ? (read.data[0] ?? null) : null)) : null
+  const agreementInterview = current?.result === "Conditional" && current.agreementSignedAt === null ? current.id : null
 
   return (
     <section
@@ -62,7 +65,14 @@ export async function NextStepCard({
           {mayAct ? action.label : `Open ${LEAD_TABS.find((each) => each.key === action.tab)?.label}`}
         </ButtonLink>
       )}
-      {canMarkAgreement && <MarkAgreement key={lead.id} leadId={lead.id} interviewId={agreementInterview} />}
+      {canMarkAgreement && (
+        <MarkAgreement
+          key={lead.id}
+          leadId={lead.id}
+          interviewId={agreementInterview}
+          offer={step?.kind === "sign-agreement" ? "step" : "secondary"}
+        />
+      )}
       {staff.permissions.includes("visits.record") && (
         // Mounted for everyone who may record visits, so its confirmation
         // outlasts the refresh that moves the step on. It offers its button

@@ -94,5 +94,13 @@ describe("llms.txt", () => {
     expect(text).toContain("The Kit First Rule")
     expect(text).toContain("--gf-orange")
     expect(text).toContain("https://design.alrahmahcomplex.or.tz/llms.txt?key=<the same password>&part=<part id>")
+    expect(text).toContain("the MCP server at https://design.alrahmahcomplex.or.tz/mcp")
+  })
+
+  it("off design.alrahmahcomplex.or.tz, names the addresses that answer there", async () => {
+    const text = await llmsText("http://localhost:3100")
+    expect(text).toContain("http://localhost:3100/design-api/llms?key=<the same password>&part=<part id>")
+    expect(text).toContain("the MCP server at http://localhost:3100/design-api/mcp")
+    expect(text).not.toContain("localhost:3100/llms.txt")
   })
 })

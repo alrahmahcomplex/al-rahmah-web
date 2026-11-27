@@ -6,6 +6,7 @@ import { join } from "node:path"
 import { Fragment, isValidElement, type ReactNode } from "react"
 
 import { ICONS, type IconName } from "@/components/icons/registry"
+import { DESIGN_ORIGIN } from "@/lib/site-hosts"
 
 import { PART_GROUPS, PARTS, findPart, type Part } from "./catalog"
 
@@ -152,6 +153,17 @@ export function iconsText(name?: string): string {
   ].join("\n")
 }
 
+/**
+ * Where llms.txt and the MCP server answer for a request from `origin`:
+ * design.'s short addresses there, the app's /design-api/ ones on every other
+ * host (localhost, Previews), which has no short addresses.
+ */
+export function designAddresses(origin: string): { llms: string; mcp: string } {
+  return origin === DESIGN_ORIGIN
+    ? { llms: `${DESIGN_ORIGIN}/llms.txt`, mcp: `${DESIGN_ORIGIN}/mcp` }
+    : { llms: `${origin}/design-api/llms`, mcp: `${origin}/design-api/mcp` }
+}
+
 /** The whole design system as one plain-text page (llms.txt). */
 export async function llmsText(origin: string): Promise<string> {
   const [design, tokens] = await Promise.all([repoFile("DESIGN.md"), repoFile("app/tokens.css")])
@@ -164,7 +176,7 @@ export async function llmsText(origin: string): Promise<string> {
     "- Build every screen only from these parts. Import them; never redraw a part, an icon or the logo.",
     "- A part a screen needs that is not here is added to the kit first, then used (The Kit First Rule below).",
     "- Every page sits in the shell: the white frame, the top bar, the sidebar and the outlined stage (part: shell).",
-    `- For one part's code and rules, open ${origin}/llms.txt?key=<the same password>&part=<part id>, or ask the MCP server at ${origin}/mcp (get_part).`,
+    `- For one part's code and rules, open ${designAddresses(origin).llms}?key=<the same password>&part=<part id>, or ask the MCP server at ${designAddresses(origin).mcp} (get_part).`,
     "",
     "# Parts",
     "",

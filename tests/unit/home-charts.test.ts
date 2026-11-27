@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { classesTab, monthsTab, niceScale, RING, ringSlices, seatsTabOf, slicePath, sourcesTab, statusTab, type SeatsTabClass } from "@/app/staff/_home/charts"
+import { classesTab, monthLine, monthsTab, niceScale, RING, ringSlices, seatsTabOf, slicePath, sourcesTab, statusTab, type SeatsTabClass } from "@/app/staff/_home/charts"
 import { APPLICATION_SOURCES, type ApplicationSource, type HomeChartCounts } from "@/lib/services/home-charts"
 import { LEAD_CLASSES, LEAD_STATUSES, type LeadClass, type LeadStatus } from "@/lib/services/leads"
 
@@ -214,9 +214,60 @@ describe("the Sources ring", () => {
     expect(large).toBeGreaterThan(small * 10)
   })
 
+  // The large-arc flags of a slice's outer and inner edges.
+  const flags = (d: string) => [...d.matchAll(/A[\d.]+,[\d.]+ 0 (\d) [01] /g)].map((m) => Number(m[1]))
+
   it("draws a slice as one closed ring piece inside the ring's width", () => {
     const d = slicePath({ index: 0, start: 0, end: Math.PI / 2 })
     expect(d).toMatch(/^M[\d.]+,[\d.]+ A[\d.]+,[\d.]+ 0 0 1 [\d.]+,[\d.]+ L[\d.]+,[\d.]+ A[\d.]+,[\d.]+ 0 0 0 [\d.]+,[\d.]+ Z$/)
-    expect(slicePath({ index: 0, start: 0, end: 1.5 * Math.PI })).toContain(" 0 1 1 ")
+    expect(flags(slicePath({ index: 0, start: 0, end: 1.5 * Math.PI }))).toEqual([1, 1])
+  })
+
+  it("gives each edge of a slice just over half the ring its own large-arc flag", () => {
+    // 53 of 100: the outer edge spans just over π, the inner, pulled in further by its corners, just under.
+    const [big] = ringSlices([53, 47, 0, 0]).slices
+    expect(flags(slicePath(big))).toEqual([1, 0])
+  })
+})
+
+describe("the Months line", () => {
+  const H = 220
+  // Twelve months, evenly along a 600-wide plot.
+  const at = (values: number[]) => values.map((value, i) => [((i + 0.5) / 12) * 600, H - value * 10] as const)
+  const moves = (d: string) => (d.match(/M/g) ?? []).length
+  const pieces = (d: string) => (d.match(/C/g) ?? []).length
+
+  it("is one solid line with its glow when no month is running", () => {
+    const line = monthLine(at([1, 2, 3, 4]), -1, H)!
+    expect(line.dashed).toBeNull()
+    expect([moves(line.solid), pieces(line.solid)]).toEqual([1, 3])
+    expect(pieces(line.area)).toBe(3)
+  })
+
+  it("runs dashed into the running month when it ends the line, the glow stopping before it", () => {
+    const line = monthLine(at([1, 2, 3, 4]), 3, H)!
+    expect([moves(line.solid), pieces(line.solid)]).toEqual([1, 2])
+    expect(line.dashed).toMatch(/^M[\d.]+,[\d.]+ C/)
+    expect(pieces(line.dashed!)).toBe(1)
+    expect(pieces(line.area)).toBe(2)
+  })
+
+  it("runs dashed into the running month in the middle of the line too, solid again after it", () => {
+    // February running, with December's applicants already in: the line runs through December.
+    const xy = at([2, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5])
+    const line = monthLine(xy, 1, H)!
+    // The dashed piece runs from January into February.
+    expect(line.dashed!.startsWith(`M${Math.round(xy[0][0] * 10) / 10},`)).toBe(true)
+    expect(line.dashed!.endsWith(` ${Math.round(xy[1][0] * 10) / 10},${Math.round(xy[1][1] * 10) / 10}`)).toBe(true)
+    expect(pieces(line.dashed!)).toBe(1)
+    // The solid line starts again at February and runs on through December: 10 pieces.
+    expect(line.solid.startsWith(`M${Math.round(xy[1][0] * 10) / 10},`)).toBe(true)
+    expect([moves(line.solid), pieces(line.solid)]).toEqual([1, 10])
+    // The glow lies under the whole line, as the running month is not its end.
+    expect(pieces(line.area)).toBe(11)
+  })
+
+  it("is nothing to draw for a single month", () => {
+    expect(monthLine(at([3]), 0, H)).toBeNull()
   })
 })

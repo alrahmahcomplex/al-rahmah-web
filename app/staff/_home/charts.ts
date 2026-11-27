@@ -1,6 +1,8 @@
 import type { ApplicationSource, HomeChartCounts } from "@/lib/services/home-charts"
 import type { LeadClass } from "@/lib/services/leads"
 
+import { smoothLine } from "./spark"
+
 // Home's chart card (#405), as the owner's chart-card prototype
 // (24tWDhYZ28Qs6CsJowG1h9, approved 2026-11-27) draws it: what each tab
 // draws, worked out from the counts. No sentence sits over a chart; each
@@ -204,8 +206,37 @@ export function slicePath({ start, end }: RingSlice): string {
   const o1 = a1 - RING.corner / OUTER
   const i0 = a0 + RING.corner / INNER
   const i1 = a1 - RING.corner / INNER
-  const large = o1 - o0 > Math.PI ? 1 : 0
-  return `M${at(OUTER, o0)} A${OUTER},${OUTER} 0 ${large} 1 ${at(OUTER, o1)} L${at(INNER, i1)} A${INNER},${INNER} 0 ${large} 0 ${at(INNER, i0)} Z`
+  // Each edge spans its own angle, so each takes its own large-arc flag: a slice just over half the ring can have one edge past π and the other not.
+  const outerLarge = o1 - o0 > Math.PI ? 1 : 0
+  const innerLarge = i1 - i0 > Math.PI ? 1 : 0
+  return `M${at(OUTER, o0)} A${OUTER},${OUTER} 0 ${outerLarge} 1 ${at(OUTER, o1)} L${at(INNER, i1)} A${INNER},${INNER} 0 ${innerLarge} 0 ${at(INNER, i0)} Z`
+}
+
+/**
+ * Months' line through its points, January first, split for drawing: the
+ * solid line, the piece into the month still running (dashed), and the
+ * glow under the line. The running month's piece is dashed wherever it
+ * falls, also when later months already have applicants; the glow stops
+ * before it only when it ends the line. `part` is the running month's
+ * index among the points, or -1.
+ */
+export function monthLine(points: readonly (readonly [number, number])[], part: number, height: number): { solid: string; dashed: string | null; area: string } | null {
+  if (points.length < 2) return null
+  const line = smoothLine(points)
+  // smoothLine's pieces: piece k runs from point k to point k + 1.
+  const pieces = line.split(" C").slice(1).map((piece) => `C${piece}`)
+  const start = line.slice(0, line.indexOf(" C"))
+  const ends = [start.slice(1), ...pieces.map((piece) => piece.slice(piece.lastIndexOf(" ") + 1))]
+  const into = part > 0 ? part - 1 : -1
+  let solid = ""
+  pieces.forEach((piece, k) => {
+    if (k === into) return
+    solid += solid === "" || k === into + 1 ? `${solid === "" ? "" : " "}M${ends[k]} ${piece}` : ` ${piece}`
+  })
+  const last = into === pieces.length - 1
+  const glow = last ? pieces.slice(0, -1) : pieces
+  const area = glow.length > 0 ? `${start} ${glow.join(" ")} L${ends[glow.length].split(",")[0]},${height} L${ends[0].split(",")[0]},${height} Z` : ""
+  return { solid, dashed: into >= 0 ? `M${ends[into]} ${pieces[into]}` : null, area }
 }
 
 /** A round top for the scale and the step between its lines, at most five steps. */

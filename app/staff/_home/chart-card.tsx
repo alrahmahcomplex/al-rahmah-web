@@ -5,8 +5,7 @@ import { useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties
 
 import { Card, Select, TabSwitch } from "@/components/kit"
 
-import { niceScale, RING, ringSlices, slicePath, type ChartPoint, type ChartTab, type ClassesTab, type MonthsTab, type SeatsTab, type SourcesTab, type StatusTab } from "./charts"
-import { smoothLine } from "./spark"
+import { monthLine, niceScale, RING, ringSlices, slicePath, type ChartPoint, type ChartTab, type ClassesTab, type MonthsTab, type SeatsTab, type SourcesTab, type StatusTab } from "./charts"
 import "./chart.css"
 
 const TAB_NAMES: Record<ChartTab["kind"], string> = { classes: "Classes", months: "Months", seats: "Seats", sources: "Sources", status: "Status" }
@@ -251,9 +250,9 @@ function ClassColumns({ tab, mark }: { tab: ClassesTab; mark: Mark }) {
 
 /**
  * Months: a smooth line with a soft glow under it, January to the last month
- * drawn, a dot a month. The month still running is a lighter dot, and when
- * it ends the line, the line runs into it dashed. The months after are left
- * empty.
+ * drawn, a dot a month. The month still running is a lighter dot, and the
+ * line runs into it dashed (see monthLine). The months after the last drawn
+ * are left empty.
  */
 function MonthsLine({ tab, mark }: { tab: MonthsTab; mark: Mark }) {
   const glowId = `hm-glow${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`
@@ -261,12 +260,11 @@ function MonthsLine({ tab, mark }: { tab: MonthsTab; mark: Mark }) {
   const { top, step } = niceScale(Math.max(...drawn.map((point) => point.value)))
   const n = tab.points.length
   const xy = drawn.map((point, i) => [((i + 0.5) / n) * W, H - (point.value / top) * H] as const)
-  const line = xy.length > 1 ? smoothLine(xy) : null
-  // The last piece runs dashed into the month still running when that month ends the line.
-  const dashed = line && drawn.at(-1)?.part ? line.lastIndexOf(" C") : -1
-  const solid = line && dashed > 0 ? line.slice(0, dashed) : line
-  const solidEnd = xy[dashed > 0 ? xy.length - 2 : xy.length - 1]
-  const area = solid ? `${solid} L${solidEnd[0]},${H} L${xy[0][0]},${H} Z` : null
+  const line = monthLine(
+    xy,
+    drawn.findIndex((point) => point.part),
+    H,
+  )
   return (
     <>
       <div className="hm-ch-plot">
@@ -279,11 +277,9 @@ function MonthsLine({ tab, mark }: { tab: MonthsTab; mark: Mark }) {
                 <stop offset="1" className="hm-ch-fade" />
               </linearGradient>
             </defs>
-            {area && <path d={area} fill={`url(#${glowId})`} />}
-            {solid && <path d={solid} className="hm-ch-stroke" vectorEffect="non-scaling-stroke" />}
-            {line && dashed > 0 && (
-              <path d={`M${solidEnd[0]},${solidEnd[1]} ${line.slice(dashed + 1)}`} className="hm-ch-stroke" data-part="" vectorEffect="non-scaling-stroke" />
-            )}
+            {line?.area && <path d={line.area} fill={`url(#${glowId})`} />}
+            {line?.solid && <path d={line.solid} className="hm-ch-stroke" vectorEffect="non-scaling-stroke" />}
+            {line?.dashed && <path d={line.dashed} className="hm-ch-stroke" data-part="" vectorEffect="non-scaling-stroke" />}
           </svg>
           <div className="hm-ch-hits" style={{ "--n": n } as CSSProperties}>
             {tab.points.map((point, i) =>

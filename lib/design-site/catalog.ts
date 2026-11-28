@@ -95,6 +95,7 @@ export const PARTS: readonly Part[] = [
   { id: "accordion", title: "Accordion: separate cards", group: "Layout and lists", summary: "Questions that fold open, each in its own card.", files: [KIT("accordion.tsx"), KIT("picked.css")], rules: ["Lists"] },
   { id: "timeline", title: "Timeline", group: "Layout and lists", summary: "What happened, newest first.", files: [KIT("timeline.tsx"), KIT("timeline.css")], rules: ["Lists"] },
   { id: "code-block", title: "Code block", group: "Layout and lists", summary: "A command or a few lines of settings, with a copy button.", files: [KIT("code-block.tsx"), KIT("kit.css")], rules: ["Cards"] },
+  { id: "message-box", title: "Message box", group: "Inputs", summary: "A ready message to send, which the person can change, with a copy button.", files: [KIT("message-box.tsx"), KIT("message-box.css")], rules: ["Inputs"] },
 
   // Feedback
   { id: "chips", title: "Chips", group: "Feedback", summary: "Status chips for a lead's lifecycle, and tags.", files: [KIT("chips.tsx")], rules: ["Chips"] },

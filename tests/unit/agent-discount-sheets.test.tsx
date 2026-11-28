@@ -155,12 +155,16 @@ describe("the standard discount sheet", () => {
   })
 })
 
+const ORIGIN = "http://localhost:3000"
+const LINK = `${ORIGIN}/apply?ref=${PROMO.code}`
+
 function promoSheet(promo: PromoCode | null, canManage = true) {
   return (
     <PromoSheet
       open
       onOpenChange={() => {}}
       promo={promo}
+      origin={ORIGIN}
       highestAgentAmount={30_000}
       canManage={canManage}
       statePending={false}
@@ -226,18 +230,104 @@ describe("the Promo code sheet", () => {
   })
 
   it("offers New Promo code only to a role that can set discounts", () => {
-    const { rerender } = render(<PromoCodes codes={[PROMO]} highestAgentAmount={null} canManage={false} today="2026-11-12" />)
+    const { rerender } = render(<PromoCodes codes={[PROMO]} highestAgentAmount={null} canManage={false} today="2026-11-12" origin={null} />)
     expect(screen.queryByRole("button", { name: "New Promo code" })).toBeNull()
-    rerender(<PromoCodes codes={[PROMO]} highestAgentAmount={null} canManage today="2026-11-12" />)
+    rerender(<PromoCodes codes={[PROMO]} highestAgentAmount={null} canManage today="2026-11-12" origin={null} />)
     expect(screen.getByRole("button", { name: "New Promo code" })).toBeInTheDocument()
   })
 
   it("opens a code's sheet from its row, named Open and the code (#343)", async () => {
     const user = userEvent.setup()
-    render(<PromoCodes codes={[PROMO]} highestAgentAmount={null} canManage today="2026-11-12" />)
+    render(<PromoCodes codes={[PROMO]} highestAgentAmount={null} canManage today="2026-11-12" origin={null} />)
     const row = screen.getByRole("row", { name: `Open ${PROMO.code}` })
     row.focus()
     await user.keyboard("{Enter}")
     expect(await screen.findByRole("dialog", { name: PROMO.code })).toBeInTheDocument()
+  })
+})
+
+describe("sharing a Promo code", () => {
+  const foot = (sheet: HTMLElement) => ({
+    share: within(sheet).queryByRole("button", { name: "Share promo code" }),
+    save: within(sheet).queryByRole("button", { name: "Save" }),
+  })
+
+  it("offers Share promo code on an Active code until a field changes, and again after Cancel", async () => {
+    const user = userEvent.setup()
+    render(promoSheet(PROMO))
+    const sheet = await screen.findByRole("dialog", { name: PROMO.code })
+    expect(foot(sheet).share).toBeInTheDocument()
+    expect(foot(sheet).save).toBeNull()
+
+    await replace(user, within(sheet).getByLabelText("Amount off the TZS 50,000 fee"), "25000")
+    expect(foot(sheet).share).toBeNull()
+    expect(foot(sheet).save).toBeInTheDocument()
+
+    await user.click(within(sheet).getByRole("button", { name: "Cancel" }))
+    expect(within(sheet).getByLabelText("Amount off the TZS 50,000 fee")).toHaveValue(20_000)
+    expect(foot(sheet).share).toBeInTheDocument()
+  })
+
+  it("lets a role that cannot change codes share an Active one", async () => {
+    render(promoSheet(PROMO, false))
+    const sheet = await screen.findByRole("dialog", { name: PROMO.code })
+    expect(foot(sheet).share).toBeInTheDocument()
+  })
+
+  it("offers no Share on a Paused, Expired or Ended code, and says why", async () => {
+    const { rerender } = render(promoSheet({ ...PROMO, state: "paused", effectiveState: "paused" }))
+    let sheet = await screen.findByRole("dialog", { name: PROMO.code })
+    expect(foot(sheet).share).toBeNull()
+    expect(sheet).toHaveTextContent("Paused. Parents who type INSTA26 pay the full fee")
+
+    rerender(promoSheet({ ...PROMO, endsOn: "2026-11-15", effectiveState: "expired" }, false))
+    sheet = await screen.findByRole("dialog", { name: PROMO.code })
+    expect(foot(sheet).share).toBeNull()
+    expect(sheet).toHaveTextContent("Expired on 15 Nov 2026.")
+
+    rerender(promoSheet({ ...PROMO, state: "ended", effectiveState: "ended" }))
+    sheet = await screen.findByRole("dialog", { name: PROMO.code })
+    expect(foot(sheet).share).toBeNull()
+  })
+
+  it("shows the link and the message, and sends the edited message to WhatsApp", async () => {
+    const user = userEvent.setup()
+    render(promoSheet(PROMO))
+    await user.click(within(await screen.findByRole("dialog", { name: PROMO.code })).getByRole("button", { name: "Share promo code" }))
+
+    const sheet = await screen.findByRole("dialog", { name: `Share ${PROMO.code}` })
+    expect(sheet).toHaveTextContent(LINK)
+    const message = within(sheet).getByLabelText("Message to send")
+    expect((message as HTMLTextAreaElement).value).toMatch(/^Apply today using the link below to get 20,000\/= off/)
+    expect((message as HTMLTextAreaElement).value.endsWith(LINK)).toBe(true)
+
+    await user.click(within(sheet).getByRole("button", { name: "Kiswahili" }))
+    expect((message as HTMLTextAreaElement).value).toMatch(/^Omba nafasi leo/)
+    await user.click(within(sheet).getByRole("button", { name: "English" }))
+
+    await user.type(message, " See you soon.")
+    const whatsApp = within(sheet).getByRole("link", { name: "Share on WhatsApp" })
+    expect(decodeURIComponent(whatsApp.getAttribute("href")!.replace("https://wa.me/?text=", ""))).toMatch(/See you soon\.$/)
+
+    await user.click(within(sheet).getByRole("button", { name: "Reset message" }))
+    expect((message as HTMLTextAreaElement).value.endsWith(LINK)).toBe(true)
+
+    await user.click(within(sheet).getByRole("button", { name: "Back" }))
+    expect(await screen.findByRole("dialog", { name: PROMO.code })).toBeInTheDocument()
+  })
+
+  it("warns when the link is taken out of the message, and puts it back", async () => {
+    const user = userEvent.setup()
+    render(promoSheet(PROMO, false))
+    await user.click(within(await screen.findByRole("dialog", { name: PROMO.code })).getByRole("button", { name: "Share promo code" }))
+    const sheet = await screen.findByRole("dialog", { name: `Share ${PROMO.code}` })
+    const message = within(sheet).getByLabelText("Message to send") as HTMLTextAreaElement
+
+    await user.clear(message)
+    await user.type(message, "Apply with our code")
+    expect(sheet).toHaveTextContent("The link is missing.")
+    await user.click(within(sheet).getByRole("button", { name: "Put the link back" }))
+    expect(message.value).toBe(`Apply with our code ${LINK}`)
+    expect(sheet).not.toHaveTextContent("The link is missing.")
   })
 })

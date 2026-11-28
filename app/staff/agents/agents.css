@@ -72,6 +72,9 @@
 .ag-legend { padding: 0; margin: 0 0 10px; font-size: 13px; font-weight: 600; color: var(--gf-ink); }
 .ag-fieldset { margin: 0; padding: 0; border: 0; min-width: 0; display: flex; flex-direction: column; gap: 12px; }
 
+/* A Promo code's share view: the message choices start at the left. */
+.ag-share .kit-chips { justify-content: flex-start; }
+
 /* A confirm that opens in place, under a dashed line. */
 .ag-inline { display: flex; flex-direction: column; gap: 12px; padding-top: 14px; border-top: 1px dashed var(--gf-line); }
 .ag-inline-act { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }

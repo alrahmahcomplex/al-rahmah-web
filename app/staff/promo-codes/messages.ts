@@ -3,7 +3,7 @@ import { discountRefusal, plural, tzs } from "../agents/discount-outcome"
 
 import { cleanDiscountCode, isPromoCode, PROMO_CODE_MAX_LENGTH } from "@/lib/discount-code-rules"
 import type { DiscountWriteError } from "@/lib/services/discount-codes"
-import type { PromoEffectiveState, PromoState, PromoWriteError } from "@/lib/services/promo-codes"
+import type { PromoCode, PromoEffectiveState, PromoState, PromoWriteError } from "@/lib/services/promo-codes"
 
 // The Promo codes page's words: states, the live code check, the comparison
 // with agents' amounts, and what each save answers. Database codes never
@@ -92,6 +92,14 @@ export function comparisonNote(amount: number, highest: number): { tone: "good" 
 
 export const NAME_MISSING = "Give the code a name staff will recognise."
 export const NEW_PROMO_META = "Give it a name staff recognise, the code parents type, and the amount off."
+// Why a Paused or Expired code has no Share button, or null for a code that can be shared.
+export function shareStateNote(promo: Pick<PromoCode, "code" | "effectiveState" | "endsOn">): string | null {
+  if (promo.effectiveState === "paused") return `Paused. Parents who type ${promo.code} pay the full fee, so there is nothing to share. Resume it to share it again.`
+  if (promo.effectiveState === "expired" && promo.endsOn)
+    return `Expired on ${formatDay(promo.endsOn)}. Give it a later Ends on date under More options to share it again.`
+  return null
+}
+
 export const ENDED_NOTE = "Ended. The code stays in history and on its students and can never be reused."
 
 // Pause, Resume and End, said before they are confirmed.

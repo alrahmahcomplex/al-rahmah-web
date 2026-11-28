@@ -96,6 +96,12 @@ One `go` button per screen (The One Invitation Rule), and it is the only filled 
 
 `CodeBlock` shows a command or a few lines of settings with the code chip's copy button. What it shows and what it copies are separate, so a secret can show masked.
 
+```tsx
+<MessageBox id="share-message" aria-label="Message to send" value={message} onChange={setMessage} copyLabel="Copy message" copiedMessage="Message copied" copyFailedMessage="Couldn’t copy. The message is selected: press Ctrl+C." />
+```
+
+`MessageBox` is a ready message the person can change before sending, with the same copy button. It grows with its text.
+
 ## Form parts
 
 The parts from prototype version 18 (the card "Form parts on the student’s record"). Each works controlled (`value` and its change handler) and uncontrolled inside a plain form (`name` and `defaultValue`), and posts what the native control posts, so no server action changes. Each takes its name from a `<label htmlFor={id}>` the caller places.

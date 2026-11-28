@@ -15,11 +15,16 @@ import {
   Table,
   type SortDirection,
 } from "@/components/kit"
-import { formatDate, tanzaniaToday } from "@/lib/school-calendar"
+import { formatDate } from "@/lib/school-calendar"
 
 // The tools of a long list (Interviews revamp, prototype
 // 1MpUKuX27V6pc1CS1z1URz v5), built in components/kit/list-tools.tsx and shown
 // here before a screen uses them (DESIGN.md, The Kit First Rule). Fixture data only.
+
+// The page is built ahead of time, so its examples use a fixed day: one read
+// from the clock would differ between the build and the visit, and hydration
+// would not match.
+const EXAMPLE_DAY = "2026-11-19"
 
 const CLASSES = [
   { value: "KG 1", label: "KG 1", count: 9 },
@@ -68,9 +73,9 @@ export function SearchMatchCard() {
 }
 
 export function DateChoiceCard() {
-  const today = tanzaniaToday()
+  const today = EXAMPLE_DAY
   const [day, setDay] = useState("")
-  const [picked, setPicked] = useState(today)
+  const [picked, setPicked] = useState(EXAMPLE_DAY)
   return (
     <Card id="date-choice" title="Date choice">
       <div className="kp-rowx">
@@ -186,7 +191,7 @@ export function ListFootCard() {
 }
 
 export function ListToolbarCard() {
-  const today = tanzaniaToday()
+  const today = EXAMPLE_DAY
   const [q, setQ] = useState("")
   const [year, setYear] = useState("2027")
   const [day, setDay] = useState("")

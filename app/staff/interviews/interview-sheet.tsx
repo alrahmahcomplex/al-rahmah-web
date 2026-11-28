@@ -36,13 +36,14 @@ export function InterviewSheet({
   // The row as it was last shown, so the sheet keeps its content while it closes.
   const [shown, setShown] = useState<BoardRow | null>(row)
   if (row && row !== shown) setShown(row)
-  const [outcome, setOutcome] = useState<{ key: string; value: SheetOutcome } | null>(null)
+  const [outcome, setOutcome] = useState<{ id: string; value: SheetOutcome } | null>(null)
   const [, startLoading] = useTransition()
 
-  // Read again whenever what the list knows of the row changes, as after a save here refreshes the list.
-  const key = row ? [row.id, row.result, row.score, row.feeStatus, row.sentOn].join("|") : null
+  // Read again each time the list's rows come from the server: on opening, and after
+  // any save in the sheet refreshes them, whatever it changed (a date-only correction
+  // changes nothing the row shows). The row is a new object only then.
   useEffect(() => {
-    if (!row || !key) return
+    if (!row) return
     let live = true
     startLoading(async () => {
       let value: SheetOutcome
@@ -51,17 +52,16 @@ export function InterviewSheet({
       } catch {
         value = { ok: false, message: "This interview could not be loaded. Check your connection and try again." }
       }
-      if (live) setOutcome({ key, value })
+      if (live) setOutcome({ id: row.id, value })
     })
     return () => {
       live = false
     }
-    // `key` stands for the row's parts that matter.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key])
+  }, [row])
 
   const current = shown
-  const loaded = outcome && current && outcome.key.startsWith(`${current.id}|`) ? outcome.value : null
+  // While it reads again, the details on show stay; another student's never show.
+  const loaded = outcome && current && outcome.id === current.id ? outcome.value : null
 
   return (
     <Sheet

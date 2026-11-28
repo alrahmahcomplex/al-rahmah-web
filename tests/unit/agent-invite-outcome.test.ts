@@ -5,6 +5,7 @@ vi.mock("server-only", () => ({}))
 import {
   accountBadge,
   approvedWithInvite,
+  approvedWithSms,
   emailOutcome,
   inviteLine,
   inviteOutcome,
@@ -132,6 +133,35 @@ describe("approving with the invite", () => {
       message: "Neema Juma (NEEMA-01) is Approved. Add their email to send the invite.",
       inviteSent: false,
     })
+  })
+})
+
+describe("approving a new agent who signed up by mobile", () => {
+  it("says the SMS went, to the mobile as the Agents screen shows it", () => {
+    expect(approvedWithSms(AGENT, { ok: true, data: { kind: "sent", phone: "+255712345123" } })).toEqual({
+      status: "approved",
+      message: "Neema Juma (NEEMA-01) is Approved. SMS sent to +255 712 345 123.",
+      inviteSent: false,
+    })
+  })
+
+  it("still approves when the SMS can't go, says why and warns the Manager to tell them", () => {
+    expect(approvedWithSms(AGENT, { ok: false, error: "budget-reached" })).toEqual({
+      status: "approved",
+      message: "Approved. SMS not sent: today's SMS limit is reached. Tell them yourself, by WhatsApp or a call.",
+      inviteSent: false,
+      smsMissed: true,
+    })
+    expect(approvedWithSms(AGENT, { ok: false, error: "access-off" }).message).toBe(
+      "Approved. SMS not sent: agent access is off. Tell them yourself, by WhatsApp or a call.",
+    )
+    expect(approvedWithSms(AGENT, { ok: false, error: "not-sent" }).message).toBe(
+      "Approved. SMS not sent: the SMS service gave an error. Tell them yourself, by WhatsApp or a call.",
+    )
+  })
+
+  it("words an agent with no email and no mobile login as before", () => {
+    expect(approvedWithSms(AGENT, { ok: true, data: { kind: "none" } })).toEqual(approvedWithInvite(AGENT, { ok: false, error: { kind: "no-email" } }))
   })
 })
 

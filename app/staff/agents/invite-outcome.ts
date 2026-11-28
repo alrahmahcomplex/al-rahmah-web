@@ -7,6 +7,7 @@ import type {
   SentInvite,
   SetEmailError,
 } from "@/lib/services/agent-invites"
+import type { ApprovalSms, ApprovalSmsError } from "@/lib/services/agent-approval-sms"
 import { emailTakenMessage } from "@/lib/email-in-use"
 import type { Result } from "@/lib/services/result"
 
@@ -116,7 +117,9 @@ export function inviteOutcome(result: Result<SentInvite, AgentInviteError | { ki
   return { status: "refused", message: `Invite not sent: ${failureReason(result.error)}` }
 }
 
-export type ApprovedOutcome = { status: "approved"; message: string; inviteSent: boolean }
+// smsMissed: a new agent who signs in by mobile was approved, but their SMS
+// didn't go, so the Manager tells them another way.
+export type ApprovedOutcome = { status: "approved"; message: string; inviteSent: boolean; smsMissed?: boolean }
 
 // Approving sends the invite to the email the Manager saw on the row.
 // Approval stands whatever the email does.
@@ -130,6 +133,36 @@ export function approvedWithInvite(
     return { status: "approved", message: `${approved} Add their email to send the invite.`, inviteSent: false }
   }
   return { status: "approved", message: `Approved. Invite not sent: ${failureReason(invite.error)}`, inviteSent: false }
+}
+
+const SMS_REASONS: Record<ApprovalSmsError, string> = {
+  "budget-reached": "today's SMS limit is reached",
+  "access-off": "agent access is off",
+  "not-sent": "the SMS service gave an error",
+  unavailable: "the SMS service gave an error",
+}
+
+// A mobile stored as +255712345123, as the Agents screen shows it.
+export function shownMobile(phone: string): string {
+  const match = /^\+255(\d{3})(\d{3})(\d{3})$/.exec(phone)
+  return match ? `+255 ${match[1]} ${match[2]} ${match[3]}` : phone
+}
+
+// Approving an agent with no email: one who signed up by mobile is texted that
+// they can sign in; anyone else is worded as today. Approval stands whatever
+// the SMS does.
+export function approvedWithSms(agent: { fullName: string; code: string }, sms: Result<ApprovalSms, ApprovalSmsError>): ApprovedOutcome {
+  if (sms.ok) {
+    const answer = sms.data
+    if (answer.kind === "none") return approvedWithInvite(agent, { ok: false, error: { kind: "no-email" } })
+    return { status: "approved", message: `${agent.fullName} (${agent.code}) is Approved. SMS sent to ${shownMobile(answer.phone)}.`, inviteSent: false }
+  }
+  return {
+    status: "approved",
+    message: `Approved. SMS not sent: ${SMS_REASONS[sms.error]}. Tell them yourself, by WhatsApp or a call.`,
+    inviteSent: false,
+    smsMissed: true,
+  }
 }
 
 export type EmailOutcome = { status: "saved"; message: string } | { status: "refused"; message: string }

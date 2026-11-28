@@ -18,13 +18,16 @@ import {
   type FeeImpact,
   type RecreatePreview,
 } from "@/lib/services/marketing-agents"
-import { sendAgentInvite } from "@/lib/services/agent-invites"
+import { sendApprovalSms } from "@/lib/services/agent-approval-sms"
+import { getAgentInvites, sendAgentInvite } from "@/lib/services/agent-invites"
+import { smsSender } from "@/lib/services/sms"
 import { requirePermission } from "@/lib/services/staff-auth"
 import { agentInviteSender } from "@/utils/supabase/admin"
 import { createClient } from "@/utils/supabase/server"
+import { smsClient } from "@/utils/supabase/sms"
 
 import { agentSetPasswordUrl } from "./invite-link"
-import { approvedWithInvite, type ApprovedOutcome } from "./invite-outcome"
+import { approvedWithInvite, approvedWithSms, type ApprovedOutcome } from "./invite-outcome"
 
 import {
   approveOutcome,
@@ -65,11 +68,23 @@ export async function approveMarketingAgent(
   if (result.ok || result.error === "no-change") revalidatePath("/staff", "layout")
   if (!result.ok) return approveOutcome(result, agent)
 
-  const invite =
-    typeof email === "string" && email.trim() !== ""
-      ? await sendAgentInvite(supabase, agentInviteSender(), agentId, await agentSetPasswordUrl(), { expectedEmail: email })
-      : ({ ok: false, error: { kind: "no-email" } } as const)
-  return approvedWithInvite(agent, invite)
+  if (typeof email === "string" && email.trim() !== "") {
+    const invite = await sendAgentInvite(supabase, agentInviteSender(), agentId, await agentSetPasswordUrl(), { expectedEmail: email })
+    return approvedWithInvite(agent, invite)
+  }
+
+  // No email: a new agent who signed up by mobile gets the approval SMS; the
+  // database decides whether they did.
+  const secret = smsClient()
+  if (secret) return approvedWithSms(agent, await sendApprovalSms(secret, smsSender(), agentId))
+  // Without the secret key no SMS can go. The Manager's own read says whether
+  // the agent signs in by mobile (joined, no email), so they hear it didn't.
+  // When that read fails too, the warning stays: telling the agent directly
+  // is the safe answer either way.
+  const notes = await getAgentInvites(supabase, [agentId])
+  const note = notes.ok ? notes.data.get(agentId) : undefined
+  if (!notes.ok || (note?.joined && !note.email)) return approvedWithSms(agent, { ok: false, error: "unavailable" })
+  return approvedWithInvite(agent, { ok: false, error: { kind: "no-email" } })
 }
 
 function isAction(action: unknown): action is AgentStatusAction {

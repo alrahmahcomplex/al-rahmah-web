@@ -152,7 +152,15 @@ export function AgentsTable({
         const who = { id: agent.id, fullName: agent.fullName, code: agent.code }
         return (
           <div className="ag-actions">
-            {agent.status === "Pending" && <ApproveAgent agent={who} email={agent.email} emailUnknown={emailUnknown} />}
+            {agent.status === "Pending" && (
+              <ApproveAgent
+                agent={who}
+                email={agent.email}
+                // Joined with no email: their login is their mobile.
+                mobile={agent.joined && !agent.email ? agent.phoneShown : null}
+                emailUnknown={emailUnknown}
+              />
+            )}
             <AgentInviteActions
               agent={who}
               email={agent.email}

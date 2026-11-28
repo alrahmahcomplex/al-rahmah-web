@@ -268,6 +268,15 @@ describe("sharing a Promo code", () => {
     expect(foot(sheet).share).toBeInTheDocument()
   })
 
+  it("reads a name as the database stores it, so extra spaces alone change nothing", async () => {
+    const user = userEvent.setup()
+    render(promoSheet(PROMO))
+    const sheet = await screen.findByRole("dialog", { name: PROMO.code })
+    await replace(user, within(sheet).getByLabelText("Name"), "  Instagram   ad ")
+    expect(foot(sheet).share).toBeInTheDocument()
+    expect(foot(sheet).save).toBeNull()
+  })
+
   it("lets a role that cannot change codes share an Active one", async () => {
     render(promoSheet(PROMO, false))
     const sheet = await screen.findByRole("dialog", { name: PROMO.code })

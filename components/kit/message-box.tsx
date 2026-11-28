@@ -38,12 +38,25 @@ export type MessageBoxProps = {
 export function MessageBox({ id, value, onChange, copyLabel, copiedMessage, copyFailedMessage, lang, className, ...aria }: MessageBoxProps) {
   const ref = useRef<HTMLTextAreaElement>(null)
 
-  // Grows with the text: the height the text needs, measured after each change.
+  // Grows with the text: the height the text needs, measured after each
+  // change and whenever the box gets narrower or wider (a turned phone).
   useLayoutEffect(() => {
     const box = ref.current
     if (!box) return
-    box.style.height = "auto"
-    box.style.height = `${box.scrollHeight + box.offsetHeight - box.clientHeight}px`
+    const fit = () => {
+      box.style.height = "auto"
+      box.style.height = `${box.scrollHeight + box.offsetHeight - box.clientHeight}px`
+    }
+    fit()
+    if (typeof ResizeObserver === "undefined") return
+    let width = box.clientWidth
+    const watch = new ResizeObserver(() => {
+      if (box.clientWidth === width) return
+      width = box.clientWidth
+      fit()
+    })
+    watch.observe(box)
+    return () => watch.disconnect()
   }, [value])
 
   async function copy() {

@@ -34,6 +34,10 @@ import { SHARE_HINT, ShareBody, ShareButton, ShareFoot, useShare, type ShareStat
 import "../agents/agents.css"
 
 const NEW_AMOUNT = 25_000
+
+// A name as the database stores it (promo_code_name): trimmed, runs of spaces
+// made one. Comparing the same way keeps a saved name from reading as changed.
+const savedName = (name: string) => name.trim().replace(/\s+/g, " ")
 const CHECK_DELAY_MS = 300
 
 // A new Promo code, or one from the list. Roles without discount_codes.manage,
@@ -190,7 +194,7 @@ function EditablePromo({
   const amountMoved = !isNew && amount !== promo.amount
   const endsMoved = !isNew && (endsOn || null) !== promo.endsOn
   const changed =
-    isNew || amountMoved || endsMoved || name.trim() !== promo.name || (note.trim() || null) !== (promo.note ?? null)
+    isNew || amountMoved || endsMoved || savedName(name) !== promo.name || (note.trim() || null) !== (promo.note ?? null)
   // A new last day moves fees as an amount does: an expired code given a
   // later day gives its amount again. The preview takes both.
   const impact = useImpact(

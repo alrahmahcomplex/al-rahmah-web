@@ -137,7 +137,7 @@ test("Admissions Staff tick Has a sibling already at Al-Rahmah, which gives the 
 
   // The history is the Super Admin's (#237).
   await openLeadHistoryAsSuperAdmin(page, lead)
-  await expect(page.getByText("ticked Has a sibling already at Al-Rahmah")).toBeVisible()
+  await expect(page.getByText("selected Has a sibling already at Al-Rahmah")).toBeVisible()
 
   // Admissions Staff clear it.
   await signIn(page, ADMISSIONS)

@@ -9,11 +9,12 @@ import {
   reactivateRole,
   deactivateStaff,
   describeAuditRow,
+  describeHistory,
+  getStaffAdminHistory,
   reactivateStaff,
   renameRole,
   retireRole,
-  setRoleManages,
-  setRolePermission,
+  saveRoleChanges,
   type AuditRow,
   type HistoryLookup,
 } from "@/lib/services/staff-admin"
@@ -55,19 +56,31 @@ describe("the staff-admin writes", () => {
     await createRole(client, "Receptionist")
     await createRole(client, "Head Accountant", { permissions: ["leads.view"], manages: ["role-2"], managedBy: ["role-3"] })
     await renameRole(client, "role-1", "Front desk")
-    await setRolePermission(client, "role-1", "leads.view", true)
+    await saveRoleChanges(client, "role-1", {
+      addPermissions: ["leads.view"],
+      removePermissions: ["payments.record"],
+      addManaged: [],
+      removeManaged: ["role-2"],
+    })
     await retireRole(client, "role-1")
     await reactivateRole(client, "role-1")
-    await setRoleManages(client, "role-1", "role-2", false)
 
     expect(rpc.mock.calls).toEqual([
       ["create_role", { name: "Receptionist", permissions: [], manages: [], managed_by: [] }],
       ["create_role", { name: "Head Accountant", permissions: ["leads.view"], manages: ["role-2"], managed_by: ["role-3"] }],
       ["rename_role", { role_id: "role-1", name: "Front desk" }],
-      ["set_role_permission", { role_id: "role-1", permission: "leads.view", granted: true }],
+      [
+        "save_role_changes",
+        {
+          role_id: "role-1",
+          add_permissions: ["leads.view"],
+          remove_permissions: ["payments.record"],
+          add_managed_role_ids: [],
+          remove_managed_role_ids: ["role-2"],
+        },
+      ],
       ["retire_role", { role_id: "role-1" }],
       ["reactivate_role", { role_id: "role-1" }],
-      ["set_role_manages", { role_id: "role-1", managed_role_id: "role-2", manages: false }],
     ])
   })
 })
@@ -376,5 +389,178 @@ describe("describeAuditRow", () => {
       summary: "asked for a password reset link for Baraka Said",
       changes: [{ field: "email", from: null, to: "baraka@example.test" }],
     })
+  })
+})
+
+describe("describeHistory: one entry per Roles save", () => {
+  const lookup: HistoryLookup = {
+    staffNames: new Map([["owner", "Salma Abdallah"]]),
+    roleNames: new Map([
+      ["role-sec", "Primary Secretary"],
+      ["role-acc", "Accountant"],
+      ["role-adm", "Admissions Staff"],
+    ]),
+    permissionLabels: new Map([
+      ["leads.view", "View applicants and their history"],
+      ["leads.decline", "Decline applicants"],
+      ["results.send", "Send interview results"],
+    ]),
+    managedPairs: new Map([["pair-old", { roleId: "role-sec", managedRoleId: "role-adm" }]]),
+  }
+  const base: AuditRow = {
+    id: 1,
+    table_name: "roles",
+    row_id: "role-sec",
+    action: "update",
+    old_values: null,
+    new_values: null,
+    actor_kind: "staff",
+    actor_staff_id: "owner",
+    created_at: "2026-11-28T10:00:00Z",
+  }
+  const at = (row: Partial<AuditRow>): AuditRow => ({ ...base, ...row })
+
+  it("lists one save's permissions and managed roles as one entry, at its newest row", () => {
+    const rows = [
+      at({ id: 12, table_name: "role_managed_roles", row_id: "pair-old", old_values: { active: true }, new_values: { active: false }, transaction_id: 77, created_at: "2026-11-28T10:00:02Z" }),
+      at({ id: 11, table_name: "role_managed_roles", row_id: "pair-new", action: "insert", new_values: { role_id: "role-sec", managed_role_id: "role-acc", active: true }, transaction_id: 77, created_at: "2026-11-28T10:00:01Z" }),
+      at({ id: 10, old_values: { permissions: ["leads.view", "results.send"] }, new_values: { permissions: ["leads.decline", "leads.view"] }, transaction_id: 77 }),
+    ]
+    expect(describeHistory(rows, lookup)).toEqual([
+      {
+        id: 12,
+        at: "2026-11-28T10:00:02Z",
+        actor: "Salma Abdallah",
+        summary: "changed the role Primary Secretary",
+        changes: [
+          { field: "permissions", from: null, to: "added Decline applicants" },
+          { field: "permissions", from: null, to: "removed Send interview results" },
+          { field: "manages the staff in", from: null, to: "removed Admissions Staff" },
+          { field: "manages the staff in", from: null, to: "added Accountant" },
+        ],
+      },
+    ])
+  })
+
+  it("names the role when a save changed only its managed set", () => {
+    const rows = [
+      at({ id: 21, table_name: "role_managed_roles", row_id: "pair-new", action: "insert", new_values: { role_id: "role-sec", managed_role_id: "role-acc", active: true }, transaction_id: 80 }),
+      at({ id: 20, table_name: "role_managed_roles", row_id: "pair-old", old_values: { active: true }, new_values: { active: false }, transaction_id: 80 }),
+    ]
+    const [entry] = describeHistory(rows, lookup)
+    expect(entry.summary).toBe("changed the role Primary Secretary")
+    expect(entry.changes.map((c) => c.to)).toEqual(["added Accountant", "removed Admissions Staff"])
+    // One pair alone keeps its own sentence.
+    expect(describeHistory([rows[0]], lookup)[0].summary).toBe("let Primary Secretary manage the staff in Accountant")
+  })
+
+  it("keeps separate saves, other roles and rows from before transactions were recorded apart", () => {
+    const rows = [
+      at({ id: 32, new_values: { permissions: ["leads.view"] }, old_values: { permissions: [] }, transaction_id: 91 }),
+      at({ id: 31, new_values: { permissions: [] }, old_values: { permissions: ["leads.view"] }, transaction_id: 90 }),
+      at({ id: 30, row_id: "role-acc", new_values: { permissions: ["leads.view"] }, old_values: { permissions: [] }, transaction_id: 90 }),
+      at({ id: 29, new_values: { permissions: ["leads.view"] }, old_values: { permissions: [] } }),
+      at({ id: 28, new_values: { permissions: ["leads.view"] }, old_values: { permissions: [] } }),
+    ]
+    expect(describeHistory(rows, lookup).map((e) => e.id)).toEqual([32, 31, 30, 29, 28])
+  })
+
+  it("reads staff changes and invites as describeAuditRow does", () => {
+    const staffRow = at({
+      table_name: "staff_members",
+      row_id: "owner",
+      old_values: { active: true },
+      new_values: { active: false },
+      transaction_id: 95,
+    })
+    const invite = at({ table_name: null, row_id: null, action: "invite_sent", new_values: {}, transaction_id: 96 })
+    expect(describeHistory([staffRow, invite], lookup)).toEqual([describeAuditRow(staffRow, lookup), describeAuditRow(invite, lookup)])
+  })
+})
+
+describe("getStaffAdminHistory", () => {
+  // A stand-in for the two audit reads: the newest rows up to the limit,
+  // then, when the limit cut the list, the rest of every transaction in view.
+  function fakeAudit(pages: AuditRow[][]) {
+    const calls: Record<string, unknown>[] = []
+    const from = vi.fn(() => {
+      const query: Record<string, unknown> = {}
+      calls.push(query)
+      const chain = {
+        select: () => chain,
+        eq: (column: string, value: unknown) => ((query[column] = value), chain),
+        in: (column: string, values: unknown) => ((query[column] = values), chain),
+        order: () => chain,
+        limit: (n: number) => ((query.limit = n), Promise.resolve({ data: pages[calls.length - 1], error: null })),
+        // The second read answers only the transactions it asked for.
+        then: (resolve: (v: unknown) => void) => {
+          const wanted = ([] as unknown[]).concat(query.transaction_id)
+          resolve({ data: pages[calls.length - 1].filter((r) => wanted.includes(r.transaction_id)), error: null })
+        },
+      }
+      return chain
+    })
+    const rpc = vi.fn().mockResolvedValue({ data: true, error: null })
+    return { client: { from, rpc } as unknown as SupabaseClient, calls }
+  }
+
+  const overview = {
+    permissions: [{ name: "leads.view" as const, label: "View applicants and their history" }],
+    roles: [
+      { id: "role-sec", name: "Primary Secretary", permissions: [], retired: false, activeHolders: 0, manages: [] },
+      { id: "role-acc", name: "Accountant", permissions: [], retired: false, activeHolders: 0, manages: [] },
+      { id: "role-adm", name: "Admissions Staff", permissions: [], retired: false, activeHolders: 0, manages: [] },
+    ],
+    staff: [{ id: "owner", name: "Salma Abdallah", email: "s@example.test", roleId: "role-sec", active: true, invited: false }],
+  }
+  const row = (over: Partial<AuditRow>): AuditRow => ({
+    id: 1,
+    table_name: "role_managed_roles",
+    row_id: "pair",
+    action: "insert",
+    old_values: null,
+    new_values: { role_id: "role-sec", managed_role_id: "role-acc", active: true },
+    actor_kind: "staff",
+    actor_staff_id: "owner",
+    created_at: "2026-11-28T10:00:00Z",
+    transaction_id: 7,
+    ...over,
+  })
+
+  it("reads the rest of a save the limit cut, so its entry lists every change", async () => {
+    const newest = row({ id: 3, transaction_id: 8, table_name: "staff_members", row_id: "owner", action: "update", new_values: { active: true }, old_values: { active: false } })
+    const cut = row({ id: 2 })
+    const rest = [cut, row({ id: 1, new_values: { role_id: "role-sec", managed_role_id: "role-adm", active: true } })]
+    const { client, calls } = fakeAudit([[newest, cut], rest])
+
+    const history = await getStaffAdminHistory(client, overview, 2)
+    expect(calls[1]).toMatchObject({ scope: "staff_admin", transaction_id: [8, 7] })
+    expect(history.ok && history.data.map((entry) => entry.summary)).toEqual([
+      "changed Salma Abdallah",
+      "changed the role Primary Secretary",
+    ])
+    expect(history.ok && history.data[1].changes.map((change) => change.to)).toEqual(["added Accountant", "added Admissions Staff"])
+  })
+
+  it("completes every save the limit cut, when two saves made at once interleave", async () => {
+    const pair = (id: number, tx: number, role: string, managed: string) =>
+      row({ id, transaction_id: tx, new_values: { role_id: role, managed_role_id: managed, active: true } })
+    const a1 = pair(4, 1, "role-sec", "role-acc")
+    const b1 = pair(3, 2, "role-acc", "role-adm")
+    const a2 = pair(2, 1, "role-sec", "role-adm")
+    const b2 = pair(1, 2, "role-acc", "role-sec")
+    const { client } = fakeAudit([[a1, b1], [a1, b1, a2, b2]])
+
+    const history = await getStaffAdminHistory(client, overview, 2)
+    expect(history.ok && history.data.map((entry) => [entry.summary, entry.changes.length])).toEqual([
+      ["changed the role Primary Secretary", 2],
+      ["changed the role Accountant", 2],
+    ])
+  })
+
+  it("reads once when the rows end before the limit", async () => {
+    const { client, calls } = fakeAudit([[row({ id: 2 })]])
+    await getStaffAdminHistory(client, overview, 2)
+    expect(calls).toHaveLength(1)
   })
 })

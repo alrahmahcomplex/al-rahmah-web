@@ -3,7 +3,6 @@
 import { revalidatePath } from "next/cache"
 
 import { staffLinkOrigin } from "@/app/staff/agents/invite-link"
-import type { Permission } from "@/lib/permissions"
 import type { Result } from "@/lib/services/result"
 import {
   assignRole,
@@ -17,9 +16,9 @@ import {
   sendResetLink,
   renameRole,
   retireRole,
-  setRoleManages,
-  setRolePermission,
+  saveRoleChanges,
   type Refusal,
+  type RoleChanges,
   type RoleNames,
 } from "@/lib/services/staff-admin"
 import { RESET_PATH } from "@/lib/password-reset"
@@ -65,7 +64,7 @@ export async function addRole(name: string, templateName: string | null): Promis
   const supabase = await createClient()
   const result = await createRoleFromTemplate(supabase, name, templateName)
   const outcome = await settle<RoleNames>(result, ({ role }) =>
-    templateName ? `Created ${role} from the ${templateName} template.` : `Created ${role}. Tick what it can do.`,
+    templateName ? `Created ${role} from the ${templateName} template.` : `Created ${role}. Select what it can do.`,
   )
   return result.ok ? { ...outcome, roleId: result.data.id } : outcome
 }
@@ -75,23 +74,20 @@ export async function reactivateRoleNow(roleId: string) {
   return settle<RoleNames>(await reactivateRole(supabase, roleId), ({ role }) => `${role} is a current role again.`)
 }
 
-// Adds a role to this role's managed set, or takes it out.
-export async function setManagedRole(roleId: string, managedRoleId: string, manages: boolean) {
-  const supabase = await createClient()
-  return settle<RoleNames>(await setRoleManages(supabase, roleId, managedRoleId, manages), ({ role }) =>
-    manages ? `${role} now manages the staff in another role.` : `${role} no longer manages the staff in that role.`,
-  )
-}
-
 export async function renameRoleTo(roleId: string, name: string) {
   const supabase = await createClient()
   return settle<RoleNames>(await renameRole(supabase, roleId, name), ({ role }) => `Renamed the role to ${role}.`)
 }
 
-export async function setPermission(roleId: string, permission: Permission, granted: boolean) {
+// Save changes: every box changed on the role, in one call. The pane lists
+// what changed under this first line.
+export async function saveRole(roleId: string, changes: RoleChanges) {
   const supabase = await createClient()
-  return settle<RoleNames>(await setRolePermission(supabase, roleId, permission, granted), ({ role }) =>
-    granted ? `Added a permission to ${role}.` : `Removed a permission from ${role}.`,
+  const count =
+    changes.addPermissions.length + changes.removePermissions.length + changes.addManaged.length + changes.removeManaged.length
+  return settle<RoleNames>(
+    await saveRoleChanges(supabase, roleId, changes),
+    ({ role }) => `Saved ${count} change${count === 1 ? "" : "s"} to ${role}.`,
   )
 }
 

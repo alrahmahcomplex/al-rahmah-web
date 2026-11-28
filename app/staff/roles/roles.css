@@ -1,7 +1,11 @@
 /* Staff and roles: the role rail beside the chosen role (DESIGN.md, Cards, Lists and Inputs). */
-.ro-grid { display: grid; grid-template-columns: minmax(0, 1fr); align-items: start; gap: 16px; }
+/* The grid fills the stage (data-stage-fill): the pane scrolls inside its card,
+   above the save bar, and the rail scrolls on its own. On a phone the rail is
+   a strip above the pane. */
+.ro-grid { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); gap: 16px; }
 @media (min-width: 768px) {
-  .ro-grid { grid-template-columns: 272px minmax(0, 1fr); }
+  .ro-grid { grid-template-columns: 272px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); }
+  .ro-rail { min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
 }
 
 /* The rail. */
@@ -27,7 +31,9 @@
 .ro-new-row .kit-field { min-width: 0; }
 
 /* The pane. */
-.ro-pane { display: flex; min-width: 0; flex-direction: column; gap: 4px; }
+.ro-pane > .kit-card-body { display: flex; flex-direction: column; gap: 4px; }
+.ro-top { height: 0; margin-bottom: -4px; }
+.ro-out-line { display: block; }
 .ro-head { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 8px 16px; padding-bottom: 10px; }
 .ro-head > div:first-child { display: flex; min-width: 0; flex: 1 1 224px; flex-direction: column; gap: 4px; }
 .ro-head .kit-card-title { overflow-wrap: anywhere; }
@@ -45,7 +51,8 @@ fieldset.kit-sec > legend + * { clear: both; }
 .ro-ticks > li { display: flex; align-items: flex-start; gap: 8px; padding: 4px 0; }
 .ro-ticks label { cursor: pointer; }
 .ro-ticks label[data-off] { color: var(--gf-quiet); }
-.ro-tick-text { display: flex; flex-direction: column; gap: 2px; }
+.ro-tick-text { display: flex; min-width: 0; flex-direction: column; gap: 2px; }
+.ro-tick-line { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
 .ro-plain { margin: 0; font-size: 14px; }
 .ro-quiet { color: var(--gf-quiet); }
 

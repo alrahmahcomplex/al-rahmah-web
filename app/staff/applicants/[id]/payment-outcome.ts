@@ -67,7 +67,7 @@ export function paymentRefusal(error: PaymentError, doing: "checked" | "recorded
       return {
         status: "refused",
         field: "type",
-        message: "A Pre-Form One fee can be recorded only while the Pre-Form One programme is ticked on a FORM 1 applicant.",
+        message: "A Pre-Form One fee can be recorded only while the Pre-Form One programme is selected on a FORM 1 applicant.",
       }
     case "amount_not_positive":
       return { status: "refused", field: "amount", message: "Enter an amount above zero." }

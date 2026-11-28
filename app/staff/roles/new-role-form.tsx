@@ -8,6 +8,7 @@ import { ROLE_TEMPLATES } from "@/lib/role-templates"
 
 import { ChoiceList } from "../_form-parts/choice-list"
 import { addRole } from "./actions"
+import { askBeforeLeaving } from "./leave-guard"
 
 // The Super Admin's "New role" at the bottom of the rail (#241). "Start
 // from" picks a template, which fills in the name and brings the template's
@@ -40,7 +41,9 @@ export function NewRoleForm() {
           setError(null)
           setTemplate("")
           setName("")
-          router.push(`/staff/roles?role=${outcome.roleId}`)
+          // Unsaved changes on the role in view are asked about first.
+          const to = `/staff/roles?role=${outcome.roleId}`
+          if (!askBeforeLeaving(to)) router.push(to)
         })
       }}
     >

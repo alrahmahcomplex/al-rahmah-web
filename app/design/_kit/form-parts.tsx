@@ -231,16 +231,16 @@ export function FormPartsCard({ page, tab, today }: { page: string; tab: string;
           </Labelled>
         </div>
         <div className="kp-fpc">
-          <h3>Tick box</h3>
+          <h3>Checkbox</h3>
           <div>
             <Checkbox
               name="pre_form_one"
               label="Pre-Form One programme"
-              hint="Tick when the family takes up the programme before Form 1. Its fee is charged on its own."
+              hint="Select when the family takes up the programme before Form 1. Its fee is charged on its own."
             />
             <Checkbox name="has_sibling" label="Has a sibling already at Al-Rahmah" defaultChecked />
           </div>
-          <p className="kp-spec">A tick box is saved with its form.</p>
+          <p className="kp-spec">A checkbox is saved with its form.</p>
         </div>
         <div className="kp-fpc">
           <h3>Switch</h3>

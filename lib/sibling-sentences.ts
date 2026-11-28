@@ -212,7 +212,7 @@ export const NOTE_LINES: Record<SiblingNote, Record<SentenceLanguage, Say>> = {
     sw: (f) => `${LARGER_DISCOUNTS[f.larger ?? "staff_child"].sw} ni kubwa zaidi, kwa hiyo linachukua nafasi ya 10%.`,
   },
   prior_sibling_tick: {
-    en: () => "Has a sibling already at Al-Rahmah is ticked.",
+    en: () => "Has a sibling already at Al-Rahmah is selected.",
     sw: () => "Imewekwa alama: ana ndugu ambaye tayari yuko Al-Rahmah.",
   },
   grants_paused: {

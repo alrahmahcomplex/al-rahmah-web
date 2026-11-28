@@ -1,5 +1,6 @@
 import { render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
+import Link from "next/link"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 const actions = vi.hoisted(() => ({
@@ -13,13 +14,13 @@ const actions = vi.hoisted(() => ({
   renameRoleTo: vi.fn(),
   resendStaffInvite: vi.fn(),
   retireRoleNow: vi.fn(),
+  saveRole: vi.fn(),
   sendStaffResetLink: vi.fn(),
-  setManagedRole: vi.fn(),
-  setPermission: vi.fn(),
 }))
 vi.mock("@/app/staff/roles/actions", () => actions)
 const push = vi.hoisted(() => vi.fn())
-vi.mock("next/navigation", () => ({ useRouter: () => ({ push }) }))
+// Leaving with unsaved changes replaces the page's history copy; both count as going there.
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push, replace: push }) }))
 
 import { NewRoleForm } from "@/app/staff/roles/new-role-form"
 import { RolePane } from "@/app/staff/roles/role-pane"
@@ -74,7 +75,7 @@ const ROLE: RoleView = {
   ],
   retireBlocked: null,
   inviteBlocked: null,
-  subtitle: "Changes apply to everyone in this role immediately.",
+  subtitle: "Select what this role can do, then press Save changes. Everyone in the role gets the change on their next click.",
   people: [
     person({}),
     person({ id: "p-2", name: "Baraka Lead", email: "baraka@example.test", managesStaff: true }),
@@ -85,13 +86,15 @@ const ROLE: RoleView = {
 
 const OK = { ok: true, message: "Done." }
 
-function renderPane(role: RoleView = ROLE, permissions: PermissionOption[] = PERMISSIONS) {
+function renderPane(role: RoleView = ROLE, permissions: PermissionOption[] = PERMISSIONS, children: React.ReactNode = null) {
   return render(
     <RolePane role={role} permissions={permissions}>
-      {null}
+      {children}
     </RolePane>,
   )
 }
+
+const saveBar = () => screen.queryByRole("region", { name: "Unsaved changes" })
 
 const row = (name: string) => screen.getByRole("listitem", { name })
 
@@ -105,30 +108,174 @@ beforeEach(() => {
 })
 
 describe("Staff and roles controls", () => {
-  it("grants and revokes a permission with the tick boxes", async () => {
+  it("selecting boxes changes only the screen; Save changes sends every change in one call", async () => {
     const user = userEvent.setup()
+    actions.saveRole.mockResolvedValue({ ok: true, message: "Saved 3 changes to Admissions Manager." })
     renderPane()
+    expect(saveBar()).toBeNull()
 
     await user.click(screen.getByRole("checkbox", { name: "Record payments and maintain fees" }))
-    await waitFor(() => expect(actions.setPermission).toHaveBeenCalledWith("r-man", "payments.record", true))
-    await idle()
-
     await user.click(screen.getByRole("checkbox", { name: "View applicants and their history" }))
-    await waitFor(() => expect(actions.setPermission).toHaveBeenCalledWith("r-man", "leads.view", false))
-    await idle()
-    expect(actions.setPermission).toHaveBeenCalledTimes(2)
+    await user.click(screen.getByRole("checkbox", { name: "Accountant" }))
+    expect(actions.saveRole).not.toHaveBeenCalled()
+    expect(screen.getByRole("checkbox", { name: "Record payments and maintain fees" })).toBeChecked()
+    expect(screen.getByRole("checkbox", { name: "View applicants and their history" })).not.toBeChecked()
+    expect(within(saveBar()!).getByText("3 changes not saved")).toBeInTheDocument()
+    expect(screen.getAllByText("Added")).toHaveLength(2)
+    expect(screen.getAllByText("Removed")).toHaveLength(1)
+
+    await user.click(within(saveBar()!).getByRole("button", { name: "Save changes" }))
+    await waitFor(() => expect(screen.getByTestId("role-outcome")).toHaveTextContent("Saved 3 changes to Admissions Manager."))
+    expect(actions.saveRole).toHaveBeenCalledTimes(1)
+    expect(actions.saveRole).toHaveBeenCalledWith("r-man", {
+      addPermissions: ["payments.record"],
+      removePermissions: ["leads.view"],
+      addManaged: ["r-acc"],
+      removeManaged: [],
+    })
+    const outcome = screen.getByTestId("role-outcome")
+    expect(outcome).toHaveTextContent("Can now: Record payments and maintain fees.")
+    expect(outcome).toHaveTextContent("Can no longer: View applicants and their history.")
+    expect(outcome).toHaveTextContent("Now manages the staff in: Accountant.")
+    expect(saveBar()).toBeNull()
   })
 
-  it("adds and removes a role from the managed set", async () => {
+  it("selecting a box back takes the change away, and Undo changes puts every box back", async () => {
     const user = userEvent.setup()
     renderPane()
+    const payments = screen.getByRole("checkbox", { name: "Record payments and maintain fees" })
+    await user.click(payments)
+    await user.click(payments)
+    expect(saveBar()).toBeNull()
 
-    await user.click(screen.getByRole("checkbox", { name: "Accountant" }))
-    await waitFor(() => expect(actions.setManagedRole).toHaveBeenCalledWith("r-man", "r-acc", true))
-    await idle()
+    await user.click(payments)
     await user.click(screen.getByRole("checkbox", { name: "Admissions Staff" }))
-    await waitFor(() => expect(actions.setManagedRole).toHaveBeenCalledWith("r-man", "r-staff", false))
-    await idle()
+    expect(within(saveBar()!).getByText("2 changes not saved")).toBeInTheDocument()
+    await user.click(within(saveBar()!).getByRole("button", { name: "Undo changes" }))
+    expect(saveBar()).toBeNull()
+    expect(payments).not.toBeChecked()
+    expect(screen.getByRole("checkbox", { name: "Admissions Staff" })).toBeChecked()
+    expect(actions.saveRole).not.toHaveBeenCalled()
+  })
+
+  it("keeps every selection when the save is refused or the connection drops", async () => {
+    const user = userEvent.setup()
+    actions.saveRole.mockResolvedValueOnce({ ok: false, message: "The change could not be saved. Try again in a moment." })
+    renderPane()
+    await user.click(screen.getByRole("checkbox", { name: "Record payments and maintain fees" }))
+    await user.click(within(saveBar()!).getByRole("button", { name: "Save changes" }))
+    await waitFor(() => expect(screen.getByTestId("role-outcome")).toHaveTextContent("Nothing was saved."))
+    expect(screen.getByTestId("role-outcome")).toHaveTextContent("Your 1 change is still shown below. Press Save changes to try again.")
+    expect(screen.getByRole("checkbox", { name: "Record payments and maintain fees" })).toBeChecked()
+    expect(within(saveBar()!).getByText("1 change not saved")).toBeInTheDocument()
+
+    actions.saveRole.mockRejectedValueOnce(new Error("network"))
+    await user.click(await within(saveBar()!).findByRole("button", { name: "Save changes" }))
+    await waitFor(() =>
+      expect(screen.getByTestId("role-outcome")).toHaveTextContent("The connection dropped before the changes reached the database."),
+    )
+    expect(saveBar()).not.toBeNull()
+  })
+
+  it("asks before leaving with unsaved changes: keep editing, or leave without saving", async () => {
+    const user = userEvent.setup()
+    renderPane(ROLE, PERMISSIONS, <Link href="/staff/home">Home</Link>)
+
+    // Nothing changed: the link is left alone.
+    const home = screen.getByRole("link", { name: "Home" })
+    home.addEventListener("click", (event) => event.preventDefault())
+    await user.click(home)
+    expect(screen.queryByRole("dialog", { name: "Save your changes to Admissions Manager?" })).toBeNull()
+
+    await user.click(screen.getByRole("checkbox", { name: "Record payments and maintain fees" }))
+    await user.click(home)
+    let sheet = await screen.findByRole("dialog", { name: "Save your changes to Admissions Manager?" })
+    expect(sheet).toHaveAccessibleDescription(
+      "You made 1 change and haven't saved it. If you leave without saving, it goes back to how it was.",
+    )
+    await user.click(within(sheet).getByRole("button", { name: "Keep editing" }))
+    expect(screen.getByRole("checkbox", { name: "Record payments and maintain fees" })).toBeChecked()
+    expect(push).not.toHaveBeenCalled()
+
+    await user.click(home)
+    sheet = await screen.findByRole("dialog", { name: "Save your changes to Admissions Manager?" })
+    await user.click(within(sheet).getByRole("button", { name: "Leave without saving" }))
+    expect(push).toHaveBeenCalledWith("/staff/home")
+    expect(actions.saveRole).not.toHaveBeenCalled()
+  })
+
+  it("asks on Back, keeps asking on a second Back, and takes its history copy off once undone", async () => {
+    const user = userEvent.setup()
+    const pushState = vi.spyOn(window.history, "pushState")
+    const back = vi.spyOn(window.history, "back").mockImplementation(() => {})
+    const go = vi.spyOn(window.history, "go").mockImplementation(() => {})
+    const question = { name: "Save your changes to Admissions Manager?" }
+    try {
+      renderPane()
+      const payments = screen.getByRole("checkbox", { name: "Record payments and maintain fees" })
+      await user.click(payments)
+      expect(pushState).toHaveBeenCalledTimes(1)
+
+      // Back: the page puts its copy straight back on top and asks.
+      window.dispatchEvent(new PopStateEvent("popstate"))
+      const sheet = await screen.findByRole("dialog", question)
+      expect(pushState).toHaveBeenCalledTimes(2)
+      // A second Back while asking lands here again.
+      window.dispatchEvent(new PopStateEvent("popstate"))
+      expect(pushState).toHaveBeenCalledTimes(3)
+      expect(screen.getByRole("dialog", question)).toBeInTheDocument()
+
+      await user.click(within(sheet).getByRole("button", { name: "Keep editing" }))
+      expect(payments).toBeChecked()
+      expect(back).not.toHaveBeenCalled()
+
+      // Undone: the copy comes off.
+      await user.click(within(saveBar()!).getByRole("button", { name: "Undo changes" }))
+      await waitFor(() => expect(back).toHaveBeenCalledTimes(1))
+
+      // Leaving from Back steps past the copy and this page's entry.
+      await user.click(payments)
+      window.dispatchEvent(new PopStateEvent("popstate"))
+      await user.click(within(await screen.findByRole("dialog", question)).getByRole("button", { name: "Leave without saving" }))
+      expect(go).toHaveBeenCalledWith(-2)
+      expect(back).toHaveBeenCalledTimes(1)
+    } finally {
+      pushState.mockRestore()
+      back.mockRestore()
+      go.mockRestore()
+    }
+  })
+
+  it("asks before New role opens the role it made", async () => {
+    const user = userEvent.setup()
+    actions.addRole.mockResolvedValue({ ok: true, message: "Added.", roleId: "r-new" })
+    render(
+      <>
+        <RolePane role={ROLE} permissions={PERMISSIONS}>
+          {null}
+        </RolePane>
+        <NewRoleForm />
+      </>,
+    )
+    await user.click(screen.getByRole("checkbox", { name: "Record payments and maintain fees" }))
+    await user.type(screen.getByLabelText("Role name"), "Gatekeepers")
+    await user.click(screen.getByRole("button", { name: "Add" }))
+    const sheet = await screen.findByRole("dialog", { name: "Save your changes to Admissions Manager?" })
+    expect(push).not.toHaveBeenCalled()
+    await user.click(within(sheet).getByRole("button", { name: "Leave without saving" }))
+    expect(push).toHaveBeenCalledWith("/staff/roles?role=r-new")
+  })
+
+  it("saves, then leaves, from the question", async () => {
+    const user = userEvent.setup()
+    actions.saveRole.mockResolvedValue({ ok: true, message: "Saved 1 change to Admissions Manager." })
+    renderPane(ROLE, PERMISSIONS, <Link href="/staff/home">Home</Link>)
+    await user.click(screen.getByRole("checkbox", { name: "Record payments and maintain fees" }))
+    await user.click(screen.getByRole("link", { name: "Home" }))
+    const sheet = await screen.findByRole("dialog", { name: "Save your changes to Admissions Manager?" })
+    await user.click(within(sheet).getByRole("button", { name: "Save changes" }))
+    await waitFor(() => expect(push).toHaveBeenCalledWith("/staff/home"))
+    expect(actions.saveRole).toHaveBeenCalledTimes(1)
   })
 
   it("moves someone at once, or asks first when they would stop managing staff", async () => {
@@ -309,22 +456,17 @@ describe("Staff and roles controls that are closed", () => {
     expect(screen.getByRole("checkbox", { name: "Cashier (retired)" })).toHaveAttribute("aria-disabled", "true")
   })
 
-  it("names the paired permission under Reports, as before", () => {
-    renderPane({ ...ROLE, permissions: [] }, [...PERMISSIONS, { name: "reports.view", label: "View Reports" }])
-    expect(screen.getByRole("checkbox", { name: "View Reports" })).toHaveAccessibleDescription(
-      "Reports need “View applicants and their history”. Ticking this ticks it too, and unticking it unticks this.",
-    )
-  })
-
-  it("tells what was ticked with it when Reports is granted", async () => {
+  it("names the permission a paired one needs, and selects and clears them together", async () => {
     const user = userEvent.setup()
     renderPane({ ...ROLE, permissions: [] }, [...PERMISSIONS, { name: "reports.view", label: "View Reports" }])
-    await user.click(screen.getByRole("checkbox", { name: "View Reports" }))
-    await waitFor(() => expect(actions.setPermission).toHaveBeenCalledWith("r-man", "reports.view", true))
-    await waitFor(() =>
-      expect(screen.getByTestId("role-outcome")).toHaveTextContent(
-        "Admissions Manager can now: View Reports. “View applicants and their history” is ticked too, since Reports need it.",
-      ),
+    expect(screen.getByRole("checkbox", { name: "View Reports" })).toHaveAccessibleDescription(
+      "Needs “View applicants and their history”. Selecting this selects it too; clearing that clears this.",
     )
+    await user.click(screen.getByRole("checkbox", { name: "View Reports" }))
+    expect(screen.getByRole("checkbox", { name: "View applicants and their history" })).toBeChecked()
+    expect(within(saveBar()!).getByText("2 changes not saved")).toBeInTheDocument()
+    await user.click(screen.getByRole("checkbox", { name: "View applicants and their history" }))
+    expect(screen.getByRole("checkbox", { name: "View Reports" })).not.toBeChecked()
+    expect(saveBar()).toBeNull()
   })
 })

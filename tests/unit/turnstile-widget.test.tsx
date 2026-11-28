@@ -110,7 +110,7 @@ describe("TurnstileWidget", () => {
     width.mockReturnValue(261)
     act(() => resized())
     // The widget drawn again starts with no message until Cloudflare asks.
-    expect(screen.queryByText("Tick the security check below, then send.")).toBeNull()
+    expect(screen.queryByText("Select the security check below, then send.")).toBeNull()
     await waitFor(() => expect(turnstile.render).toHaveBeenCalledTimes(2))
     expect(turnstile.remove).toHaveBeenCalledWith("widget-1")
     expect(lastOptions().size).toBe("compact")
@@ -254,9 +254,9 @@ describe("TurnstileWidget", () => {
     act(() => lastOptions()["before-interactive-callback"]!())
     await waitFor(() => expect(turnstile.render).toHaveBeenCalledTimes(2))
     expect(lastOptions().size).toBe("compact")
-    expect(screen.queryByText("Tick the security check below, then send.")).toBeNull()
+    expect(screen.queryByText("Select the security check below, then send.")).toBeNull()
     act(() => lastOptions()["before-interactive-callback"]!())
-    expect(screen.getByText("Tick the security check below, then send.")).toBeInTheDocument()
+    expect(screen.getByText("Select the security check below, then send.")).toBeInTheDocument()
   })
 
   it("draws a box that is too wide again at the size that fits when Cloudflare shows an error in it (#278)", async () => {
@@ -316,7 +316,7 @@ describe("TurnstileWidget", () => {
     act(() => lastOptions()["before-interactive-callback"]!())
     await act(async () => {})
     expect(turnstile.render).toHaveBeenCalledTimes(1)
-    expect(screen.getByText("Tick the security check below, then send.")).toBeInTheDocument()
+    expect(screen.getByText("Select the security check below, then send.")).toBeInTheDocument()
 
     // Nor once the box shows: a box growing into view, or a wider window,
     // doesn't take away the challenge the person is about to click.
@@ -348,7 +348,7 @@ describe("TurnstileWidget", () => {
 
     act(() => lastOptions().callback!())
     expect(container.firstChild).toHaveClass("mt-5")
-    expect(screen.queryByText("Tick the security check below, then send.")).toBeNull()
+    expect(screen.queryByText("Select the security check below, then send.")).toBeNull()
   })
 
   it("falls back to the visitor's browser language for Swahili, which Turnstile doesn't offer", async () => {
@@ -415,7 +415,7 @@ describe("TurnstileWidget", () => {
     expect(screen.queryByRole("alert")).toBeNull()
     expect(screen.queryByText("The security check couldn't load. Reload the page and try again.")).toBeNull()
     act(() => lastOptions()["before-interactive-callback"]!())
-    expect(screen.getByText("Tick the security check below, then send.")).toHaveClass("sr-only")
+    expect(screen.getByText("Select the security check below, then send.")).toHaveClass("sr-only")
   })
 
   it("draws the check again from the start when asked, as Run the check again does", async () => {

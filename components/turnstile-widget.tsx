@@ -73,7 +73,7 @@ const COPY: Record<Language, Record<Exclude<CheckState, "hidden">, string>> = {
     unsupported: "Kivinjari hiki hakiwezi kufanya ukaguzi wa usalama. Jaribu kivinjari kingine, au piga simu ofisini.",
   },
   en: {
-    needsClick: "Tick the security check below, then send.",
+    needsClick: "Select the security check below, then send.",
     failed: "The security check couldn't load. Reload the page and try again.",
     unsupported: "This browser can't run the security check. Try another browser, or call the office.",
   },

@@ -47,26 +47,21 @@ export type Permission = (typeof PERMISSIONS)[number]
 // answered only under leads.view, and so is every discount and export
 // screen; the import creates leads. The database keeps each pair together
 // (supabase/migrations/20261204130100_discount_import_export_permissions.sql);
-// the role screen uses this to tick and untick them together and say why.
-// No needed permission needs another, so one step is always enough.
-//
-// The database keeps one more pair that is not listed here yet:
-// visits.record needs payments.view (#460,
+// the role screen uses this to select and clear them together and name the
+// one needed. Check-in needs school-fee payments (#460,
 // supabase/migrations/20270103100100_check_in_implies_payments_view.sql).
-// The role screen's wording names Reports as the reason for every pair, so
-// listing it would show the wrong reason; it waits for a copy change the
-// owner approves. Until then the screen's ticks still show the database's
-// result after each change.
+// No needed permission needs another, so one step is always enough.
 export const PERMISSION_NEEDS: Readonly<Partial<Record<Permission, Permission>>> = {
   "reports.view": "leads.view",
   "discount_codes.manage": "leads.view",
   "leads.import": "leads.create",
   "leads.export": "leads.view",
+  "visits.record": "payments.view",
 }
 
-// The other permissions that change when `permission` is ticked or unticked
-// on a role holding `held`: ticking adds what it needs, unticking takes away
-// what needs it. Matches the database trigger.
+// The other permissions that change when `permission` is selected or
+// cleared on a role holding `held`: selecting adds what it needs, clearing
+// takes away what needs it. Matches the database trigger.
 export function impliedChanges(held: readonly string[], permission: Permission, granted: boolean): Permission[] {
   if (granted) {
     const needed = PERMISSION_NEEDS[permission]

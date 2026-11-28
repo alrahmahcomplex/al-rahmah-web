@@ -12,16 +12,16 @@ export type PriorSiblingOutcome = { status: "done" } | { status: "refused"; fiel
 export function priorSiblingOutcome(error: SetPriorSiblingError): PriorSiblingOutcome {
   switch (error) {
     case "forbidden":
-      return { status: "refused", field: null, message: "Your role can't change the sibling tick. Nothing was saved." }
+      return { status: "refused", field: null, message: "Your role can't change the sibling box. Nothing was saved." }
     case "invalid-name":
       return { status: "refused", field: "name", message: "Write the sibling's name, in at most 200 characters." }
     case "invalid-class":
       return { status: "refused", field: "class", message: "Choose the sibling's class." }
     case "lead-closed":
-      return { status: "refused", field: null, message: "This application is closed, so the sibling tick can't change. Reload the page." }
+      return { status: "refused", field: null, message: "This application is closed, so the sibling box can't change. Reload the page." }
     case "not-found":
       return { status: "refused", field: null, message: "This application could not be found. Reload the page." }
     case "unavailable":
-      return { status: "refused", field: null, message: "The sibling tick could not be saved. Nothing was changed. Try again in a moment." }
+      return { status: "refused", field: null, message: "The sibling box could not be saved. Nothing was changed. Try again in a moment." }
   }
 }

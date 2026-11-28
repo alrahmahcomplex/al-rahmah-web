@@ -52,7 +52,7 @@ const SOURCES: Readonly<Record<string, string>> = {
   locked: "Fixed at enrolment",
   manual: "Set by hand",
   legacy: "The old family rule",
-  prior_sibling: "The Has a sibling already at Al-Rahmah tick",
+  prior_sibling: "The Has a sibling already at Al-Rahmah box",
 }
 
 const EDIT_VALUES: Readonly<Record<string, string>> = {

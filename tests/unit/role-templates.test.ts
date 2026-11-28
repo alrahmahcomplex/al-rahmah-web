@@ -34,6 +34,7 @@ describe("the role templates", () => {
       "discount_codes.manage": "leads.view",
       "leads.import": "leads.create",
       "leads.export": "leads.view",
+      "visits.record": "payments.view",
     })
     for (const template of ROLE_TEMPLATES) {
       for (const [dependent, needed] of Object.entries(PERMISSION_NEEDS) as [Permission, Permission][]) {

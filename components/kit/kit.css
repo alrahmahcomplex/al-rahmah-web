@@ -198,6 +198,28 @@ a.kit-fpill { display: inline-flex; align-items: center; text-decoration: none; 
   .kit-card { padding: 18px; }
   .kit-task { border-radius: 32px; padding: 24px 18px; }
 }
+/* A filling card: its content scrolls inside, above its foot. */
+.kit-card[data-fill] { display: flex; flex-direction: column; min-height: 0; padding: 0; overflow: hidden; }
+.kit-card[data-fill] > .kit-card-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 22px 24px; }
+@media (max-width: 860px) { .kit-card[data-fill] > .kit-card-body { padding: 18px; } }
+
+/* ---------- save bar: a filling card's foot while changes wait ---------- */
+.kit-savebar {
+  flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 12px 24px;
+  border-top: 1px solid var(--gf-mist); background: var(--gf-paper); box-shadow: 0 -14px 24px -20px rgb(9 0 187 / .35);
+  animation: kit-savebar-in var(--gf-t-slow) var(--gf-ease-out) both;
+}
+.kit-savebar-text { flex: 1 1 160px; margin: 0; display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 14px; color: var(--gf-ink); }
+.kit-savebar-text .gf-ic { color: var(--gf-orange-deep); }
+.kit-savebar-acts { display: flex; flex-wrap: wrap; gap: 8px; }
+@keyframes kit-savebar-in { from { transform: translateY(14px); opacity: 0; } }
+@media (max-width: 860px) { .kit-savebar { padding: 12px 18px; } }
+@media (max-width: 520px) {
+  .kit-savebar-acts { width: 100%; }
+  .kit-savebar-acts .kit-btn { flex: 1; }
+}
+@media (prefers-reduced-motion: reduce) { .kit-savebar { animation: none; } }
+html.rm .kit-savebar { animation: none; }
 
 /* ---------- stat card (#520): the icon before the title, the number under them, then the card's own graph ---------- */
 .kit-stat {

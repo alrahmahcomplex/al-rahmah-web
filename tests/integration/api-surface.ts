@@ -1295,6 +1295,17 @@ export const FUNCTIONS: Record<string, FunctionEntry> = {
     },
     agent: { refused: "not_permitted" },
   },
+  "public.save_role_changes(role_id uuid, add_permissions text[], remove_permissions text[], add_managed_role_ids uuid[], remove_managed_role_ids uuid[])": {
+    roles: ["authenticated"],
+    args: {
+      role_id: "(select id from public.roles where name = 'Accountant')",
+      add_permissions: "array['leads.view']",
+      remove_permissions: "array[]::text[]",
+      add_managed_role_ids: "array[(select id from public.roles where name = 'Admissions Staff')]",
+      remove_managed_role_ids: "array[]::uuid[]",
+    },
+    agent: { refused: "forbidden" },
+  },
   "public.set_role_manages(role_id uuid, managed_role_id uuid, manages boolean)": {
     roles: ["authenticated"],
     args: {

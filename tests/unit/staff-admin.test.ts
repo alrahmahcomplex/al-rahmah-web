@@ -9,11 +9,11 @@ import {
   reactivateRole,
   deactivateStaff,
   describeAuditRow,
+  describeHistory,
   reactivateStaff,
   renameRole,
   retireRole,
-  setRoleManages,
-  setRolePermission,
+  saveRoleChanges,
   type AuditRow,
   type HistoryLookup,
 } from "@/lib/services/staff-admin"
@@ -55,19 +55,31 @@ describe("the staff-admin writes", () => {
     await createRole(client, "Receptionist")
     await createRole(client, "Head Accountant", { permissions: ["leads.view"], manages: ["role-2"], managedBy: ["role-3"] })
     await renameRole(client, "role-1", "Front desk")
-    await setRolePermission(client, "role-1", "leads.view", true)
+    await saveRoleChanges(client, "role-1", {
+      addPermissions: ["leads.view"],
+      removePermissions: ["payments.record"],
+      addManaged: [],
+      removeManaged: ["role-2"],
+    })
     await retireRole(client, "role-1")
     await reactivateRole(client, "role-1")
-    await setRoleManages(client, "role-1", "role-2", false)
 
     expect(rpc.mock.calls).toEqual([
       ["create_role", { name: "Receptionist", permissions: [], manages: [], managed_by: [] }],
       ["create_role", { name: "Head Accountant", permissions: ["leads.view"], manages: ["role-2"], managed_by: ["role-3"] }],
       ["rename_role", { role_id: "role-1", name: "Front desk" }],
-      ["set_role_permission", { role_id: "role-1", permission: "leads.view", granted: true }],
+      [
+        "save_role_changes",
+        {
+          role_id: "role-1",
+          add_permissions: ["leads.view"],
+          remove_permissions: ["payments.record"],
+          add_managed_role_ids: [],
+          remove_managed_role_ids: ["role-2"],
+        },
+      ],
       ["retire_role", { role_id: "role-1" }],
       ["reactivate_role", { role_id: "role-1" }],
-      ["set_role_manages", { role_id: "role-1", managed_role_id: "role-2", manages: false }],
     ])
   })
 })
@@ -376,5 +388,79 @@ describe("describeAuditRow", () => {
       summary: "asked for a password reset link for Baraka Said",
       changes: [{ field: "email", from: null, to: "baraka@example.test" }],
     })
+  })
+})
+
+describe("describeHistory: one entry per Roles save", () => {
+  const lookup: HistoryLookup = {
+    staffNames: new Map([["owner", "Salma Abdallah"]]),
+    roleNames: new Map([
+      ["role-sec", "Primary Secretary"],
+      ["role-acc", "Accountant"],
+      ["role-adm", "Admissions Staff"],
+    ]),
+    permissionLabels: new Map([
+      ["leads.view", "View applicants and their history"],
+      ["leads.decline", "Decline applicants"],
+      ["results.send", "Send interview results"],
+    ]),
+    managedPairs: new Map([["pair-old", { roleId: "role-sec", managedRoleId: "role-adm" }]]),
+  }
+  const base: AuditRow = {
+    id: 1,
+    table_name: "roles",
+    row_id: "role-sec",
+    action: "update",
+    old_values: null,
+    new_values: null,
+    actor_kind: "staff",
+    actor_staff_id: "owner",
+    created_at: "2026-11-28T10:00:00Z",
+  }
+  const at = (row: Partial<AuditRow>): AuditRow => ({ ...base, ...row })
+
+  it("lists one save's permissions and managed roles as one entry, at its newest row", () => {
+    const rows = [
+      at({ id: 12, table_name: "role_managed_roles", row_id: "pair-old", old_values: { active: true }, new_values: { active: false }, transaction_id: 77, created_at: "2026-11-28T10:00:02Z" }),
+      at({ id: 11, table_name: "role_managed_roles", row_id: "pair-new", action: "insert", new_values: { role_id: "role-sec", managed_role_id: "role-acc", active: true }, transaction_id: 77, created_at: "2026-11-28T10:00:01Z" }),
+      at({ id: 10, old_values: { permissions: ["leads.view", "results.send"] }, new_values: { permissions: ["leads.decline", "leads.view"] }, transaction_id: 77 }),
+    ]
+    expect(describeHistory(rows, lookup)).toEqual([
+      {
+        id: 12,
+        at: "2026-11-28T10:00:02Z",
+        actor: "Salma Abdallah",
+        summary: "changed the role Primary Secretary",
+        changes: [
+          { field: "permissions", from: null, to: "added Decline applicants" },
+          { field: "permissions", from: null, to: "removed Send interview results" },
+          { field: "manages the staff in", from: null, to: "removed Admissions Staff" },
+          { field: "manages the staff in", from: null, to: "added Accountant" },
+        ],
+      },
+    ])
+  })
+
+  it("names the role when a save changed only its managed set", () => {
+    const rows = [
+      at({ id: 21, table_name: "role_managed_roles", row_id: "pair-new", action: "insert", new_values: { role_id: "role-sec", managed_role_id: "role-acc", active: true }, transaction_id: 80 }),
+      at({ id: 20, table_name: "role_managed_roles", row_id: "pair-old", old_values: { active: true }, new_values: { active: false }, transaction_id: 80 }),
+    ]
+    const [entry] = describeHistory(rows, lookup)
+    expect(entry.summary).toBe("changed the role Primary Secretary")
+    expect(entry.changes.map((c) => c.to)).toEqual(["added Accountant", "removed Admissions Staff"])
+    // One pair alone keeps its own sentence.
+    expect(describeHistory([rows[0]], lookup)[0].summary).toBe("let Primary Secretary manage the staff in Accountant")
+  })
+
+  it("keeps separate saves, other roles and rows from before transactions were recorded apart", () => {
+    const rows = [
+      at({ id: 32, new_values: { permissions: ["leads.view"] }, old_values: { permissions: [] }, transaction_id: 91 }),
+      at({ id: 31, new_values: { permissions: [] }, old_values: { permissions: ["leads.view"] }, transaction_id: 90 }),
+      at({ id: 30, row_id: "role-acc", new_values: { permissions: ["leads.view"] }, old_values: { permissions: [] }, transaction_id: 90 }),
+      at({ id: 29, new_values: { permissions: ["leads.view"] }, old_values: { permissions: [] } }),
+      at({ id: 28, new_values: { permissions: ["leads.view"] }, old_values: { permissions: [] } }),
+    ]
+    expect(describeHistory(rows, lookup).map((e) => e.id)).toEqual([32, 31, 30, 29, 28])
   })
 })

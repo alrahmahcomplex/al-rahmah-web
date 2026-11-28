@@ -3,6 +3,7 @@
 export { Button, ButtonLink, RoundButton, TextLink, type ButtonLinkProps, type ButtonProps, type ButtonSize, type ButtonVariant, type RoundButtonProps, type TextLinkProps } from "./button"
 export { Bento, type BentoProps } from "./bento"
 export { Card, TaskCard, type CardProps } from "./card"
+export { SaveBar, type SaveBarProps } from "./save-bar"
 export { ClassPicker, type ClassLevel } from "./class-picker"
 export { StatCard, type StatCardProps, type StatTrend } from "./stat-card"
 export { ChipButtons, ChoiceTiles, DefaultTile, type ChipOption, type ChoiceOption, type ChoiceTilesProps } from "./choices"

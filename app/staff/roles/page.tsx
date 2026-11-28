@@ -53,7 +53,7 @@ export default async function StaffAndRolesPage({ searchParams }: { searchParams
   return (
     <>
       {heading}
-      <div className="ro-grid">
+      <div className="ro-grid" data-stage-fill="">
         <RoleRail roles={overview.data.roles} selectedId={selectedId} yourRoleId={yourRoleId ?? null} viewer={viewer} />
         {role && (
           <RolePane key={role.id} role={role} permissions={overview.data.permissions}>

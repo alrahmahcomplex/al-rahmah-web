@@ -71,7 +71,7 @@ describe("the prior-sibling tick in the lead history", () => {
       {},
     )
     expect(described).toMatchObject({
-      summary: "ticked Has a sibling already at Al-Rahmah",
+      summary: "selected Has a sibling already at Al-Rahmah",
       changes: [
         { label: "Has a sibling already at Al-Rahmah", from: null, to: "Yes" },
         { label: "Sibling's name", from: null, to: "Amina Older" },

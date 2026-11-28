@@ -6,15 +6,20 @@ import { expect, test } from "./staff-test"
 import { signInAsSuperAdmin } from "./super-admin"
 
 // reports.view implies leads.view (#244): on the Super Admin's role pane,
-// ticking View reports ticks View leads, unticking View leads unticks View
-// reports, and the reason shows beside View reports.
+// selecting View reports selects View leads, clearing View leads clears View
+// reports, and the needed permission shows beside View reports.
 
 const unique = (name: string) => `${name} ${randomUUID().slice(0, 8)}`
 const callout = (page: Page) => page.getByTestId("role-outcome")
 const LEADS = "View applicants and their history"
 const REPORTS = "View reports"
 
-test("ticking View reports ticks View leads, and unticking View leads unticks both", async ({ page }) => {
+async function save(page: Page) {
+  await page.getByRole("region", { name: "Unsaved changes" }).getByRole("button", { name: "Save changes" }).click()
+  await expect(page.getByRole("region", { name: "Unsaved changes" })).toHaveCount(0)
+}
+
+test("selecting View reports selects View leads, and clearing View leads clears both", async ({ page }) => {
   const name = unique("Reports reader")
   await signInAsSuperAdmin(page)
   await page.goto("/staff/roles")
@@ -28,12 +33,13 @@ test("ticking View reports ticks View leads, and unticking View leads unticks bo
   const reports = page.getByRole("checkbox", { name: REPORTS, exact: true })
   await expect(leads).not.toBeChecked()
   await expect(reports).not.toBeChecked()
-  await expect(reports).toHaveAccessibleDescription(`Reports need “${LEADS}”. Ticking this ticks it too, and unticking it unticks this.`)
+  await expect(reports).toHaveAccessibleDescription(`Needs “${LEADS}”. Selecting this selects it too; clearing that clears this.`)
 
   await reports.click()
-  await expect(callout(page)).toHaveText(`${name} can now: ${REPORTS}. “${LEADS}” is ticked too, since Reports need it.`)
   await expect(reports).toBeChecked()
   await expect(leads).toBeChecked()
+  await save(page)
+  await expect(callout(page)).toHaveText(`Saved 2 changes to ${name}.Can now: ${LEADS}, ${REPORTS}.`)
 
   // Survives a reload: the database holds both.
   await page.reload()
@@ -41,15 +47,18 @@ test("ticking View reports ticks View leads, and unticking View leads unticks bo
   await expect(page.getByRole("checkbox", { name: LEADS, exact: true })).toBeChecked()
 
   await page.getByRole("checkbox", { name: LEADS, exact: true }).click()
-  await expect(callout(page)).toHaveText(`${name} can no longer: ${LEADS}. “${REPORTS}” went with it.`)
   await expect(page.getByRole("checkbox", { name: LEADS, exact: true })).not.toBeChecked()
   await expect(page.getByRole("checkbox", { name: REPORTS, exact: true })).not.toBeChecked()
+  await save(page)
+  await expect(callout(page)).toHaveText(`Saved 2 changes to ${name}.Can no longer: ${LEADS}, ${REPORTS}.`)
 
-  // Unticking View reports alone leaves View leads.
+  // Clearing View reports alone leaves View leads.
   await page.getByRole("checkbox", { name: REPORTS, exact: true }).click()
   await expect(page.getByRole("checkbox", { name: LEADS, exact: true })).toBeChecked()
+  await save(page)
   await page.getByRole("checkbox", { name: REPORTS, exact: true }).click()
-  await expect(callout(page)).toHaveText(`${name} can no longer: ${REPORTS}.`)
+  await save(page)
+  await expect(callout(page)).toHaveText(`Saved 1 change to ${name}.Can no longer: ${REPORTS}.`)
   await expect(page.getByRole("checkbox", { name: LEADS, exact: true })).toBeChecked()
   await expect(page.getByRole("checkbox", { name: REPORTS, exact: true })).not.toBeChecked()
 })

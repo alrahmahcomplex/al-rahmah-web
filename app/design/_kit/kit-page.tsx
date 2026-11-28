@@ -45,6 +45,7 @@ import { PART_GROUPS, partsIn, type Part, type PartGroup } from "@/lib/design-si
 import { tanzaniaToday } from "@/lib/school-calendar"
 import type { LeadStatus } from "@/lib/services/leads"
 
+import { SaveBarCard } from "./save-parts"
 import { CodeChipCard, FilterMenuCard, LinkRowsCard, ProfileRowCard, StepTrackCard, TopBarSwapCard } from "./agent-parts"
 import { APPLICANTS, CAMPUS, DISCOUNT_REQUESTS, FEE_SCHEDULE, FILTERS, PAYMENT_KINDS, type Applicant } from "./fixtures"
 import { FormPartsCard, ListInPopoverCard } from "./form-parts"
@@ -944,6 +945,7 @@ const CARDS: Record<string, () => ReactNode> = {
   tabs: TabsCard,
   pagination: PaginationCard,
   "cards-chips": CardsChipsCard,
+  "save-bar": SaveBarCard,
   "filter-menu": FilterMenuCard,
   "link-rows": LinkRowsCard,
   "sections-kv": SectionsCard,

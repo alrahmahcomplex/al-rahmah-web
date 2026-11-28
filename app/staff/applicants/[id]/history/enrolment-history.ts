@@ -44,7 +44,7 @@ const CAUSES: Readonly<Record<string, string>> = {
   academic_year_start: "the Academic-year start was reached",
   reopening: "the application was reopened",
   sibling: "the applicant's Sibling discount changed",
-  prior_sibling: "Has a sibling already at Al-Rahmah was ticked or cleared",
+  prior_sibling: "Has a sibling already at Al-Rahmah was selected or cleared",
 }
 
 // Also says why a sibling group, Sibling discount or seat changed (because.ts).
@@ -117,20 +117,20 @@ export function enrolmentProfileSummary(entry: LeadHistoryEntry): string {
   return "updated what enrolled the applicant"
 }
 
-// Staff ticking or clearing the Pre-Form One programme; null when the entry
+// Staff selecting or clearing the Pre-Form One programme; null when the entry
 // doesn't touch it.
 function preFormOneSummary(entry: LeadHistoryEntry): string | null {
   const tick = entry.changes.find((c) => c.field === "pre_form_one")
-  if (tick?.to === true) return "ticked the Pre-Form One programme"
+  if (tick?.to === true) return "selected the Pre-Form One programme"
   if (tick?.to === false && entry.action === "update") return "cleared the Pre-Form One programme"
   return null
 }
 
-// Staff ticking, clearing or changing Has a sibling already at Al-Rahmah;
+// Staff selecting, clearing or changing Has a sibling already at Al-Rahmah;
 // null when the entry doesn't touch it.
 function priorSiblingSummary(entry: LeadHistoryEntry): string | null {
   const tick = entry.changes.find((c) => c.field === "prior_sibling")
-  if (tick?.to === true) return "ticked Has a sibling already at Al-Rahmah"
+  if (tick?.to === true) return "selected Has a sibling already at Al-Rahmah"
   if (tick?.to === false && entry.action === "update") return "cleared Has a sibling already at Al-Rahmah"
   if (entry.action === "update" && entry.changes.some((c) => c.field === "prior_sibling_name" || c.field === "prior_sibling_class")) {
     return "changed the sibling already at Al-Rahmah"

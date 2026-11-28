@@ -66,7 +66,7 @@ test.describe("the rail and pane", () => {
     await expect(rail.getByRole("link", { name: /Receptionist/ })).toContainText("Retired")
 
     await expect(page.getByRole("heading", { name: "Admissions Manager", level: 2 })).toBeVisible()
-    await expect(page.getByText("Changes apply to everyone in this role immediately.")).toBeVisible()
+    await expect(page.getByText("Select what this role can do, then press Save changes. Everyone in the role gets the change on their next click.")).toBeVisible()
     await expect(page.getByRole("checkbox", { name: "Admissions Staff", exact: true })).toBeChecked()
     await expect(page.getByRole("checkbox", { name: "Accountant", exact: true })).not.toBeChecked()
     await expect(personRow(page, "Second Manager")).toContainText("Active")
@@ -234,7 +234,7 @@ test.describe("shaping roles, the Super Admin's alone", () => {
     return { id: rows[0].id, name }
   }
 
-  test("a blank role starts with nothing ticked, and ticking a permission saves it", async ({ page }) => {
+  test("a blank role starts with nothing selected, and Save changes saves a selected permission", async ({ page }) => {
     const name = uniqueName("Front desk")
     await signIn(page, SUPER_ADMIN)
     await page.goto("/staff/roles")
@@ -245,12 +245,17 @@ test.describe("shaping roles, the Super Admin's alone", () => {
 
     await expect(page.getByRole("heading", { name, level: 2 })).toBeVisible()
     await expect(rail.getByRole("link", { name: new RegExp(name) })).toHaveAttribute("aria-current", "page")
-    await expect(page.getByText("Changes apply to everyone in this role immediately.")).toBeVisible()
+    await expect(page.getByText("Select what this role can do, then press Save changes. Everyone in the role gets the change on their next click.")).toBeVisible()
     await expect(page.getByRole("checkbox", { checked: true })).toHaveCount(0)
 
     await page.getByRole("checkbox", { name: "View applicants and their history" }).click()
+    const bar = page.getByRole("region", { name: "Unsaved changes" })
+    await expect(bar).toContainText("1 change not saved")
+    await bar.getByRole("button", { name: "Save changes" }).click()
 
-    await expect(callout(page)).toHaveText(`${name} can now: View applicants and their history.`)
+    await expect(callout(page)).toHaveText(`Saved 1 change to ${name}.Can now: View applicants and their history.`)
+    await expect(bar).toHaveCount(0)
+    await page.reload()
     await expect(page.getByRole("checkbox", { name: "View applicants and their history" })).toBeChecked()
 
     await openStaffHistoryAsSuperAdmin(page)
@@ -258,7 +263,7 @@ test.describe("shaping roles, the Super Admin's alone", () => {
       .getByRole("list", { name: "History" })
       .getByRole("listitem")
       .filter({ hasText: `changed the role ${name}` })
-    await expect(change).toContainText("permissions: None → View applicants and their history")
+    await expect(change).toContainText("permissions: added View applicants and their history")
   })
 
   test("a name another role has is refused under the field", async ({ page }) => {
@@ -272,19 +277,49 @@ test.describe("shaping roles, the Super Admin's alone", () => {
     await expect(rail.getByRole("alert")).toHaveText('A role called "accountant" already exists.')
   })
 
-  test("a role's managed set is ticked and unticked like its permissions", async ({ page }) => {
+  test("a role's managed set joins the same Save as its permissions, in one History entry", async ({ page }) => {
     const role = await systemRole()
     await signIn(page, SUPER_ADMIN)
     await page.goto(`/staff/roles?role=${role.id}`)
 
     const accountants = page.getByRole("checkbox", { name: "Accountant", exact: true })
     await accountants.click()
-    await expect(callout(page)).toHaveText(`${role.name} now manages the staff in another role.`)
+    await page.getByRole("checkbox", { name: "Decline applicants" }).click()
+    const bar = page.getByRole("region", { name: "Unsaved changes" })
+    await expect(bar).toContainText("2 changes not saved")
+    await bar.getByRole("button", { name: "Save changes" }).click()
+    await expect(callout(page)).toContainText(`Saved 2 changes to ${role.name}.`)
+    await expect(callout(page)).toContainText("Now manages the staff in: Accountant.")
     await expect(accountants).toBeChecked()
 
-    await accountants.click()
-    await expect(callout(page)).toHaveText(`${role.name} no longer manages the staff in that role.`)
-    await expect(accountants).not.toBeChecked()
+    await openStaffHistoryAsSuperAdmin(page)
+    const change = page
+      .getByRole("list", { name: "History" })
+      .getByRole("listitem")
+      .filter({ hasText: `changed the role ${role.name}` })
+    await expect(change).toHaveCount(1)
+    await expect(change).toContainText("permissions: added Decline applicants")
+    await expect(change).toContainText("manages the staff in: added Accountant")
+  })
+
+  test("leaving with unsaved changes asks first, and Undo changes puts every box back", async ({ page }) => {
+    const role = await systemRole()
+    const other = await systemRole()
+    await signIn(page, SUPER_ADMIN)
+    await page.goto(`/staff/roles?role=${role.id}`)
+
+    const decline = page.getByRole("checkbox", { name: "Decline applicants" })
+    await decline.click()
+    await page.getByRole("navigation", { name: "Roles" }).getByRole("link", { name: new RegExp(other.name) }).click()
+    const sheet = page.getByRole("dialog", { name: `Save your changes to ${role.name}?` })
+    await sheet.getByRole("button", { name: "Keep editing" }).click()
+    await expect(sheet).toBeHidden()
+    await expect(page).toHaveURL(new RegExp(role.id))
+    await expect(decline).toBeChecked()
+
+    await page.getByRole("region", { name: "Unsaved changes" }).getByRole("button", { name: "Undo changes" }).click()
+    await expect(decline).not.toBeChecked()
+    await expect(page.getByRole("region", { name: "Unsaved changes" })).toHaveCount(0)
   })
 
   test("retiring a role active staff hold is refused, naming them", async ({ page }) => {
@@ -364,6 +399,6 @@ test.describe("shaping roles, the Super Admin's alone", () => {
 
     await page.getByRole("button", { name: "Reactivate role" }).click()
     await expect(callout(page)).toHaveText(`${renamed} is a current role again.`)
-    await expect(page.getByText("Changes apply to everyone in this role immediately.")).toBeVisible()
+    await expect(page.getByText("Select what this role can do, then press Save changes. Everyone in the role gets the change on their next click.")).toBeVisible()
   })
 })

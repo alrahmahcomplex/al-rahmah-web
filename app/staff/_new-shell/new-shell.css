@@ -220,6 +220,13 @@ html:has(.ns) body { background: var(--gf-paper); }
 }
 .ns-scroll::-webkit-scrollbar { display: none; }
 .ns-page { max-width: 1180px; margin: 0 auto; }
+/* A page whose last block fills the stage (data-stage-fill), such as Staff
+   and roles: the block takes the stage's height and scrolls inside its own
+   cards, so a filling card's foot sits on the card's bottom edge with
+   nothing scrolling behind it. Below 480px of height the stage scrolls. */
+.ns-scroll:has(> .ns-page > [data-stage-fill]) { display: flex; flex-direction: column; padding-bottom: 20px; }
+.ns-page:has(> [data-stage-fill]) { flex: 1 0 0; min-height: 480px; width: 100%; display: flex; flex-direction: column; }
+.ns-page > [data-stage-fill] { flex: 1; min-height: 0; }
 
 /* Each block of a page rises 10px and fades in on a page change (DESIGN.md,
    Motion): top-level blocks start 0, 50, 100 and 140ms in. Inside a narrow
@@ -287,6 +294,7 @@ html:has(.ns) body { background: var(--gf-paper); }
   .ns-sb, .ns-rz, .ns .ns-tog { display: none; }
   .ns-tb { padding: 0 0 2px; }
   .ns-scroll { --kit-stage-pt: 16px; padding: var(--kit-stage-pt) 14px 36px; }
+  .ns-scroll:has(> .ns-page > [data-stage-fill]) { padding-bottom: 12px; }
   .ns-me { padding: 0 4px; }
   .ns-me span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 }

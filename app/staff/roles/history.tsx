@@ -32,7 +32,7 @@ export function History({ result }: { result: Result<HistoryEntry[], "forbidden"
                 {entry.changes.length > 0 && (
                   <ul className="ro-changes">
                     {entry.changes.map((change) => (
-                      <li key={change.field}>
+                      <li key={`${change.field}-${change.to}`}>
                         {change.field}: {change.from !== null && <>{change.from} → </>}
                         <span className="ro-to">{change.to ?? "none"}</span>
                       </li>

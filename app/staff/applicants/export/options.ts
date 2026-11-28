@@ -31,7 +31,7 @@ const DESCRIPTIONS: Record<string, string> = {
   calls: "Class list plus parent name, phone and WhatsApp",
   codes: "Who referred each applicant",
   full: "Every column, payments, results, notes and history included",
-  custom: "Tick exactly what you need",
+  custom: "Select exactly what you need",
 }
 
 export function exportOptions(access: { permissions: readonly string[]; superAdmin: boolean }): ExportOptions {

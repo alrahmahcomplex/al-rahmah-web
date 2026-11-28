@@ -33,7 +33,7 @@ describe("roleView for the Super Admin", () => {
     const view = roleView(DATA, "manager", SUPER_ADMIN)!
 
     expect(view).toMatchObject({ canEditRoles: true, editable: true, managed: true, managesStaff: true })
-    expect(view.subtitle).toBe("Changes apply to everyone in this role immediately.")
+    expect(view.subtitle).toBe("Select what this role can do, then press Save changes. Everyone in the role gets the change on their next click.")
     expect(view.managedOptions).toEqual([
       { id: "admin", name: "Administrator", checked: false, retired: false },
       { id: "staff", name: "Admissions Staff", checked: true, retired: false },

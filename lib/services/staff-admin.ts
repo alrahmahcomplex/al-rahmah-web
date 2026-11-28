@@ -181,11 +181,6 @@ export function reactivateRole(supabase: SupabaseClient, roleId: string) {
   return write<RoleNames>(supabase, "reactivate_role", { role_id: roleId })
 }
 
-// Adds `managedRoleId` to the role's managed set, or takes it out.
-export function setRoleManages(supabase: SupabaseClient, roleId: string, managedRoleId: string, manages: boolean) {
-  return write<RoleNames>(supabase, "set_role_manages", { role_id: roleId, managed_role_id: managedRoleId, manages })
-}
-
 // A role from a template (lib/role-templates.ts), or blank without one. From
 // a template it takes the template's permissions, manages the current roles
 // its template manages, and joins the managed set of every current role
@@ -212,10 +207,24 @@ export function renameRole(supabase: SupabaseClient, roleId: string, name: strin
   return write<RoleNames>(supabase, "rename_role", { role_id: roleId, name })
 }
 
-// Ticks or unticks one permission, so two Managers changing different
-// permissions at once never undo each other.
-export function setRolePermission(supabase: SupabaseClient, roleId: string, permission: Permission, granted: boolean) {
-  return write<RoleNames>(supabase, "set_role_permission", { role_id: roleId, permission, granted })
+// One save of the Roles page: only the boxes that changed, all or nothing.
+// Another Super Admin's save of other boxes on the same role is kept; on the
+// same box, the later save wins.
+export type RoleChanges = {
+  addPermissions: readonly Permission[]
+  removePermissions: readonly Permission[]
+  addManaged: readonly string[]
+  removeManaged: readonly string[]
+}
+
+export function saveRoleChanges(supabase: SupabaseClient, roleId: string, changes: RoleChanges) {
+  return write<RoleNames>(supabase, "save_role_changes", {
+    role_id: roleId,
+    add_permissions: changes.addPermissions,
+    remove_permissions: changes.removePermissions,
+    add_managed_role_ids: changes.addManaged,
+    remove_managed_role_ids: changes.removeManaged,
+  })
 }
 
 export function retireRole(supabase: SupabaseClient, roleId: string) {
@@ -431,6 +440,8 @@ export type AuditRow = {
   actor_kind: string
   actor_staff_id: string | null
   created_at: string
+  // The transaction that wrote the row; null before 20270206100100.
+  transaction_id?: number | string | null
 }
 
 export type HistoryChange = { field: string; from: string | null; to: string | null }
@@ -563,6 +574,83 @@ export function describeAuditRow(row: AuditRow, lookup: HistoryLookup): HistoryE
   return { id: row.id, at: row.created_at, actor, summary, changes }
 }
 
+// The role a row of one Roles save belongs to: the role itself, or a
+// managed-set pair's managing role. Null for every other row.
+function savedRole(row: AuditRow, lookup: HistoryLookup): string | null {
+  if (row.transaction_id === null || row.transaction_id === undefined || row.actor_kind !== "staff") return null
+  if (row.table_name === "roles" && (row.action === "update" || row.action === "insert")) return row.row_id
+  if (row.table_name === "role_managed_roles") {
+    const manager = row.new_values?.role_id ?? lookup.managedPairs?.get(row.row_id ?? "")?.roleId
+    return manager ? String(manager) : null
+  }
+  return null
+}
+
+function labelsOf(value: unknown, lookup: HistoryLookup): string[] {
+  return Array.isArray(value) ? value.map((p) => lookup.permissionLabels.get(String(p)) ?? String(p)) : []
+}
+
+// A role's permission change as one line per permission added or taken
+// away, rather than the whole set before and after.
+function permissionLines(row: AuditRow, lookup: HistoryLookup): HistoryChange[] {
+  const before = labelsOf(row.old_values?.permissions, lookup)
+  const after = labelsOf(row.new_values?.permissions, lookup)
+  return [
+    ...after.filter((p) => !before.includes(p)).map((p) => ({ field: "permissions", from: null, to: `added ${p}` })),
+    ...before.filter((p) => !after.includes(p)).map((p) => ({ field: "permissions", from: null, to: `removed ${p}` })),
+  ]
+}
+
+function managedLine(row: AuditRow, lookup: HistoryLookup): HistoryChange {
+  const managed = row.new_values?.managed_role_id ?? lookup.managedPairs?.get(row.row_id ?? "")?.managedRoleId
+  const name = lookup.roleNames.get(String(managed ?? "")) ?? "a role"
+  return { field: "manages the staff in", from: null, to: row.new_values?.active === false ? `removed ${name}` : `added ${name}` }
+}
+
+// The Roles page's History. A role update lists the permissions it added
+// and took away. The rows one save wrote (one transaction, one role: its
+// permissions and its managed set) read as one entry, at the newest row.
+export function describeHistory(rows: readonly AuditRow[], lookup: HistoryLookup): HistoryEntry[] {
+  const groups = new Map<string, AuditRow[]>()
+  const order: (AuditRow | string)[] = []
+  for (const row of rows) {
+    const role = savedRole(row, lookup)
+    const key = role && `${row.transaction_id}:${role}`
+    if (!key) {
+      order.push(row)
+    } else if (groups.has(key)) {
+      groups.get(key)!.push(row)
+    } else {
+      groups.set(key, [row])
+      order.push(key)
+    }
+  }
+
+  return order.map((item) => {
+    const group = typeof item === "string" ? groups.get(item)! : [item]
+    const roleRow = group.find((row) => row.table_name === "roles")
+    const pairs = group.filter((row) => row.table_name === "role_managed_roles")
+    if (!roleRow && pairs.length === 1) return describeAuditRow(pairs[0], lookup)
+
+    const first = roleRow ?? group[0]
+    const entry = describeAuditRow(first, lookup)
+    if (!roleRow) {
+      const role = lookup.roleNames.get(savedRole(first, lookup) ?? "") ?? "a role"
+      entry.summary = `changed the role ${role}`
+      entry.changes = []
+    } else if (roleRow.action === "update") {
+      entry.changes = entry.changes.flatMap((change) =>
+        change.field === "permissions" ? permissionLines(roleRow, lookup) : [change],
+      )
+    }
+    entry.changes.push(...pairs.map((row) => managedLine(row, lookup)))
+    // Listed at the save's newest row, with its time.
+    entry.id = group[0].id
+    entry.at = group[0].created_at
+    return entry
+  })
+}
+
 export async function getStaffAdminHistory(
   supabase: SupabaseClient,
   staffAndRoles: StaffAndRoles,
@@ -578,7 +666,7 @@ export async function getStaffAdminHistory(
 
   const { data, error } = await supabase
     .from("audit_log")
-    .select("id, table_name, row_id, action, old_values, new_values, actor_kind, actor_staff_id, created_at")
+    .select("id, table_name, row_id, action, old_values, new_values, actor_kind, actor_staff_id, created_at, transaction_id")
     .eq("scope", "staff_admin")
     .order("created_at", { ascending: false })
     .order("id", { ascending: false })
@@ -595,7 +683,7 @@ export async function getStaffAdminHistory(
     permissionLabels: new Map(staffAndRoles.permissions.map((p) => [p.name, p.label])),
     managedPairs: staffAndRoles.managedPairs,
   }
-  return { ok: true, data: ((data ?? []) as AuditRow[]).map((row) => describeAuditRow(row, lookup)) }
+  return { ok: true, data: describeHistory((data ?? []) as AuditRow[], lookup) }
 }
 
 // ---------------------------------------------------------------------------

@@ -1,9 +1,10 @@
 "use client"
 
-import { useId, useRef, useState, useTransition } from "react"
+import { useRouter } from "next/navigation"
+import { useEffect, useId, useRef, useState, useTransition } from "react"
 
-import { Button, Card, Field, FieldError, Note, Popover, PopoverClose, Section, Sheet, Tag } from "@/components/kit"
-import { impliedChanges, PERMISSION_NEEDS } from "@/lib/permissions"
+import { Button, Card, Field, FieldError, Note, Popover, PopoverClose, SaveBar, Section, Sheet, Tag } from "@/components/kit"
+import { PERMISSION_NEEDS } from "@/lib/permissions"
 import { refusal, type PermissionOption } from "@/lib/services/staff-admin"
 
 import { TickBox } from "../_form-parts/tick-box"
@@ -16,20 +17,34 @@ import {
   reactivateStaffMember,
   renameRoleTo,
   resendStaffInvite,
+  saveRole,
   sendStaffResetLink,
   retireRoleNow,
-  setManagedRole,
-  setPermission,
   type ChangeOutcome,
 } from "./actions"
+import {
+  changeCount,
+  draftChanges,
+  EMPTY_DRAFT,
+  selectManaged,
+  selectPermission,
+  shownManaged,
+  shownPermissions,
+  type Draft,
+} from "./draft"
 import type { PersonView, RoleOption, RoleView } from "./view"
 
 type Run = (change: () => Promise<ChangeOutcome>) => void
 type Track = (change: () => Promise<ChangeOutcome>) => Promise<ChangeOutcome>
 
+// What the pane's callout shows: a first line, in bold when more follow.
+type Outcome = ChangeOutcome & { lines?: string[] }
+
 // A change that stops someone managing staff, or retires a role, waits here
 // until the person confirms it.
 type PendingConfirmation = { title: string; description: string; action: string; change: () => Promise<ChangeOutcome> }
+
+const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? "" : "s"}`
 
 export function RolePane({
   role,
@@ -40,19 +55,39 @@ export function RolePane({
   permissions: PermissionOption[]
   children: React.ReactNode
 }) {
-  const [outcome, setOutcome] = useState<ChangeOutcome | null>(null)
+  const router = useRouter()
+  const [outcome, setOutcome] = useState<Outcome | null>(null)
   const [confirmation, setConfirmation] = useState<PendingConfirmation | null>(null)
   // The last confirmation asked, so the sheet keeps its words while it slides out.
   const [asked, setAsked] = useState<PendingConfirmation | null>(null)
   if (confirmation && confirmation !== asked) setAsked(confirmation)
   const [renaming, setRenaming] = useState(false)
+  const [draft, setDraft] = useState<Draft>(EMPTY_DRAFT)
+  // Where the person was going when they had unsaved changes.
+  const [leaving, setLeaving] = useState<string | null>(null)
   const [pending, startTransition] = useTransition()
+  const [saving, startSaving] = useTransition()
   const subtitleId = useId()
   const retireReasonId = useId()
   const permissionIdPrefix = useId()
   const managedIdPrefix = useId()
+  const bodyTop = useRef<HTMLDivElement>(null)
 
   const labelOf = (name: string) => permissions.find((p) => p.name === name)?.label ?? name
+  const nameOf = (id: string) => role.managedOptions.find((option) => option.id === id)?.name ?? "a role"
+
+  const savedManaged = role.managedOptions.filter((option) => option.checked).map((option) => option.id)
+  const changes = draftChanges(
+    role.permissions,
+    permissions.map((p) => p.name),
+    savedManaged,
+    role.managedOptions.map((option) => option.id),
+    draft,
+  )
+  const count = changeCount(changes)
+  const shown = shownPermissions(role.permissions, draft)
+  const shownManagedIds = shownManaged(savedManaged, draft)
+  const busy = pending || saving
 
   const run: Run = (change) => {
     startTransition(async () => {
@@ -75,12 +110,125 @@ export function RolePane({
       })
     })
 
+  // Save changes: one call with every change. On success the callout lists
+  // what changed; on a refusal nothing was saved and the selections stay.
+  const save = (then?: () => void) => {
+    const sent = changes
+    const sentCount = count
+    startSaving(async () => {
+      let answer: ChangeOutcome
+      try {
+        answer = await saveRole(role.id, sent)
+      } catch {
+        answer = { ok: false, message: "The connection dropped before the changes reached the database." }
+      }
+      // In the same transition as the refreshed role the save brings back, so
+      // the boxes never show the old saved state in between.
+      startSaving(() => {
+        if (answer.ok) {
+          const list = (items: readonly string[], name: (item: string) => string) => items.map(name).join(", ")
+          setDraft(EMPTY_DRAFT)
+          setOutcome({
+            ...answer,
+            lines: [
+              sent.addPermissions.length > 0 && `Can now: ${list(sent.addPermissions, labelOf)}.`,
+              sent.removePermissions.length > 0 && `Can no longer: ${list(sent.removePermissions, labelOf)}.`,
+              sent.addManaged.length > 0 && `Now manages the staff in: ${list(sent.addManaged, nameOf)}.`,
+              sent.removeManaged.length > 0 && `No longer manages the staff in: ${list(sent.removeManaged, nameOf)}.`,
+            ].filter((line): line is string => typeof line === "string"),
+          })
+          then?.()
+        } else {
+          // Leaving waits: the person reads why first.
+          setLeaving(null)
+          setOutcome({
+            ok: false,
+            message: "Nothing was saved.",
+            lines: [
+              answer.message,
+              `Your ${plural(sentCount, "change")} ${sentCount === 1 ? "is" : "are"} still shown below. Press Save changes to try again.`,
+            ],
+          })
+        }
+      })
+      const body = bodyTop.current?.closest(".kit-card-body")
+      if (body) body.scrollTop = 0
+    })
+  }
+
+  // Leaving with unsaved changes asks first: a link in the page or the
+  // sidebar, another role in the rail. Closing or reloading the tab gets the
+  // browser's own question.
+  useEffect(() => {
+    if (count === 0) return
+    const onClick = (event: MouseEvent) => {
+      if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
+      const link = event.target instanceof Element ? event.target.closest("a[href]") : null
+      if (!(link instanceof HTMLAnchorElement) || link.target === "_blank" || link.hasAttribute("download")) return
+      const to = new URL(link.href, window.location.href)
+      if (to.origin !== window.location.origin) return
+      if (to.pathname === window.location.pathname && to.search === window.location.search) return
+      event.preventDefault()
+      event.stopPropagation()
+      setLeaving(to.pathname + to.search + to.hash)
+    }
+    const onUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault()
+      event.returnValue = ""
+    }
+    document.addEventListener("click", onClick, true)
+    window.addEventListener("beforeunload", onUnload)
+    return () => {
+      document.removeEventListener("click", onClick, true)
+      window.removeEventListener("beforeunload", onUnload)
+    }
+  }, [count])
+
+  const leave = (to: string) => {
+    setLeaving(null)
+    setDraft(EMPTY_DRAFT)
+    router.push(to)
+  }
+
   return (
-    <Card aria-labelledby="role-heading" className="ro-pane">
+    <Card
+      aria-labelledby="role-heading"
+      className="ro-pane"
+      fill
+      foot={
+        count > 0 && (
+          <SaveBar
+            label="Unsaved changes"
+            message={`${plural(count, "change")} not saved`}
+            undoLabel="Undo changes"
+            saveLabel="Save changes"
+            savingLabel="Saving…"
+            saving={saving}
+            onUndo={() => {
+              setDraft(EMPTY_DRAFT)
+              setOutcome(null)
+            }}
+            onSave={() => save()}
+          />
+        )
+      }
+    >
+      <div ref={bodyTop} className="ro-top" />
       {outcome && (
         <div data-testid="role-outcome">
           <Note tone={outcome.ok ? "good" : "bad"} role={outcome.ok ? "status" : "alert"}>
-            {outcome.message}
+            {outcome.lines && outcome.lines.length > 0 ? (
+              <>
+                <b>{outcome.message}</b>
+                {outcome.lines.map((line) => (
+                  <span key={line} className="ro-out-line">
+                    {line}
+                  </span>
+                ))}
+              </>
+            ) : (
+              outcome.message
+            )}
           </Note>
         </div>
       )}
@@ -99,21 +247,21 @@ export function RolePane({
             <Button
               variant="ghost"
               size="small"
-              disabled={pending || !role.editable}
+              disabled={busy || !role.editable}
               aria-describedby={role.editable ? undefined : subtitleId}
               onClick={() => setRenaming(true)}
             >
               Rename
             </Button>
             {role.retired ? (
-              <Button variant="ghost" size="small" disabled={pending} onClick={() => run(() => reactivateRoleNow(role.id))}>
+              <Button variant="ghost" size="small" disabled={busy} onClick={() => run(() => reactivateRoleNow(role.id))}>
                 Reactivate role
               </Button>
             ) : (
               <Button
                 variant="ghost"
                 size="small"
-                disabled={pending || role.retireBlocked !== null}
+                disabled={busy || role.retireBlocked !== null}
                 aria-describedby={role.retireBlocked ? retireReasonId : undefined}
                 onClick={() =>
                   setConfirmation({
@@ -141,42 +289,30 @@ export function RolePane({
           <legend className="kit-sec-title">What this role can do</legend>
           <ul className="ro-ticks">
             {permissions.map((permission) => {
-              const held = role.permissions.includes(permission.name)
+              const held = shown.includes(permission.name)
+              const changed = held !== role.permissions.includes(permission.name)
               const checkboxId = `${permissionIdPrefix}-${permission.name}`
               const needed = PERMISSION_NEEDS[permission.name]
-              const neededLabel = needed && labelOf(needed)
               const noteId = `${checkboxId}-note`
               return (
                 <li key={permission.name}>
                   <TickBox
                     id={checkboxId}
                     checked={held}
-                    disabled={pending || !role.editable}
-                    aria-describedby={neededLabel ? noteId : undefined}
-                    onCheckedChange={(granted) =>
-                      run(async () => {
-                        // The database ticks or unticks the paired permission
-                        // in the same change; the message names it.
-                        const implied = impliedChanges(role.permissions, permission.name, granted).map(labelOf)
-                        const outcome = await setPermission(role.id, permission.name, granted)
-                        if (!outcome.ok) return outcome
-                        const main = granted
-                          ? `${role.name} can now: ${permission.label}.`
-                          : `${role.name} can no longer: ${permission.label}.`
-                        const also = implied.map((label) =>
-                          granted ? ` “${label}” is ticked too, since Reports need it.` : ` “${label}” went with it.`,
-                        )
-                        return { ok: true, message: main + also.join("") }
-                      })
-                    }
+                    disabled={busy || !role.editable}
+                    aria-describedby={needed ? noteId : undefined}
+                    onCheckedChange={(on) => setDraft((d) => selectPermission(role.permissions, d, permission.name, on))}
                   />
                   <div className="ro-tick-text">
-                    <label htmlFor={checkboxId} data-off={!held || undefined}>
-                      {permission.label}
-                    </label>
-                    {neededLabel && (
+                    <div className="ro-tick-line">
+                      <label htmlFor={checkboxId} data-off={!held || undefined}>
+                        {permission.label}
+                      </label>
+                      {changed && <Tag tone={held ? "ok" : "bad"}>{held ? "Added" : "Removed"}</Tag>}
+                    </div>
+                    {needed && (
                       <p id={noteId} className="ro-cap">
-                        Reports need “{neededLabel}”. Ticking this ticks it too, and unticking it unticks this.
+                        Needs “{labelOf(needed)}”. Selecting this selects it too; clearing that clears this.
                       </p>
                     )}
                   </div>
@@ -205,7 +341,7 @@ export function RolePane({
         <fieldset className="kit-sec" aria-describedby={`${managedIdPrefix}-note`}>
           <legend className="kit-sec-title">Manages the staff in</legend>
           <p id={`${managedIdPrefix}-note`} className="ro-note">
-            People in {role.name} can invite, deactivate, reactivate and move the staff in the roles ticked here, between
+            People in {role.name} can invite, deactivate, reactivate and move the staff in the roles selected here, between
             those roles only. They never change roles themselves.
           </p>
           {role.managedOptions.length === 0 ? (
@@ -214,19 +350,24 @@ export function RolePane({
             <ul className="ro-ticks">
               {role.managedOptions.map((option) => {
                 const checkboxId = `${managedIdPrefix}-${option.id}`
+                const on = shownManagedIds.includes(option.id)
+                const changed = on !== option.checked
                 return (
                   <li key={option.id}>
                     <TickBox
                       id={checkboxId}
-                      checked={option.checked}
+                      checked={on}
                       // A retired role can only be taken out of the set.
-                      disabled={pending || role.retired || (option.retired && !option.checked)}
-                      onCheckedChange={(manages) => run(() => setManagedRole(role.id, option.id, manages))}
+                      disabled={busy || role.retired || (option.retired && !option.checked)}
+                      onCheckedChange={(manages) => setDraft((d) => selectManaged(savedManaged, d, option.id, manages))}
                     />
-                    <label htmlFor={checkboxId} data-off={!option.checked || undefined}>
-                      {option.name}
-                      {option.retired && " (retired)"}
-                    </label>
+                    <div className="ro-tick-line">
+                      <label htmlFor={checkboxId} data-off={!on || undefined}>
+                        {option.name}
+                        {option.retired && " (retired)"}
+                      </label>
+                      {changed && <Tag tone={on ? "ok" : "bad"}>{on ? "Added" : "Removed"}</Tag>}
+                    </div>
                   </li>
                 )
               })}
@@ -252,7 +393,7 @@ export function RolePane({
                   key={person.id}
                   person={person}
                   roleName={role.name}
-                  pending={pending}
+                  pending={busy}
                   run={run}
                   track={track}
                   report={setOutcome}
@@ -264,7 +405,7 @@ export function RolePane({
         </Section>
       )}
 
-      {role.managed && <InviteForm role={role} pending={pending} run={run} />}
+      {role.managed && <InviteForm role={role} pending={busy} run={run} />}
 
       {children}
 
@@ -277,7 +418,7 @@ export function RolePane({
         defaultValue={role.name}
         submit="Save name"
         save={(name) => track(() => renameRoleTo(role.id, name))}
-        saving={pending}
+        saving={busy}
         onSaved={setOutcome}
       />
 
@@ -301,6 +442,30 @@ export function RolePane({
             </Button>
             <Button variant="ghost" size="wide" onClick={() => setConfirmation(null)}>
               Cancel
+            </Button>
+          </>
+        }
+      >
+        {null}
+      </Sheet>
+
+      <Sheet
+        open={leaving !== null && count > 0}
+        onOpenChange={(open) => !open && setLeaving(null)}
+        placement="centre"
+        title={`Save your changes to ${role.name}?`}
+        hint={`You made ${plural(count, "change")} and haven't saved ${count === 1 ? "it" : "them"}. If you leave without saving, ${count === 1 ? "it goes" : "they go"} back to how ${count === 1 ? "it was" : "they were"}.`}
+        closeLabel="Close"
+        foot={
+          <>
+            <Button size="wide" pending={saving} onClick={() => save(() => leaving && leave(leaving))}>
+              {saving ? "Saving…" : "Save changes"}
+            </Button>
+            <Button variant="bad" size="wide" disabled={saving} onClick={() => leaving && leave(leaving)}>
+              Leave without saving
+            </Button>
+            <Button variant="ghost" size="wide" disabled={saving} onClick={() => setLeaving(null)}>
+              Keep editing
             </Button>
           </>
         }

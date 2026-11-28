@@ -22,7 +22,7 @@ const VIEWPORTS = [
 
 const NEEDS_CLICK = {
   sw: "Weka alama kwenye ukaguzi wa usalama hapa chini, kisha utume.",
-  en: "Tick the security check below, then send.",
+  en: "Select the security check below, then send.",
 }
 
 async function cloudflareAsksForAClick(page: Page) {

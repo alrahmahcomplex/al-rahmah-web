@@ -106,3 +106,9 @@
 .kp-tints > [data-surface="whisper"] { background: var(--gf-whisper); }
 .kp-tints > [data-surface="chrome"] { background: var(--gf-chrome); }
 .kp-tints > [data-surface="mist"] { background: var(--gf-mist); }
+
+/* Save bar: a filling card in a box of fixed height, so its content scrolls above the bar. */
+.kp-savebar-demo { height: 300px; display: flex; flex-direction: column; }
+.kp-savebar-demo > .kit-card { flex: 1; }
+.kp-savebar-list { margin: 10px 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 4px; }
+.kp-savebar-list > li { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }

@@ -76,7 +76,7 @@ const managesOthers = (role: Pick<RoleSummary, "manages" | "retired">) => !role.
 function subtitleFor(role: RoleSummary, viewer: Viewer, isYours: boolean, managed: boolean): string {
   if (viewer.superAdmin) {
     if (role.retired) return "Retired. Kept for history. Reactivate it to give it to anyone again."
-    return "Changes apply to everyone in this role immediately."
+    return "Select what this role can do, then press Save changes. Everyone in the role gets the change on their next click."
   }
   if (managed) return "You manage the staff in this role. Only the Super Admin changes what it can do."
   if (isYours) return "This is your role. Only the Super Admin changes it."

@@ -17,6 +17,42 @@ const BOXES = [
   { id: "fees", label: "View school-fee payments", saved: true },
 ] as const
 
+const ROLES = [
+  "Accountant",
+  "Director",
+  "Head of Finance",
+  "Head of Marketing",
+  "Head of Primary School",
+  "Head of Secondary School",
+  "Marketing Officer",
+  "Primary Academic",
+  "Primary Secretary",
+  "Secondary Academic",
+  "Secondary Secretary",
+]
+
+export function ScrollBarCard() {
+  return (
+    <Card id="scroll-bar" title="Scrollbar">
+      <p className="kp-spec">
+        Whatever scrolls hides the browser&apos;s own bar and gets the app&apos;s: 4.5px wide, light lavender, round ends, no arrows,
+        outside what it scrolls. The page&apos;s sits in the white gutter right of the stage; a filling card&apos;s sits just outside the
+        card&apos;s right edge. It shows only while there is more to scroll, darkens on hover, and can be dragged or pressed. Not drawn on
+        a touch screen.
+      </p>
+      <div className="kp-scroll-demo">
+        <Card fill title="Roles">
+          <ul className="kp-scroll-list">
+            {ROLES.map((role) => (
+              <li key={role}>{role}</li>
+            ))}
+          </ul>
+        </Card>
+      </div>
+    </Card>
+  )
+}
+
 export function SaveBarCard() {
   const [saved, setSaved] = useState<Record<string, boolean>>(() => Object.fromEntries(BOXES.map((b) => [b.id, b.saved])))
   const [shown, setShown] = useState(saved)

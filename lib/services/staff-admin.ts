@@ -630,7 +630,8 @@ export function describeHistory(rows: readonly AuditRow[], lookup: HistoryLookup
     const group = typeof item === "string" ? groups.get(item)! : [item]
     const roleRow = group.find((row) => row.table_name === "roles")
     const pairs = group.filter((row) => row.table_name === "role_managed_roles")
-    if (!roleRow && pairs.length === 1) return describeAuditRow(pairs[0], lookup)
+    // Staff changes, invites and a single managed-set pair read as before.
+    if (!roleRow && pairs.length <= 1) return describeAuditRow(group[0], lookup)
 
     const first = roleRow ?? group[0]
     const entry = describeAuditRow(first, lookup)

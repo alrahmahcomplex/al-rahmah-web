@@ -463,4 +463,16 @@ describe("describeHistory: one entry per Roles save", () => {
     ]
     expect(describeHistory(rows, lookup).map((e) => e.id)).toEqual([32, 31, 30, 29, 28])
   })
+
+  it("reads staff changes and invites as describeAuditRow does", () => {
+    const staffRow = at({
+      table_name: "staff_members",
+      row_id: "owner",
+      old_values: { active: true },
+      new_values: { active: false },
+      transaction_id: 95,
+    })
+    const invite = at({ table_name: null, row_id: null, action: "invite_sent", new_values: {}, transaction_id: 96 })
+    expect(describeHistory([staffRow, invite], lookup)).toEqual([describeAuditRow(staffRow, lookup), describeAuditRow(invite, lookup)])
+  })
 })

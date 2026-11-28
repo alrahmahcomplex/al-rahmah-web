@@ -8,13 +8,14 @@ import { RoundButton, Toaster } from "@/components/kit"
 
 import { currentNavHref } from "../navigation"
 import { SIDEBAR_RAIL_COOKIE, SIDEBAR_WIDTH_COOKIE, clearedSidebarCookie, sidebarCookie } from "../shell-cookies"
-import type { ShellProps } from "../shell-types"
+import type { ShellProps, ShellSections } from "../shell-types"
 import "./new-shell.css"
 import { rememberScroll, savedScroll } from "./scroll-memory"
 import { SidebarBoundary, SidebarContent } from "./sidebar"
 import {
   FIRST_WIDTH,
   KEY_STEP,
+  OPEN_MIN,
   SIDEBAR_BASE,
   clampWidth,
   sidebarLimits,
@@ -25,8 +26,8 @@ import { Bell, PersonMenu, TopBarSearch } from "./top-bar-parts"
 
 const PHONE = "(max-width: 860px)"
 // A row's side padding, the gap after its icon and the icon (new-shell.css).
-const ROW_PADDING = 10
-const ROW_GAP = 10
+const ROW_PADDING = 12
+const ROW_GAP = 12
 const ICON = 16
 // Before the fonts are measured: where the title starts and its width at 14px.
 const TITLE_LEFT = 50
@@ -71,6 +72,7 @@ function measure(parts: Parts): { limits: SidebarLimits; titleLeft: number; titl
     pagePadding: parseFloat(getComputedStyle(scroll).paddingLeft) || 0,
     pageMax: parseFloat(getComputedStyle(page).maxWidth) || Number.MAX_SAFE_INTEGER,
     stageAtBase: stage.clientWidth + (aside.getBoundingClientRect().width - SIDEBAR_BASE),
+    openMin: OPEN_MIN,
   })
   return { limits, titleLeft: name.offsetLeft || TITLE_LEFT, titleWidth }
 }
@@ -172,9 +174,15 @@ export type NewShellProps = Omit<ShellProps, "person"> & {
   /** Overrides which sidebar href is marked current (e.g. /reminders -> /home). */
   currentHref?: string
   /** Distinguishes the staff and agents shells without affecting staff attributes or behaviour. */
-  shellApp?: "staff" | "agents"
+  shellApp?: "staff" | "agents" | "design"
   /** Document language attribute for the shell container (used by bilingual agents pages). */
   lang?: string
+  /** The sidebar's groups, in order, for a site other than staff (the design site). */
+  groups?: readonly string[]
+  /** A page's sections, listed under its row in the sidebar (the design site). */
+  sections?: ShellSections
+  /** What the top bar holds after the toggle, in place of the staff search, bell and person; the phone's Menu and drawer stay. */
+  topBarEnd?: ReactNode
 }
 
 /**
@@ -197,6 +205,9 @@ export function NewShell({
   currentHref,
   shellApp = "staff",
   lang,
+  groups,
+  sections,
+  topBarEnd,
   children,
 }: NewShellProps) {
   const pathname = usePathname()
@@ -376,6 +387,7 @@ export function NewShell({
         data-shell="new"
         data-staff-shell={shellApp === "staff" ? "" : undefined}
         data-agents-shell={shellApp === "agents" ? "" : undefined}
+        data-design-shell={shellApp === "design" ? "" : undefined}
         data-folded={folded ? "" : undefined}
         data-resizing={resizing ? "" : undefined}
         data-live={live ? "" : undefined}
@@ -392,6 +404,8 @@ export function NewShell({
                 nameRef={nameRef}
                 brandSubtitle={brandSubtitle}
                 navLabel={navLabel}
+                groups={groups}
+                sections={sections}
               />
             </SidebarBoundary>
           </div>
@@ -444,6 +458,9 @@ export function NewShell({
                           onChoose={() => setDrawer(false)}
                           brandSubtitle={brandSubtitle}
                           navLabel={navLabel}
+                          groups={groups}
+                          sections={sections}
+                          sectionsId="ns-sections-drawer"
                         />
                       </SidebarBoundary>
                     </Dialog.Popup>
@@ -458,10 +475,14 @@ export function NewShell({
                   aria-controls="staff-sidebar"
                   onClick={toggle}
                 />
-                {canSearch && <TopBarSearch />}
-                <span className="ns-spacer" />
-                {bell && <Bell pending={bell.pending} />}
-                {person && <PersonMenu person={person} />}
+                {topBarEnd ?? (
+                  <>
+                    {canSearch && <TopBarSearch />}
+                    <span className="ns-spacer" />
+                    {bell && <Bell pending={bell.pending} />}
+                    {person && <PersonMenu person={person} />}
+                  </>
+                )}
               </>
             )}
           </header>

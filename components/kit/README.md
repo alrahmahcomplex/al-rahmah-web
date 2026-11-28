@@ -2,7 +2,7 @@
 
 The staff app's components in the Admission form's design language (DESIGN.md, Components), measured from the approved prototype, version 13, with the look of version 38: thin 0.75px lines (`--gf-stroke`), icon set 1, line illustrations, outlined red and dark orange buttons, tinted notes and toasts, and the finish mark. Each component imports `kit.css`; its classes start with `kit-` and read the `--gf-*` tokens from `app/tokens.css`. No hex colour may be written here (`scripts/design-lint.mjs`). No component holds page words: pass every string as a prop.
 
-Import from `@/components/kit`. Every piece, in every state, is on the kit page, `/staff/kit`. Check a change there against the prototype's "Design system" page.
+Import from `@/components/kit`. Every piece, in every state, is on the Design system page: design.alrahmahcomplex.or.tz, or `/design` locally (it was `/staff/kit`). Each piece is a part in `lib/design-site/catalog.ts`, which feeds that page, its sidebar sections, llms.txt and the MCP server; a test fails when a file here belongs to no part. Check a change there against the prototype's "Design system" page.
 
 **Quiet text on a tint.** Slate Quiet (`--gf-quiet`) reads 4.5:1 only on white. The kit's quiet text (captions, table headings, keys, hints) reads `--kit-quiet`, and every part the kit tints sets it to Quiet on tint (`--gf-quiet-on-tint`): notes, toasts, the finished state's numbers, hovered and current list rows, a hovered table row that opens, a hovered `ChoiceTiles` row, the highlighted option in a `Select`'s list, a file dragged over the `FilePicker`, the tab track. A box of your own on Lavender Whisper, Chrome or Mist, or on a note's tint, sets it too, and so does a quiet class of the screen's own (`color: var(--kit-quiet, var(--gf-quiet))`):
 
@@ -16,7 +16,7 @@ Import from `@/components/kit`. Every piece, in every state, is on the kit page,
 
 A staff screen uses only the kit. The old parts are left only for the public pages that still use them.
 
-**Kit first.** A part a screen needs that is not here is added here first: drawn on the prototype's Design system page, then built here, or in the icon, illustration, guided-form or brand folder DESIGN.md names for it, and shown on `/staff/kit` in every state, then used (DESIGN.md, The Kit First Rule). A screen's CSS lays kit parts out; it does not change their look.
+**Kit first.** A part a screen needs that is not here is added here first: drawn on the prototype's Design system page, then built here, or in the icon, illustration, guided-form or brand folder DESIGN.md names for it, given its part in `lib/design-site/catalog.ts` and its card on the Design system page in every state, then used (DESIGN.md, The Kit First Rule). A screen's CSS lays kit parts out; it does not change their look.
 
 | Use | Not |
 |---|---|
@@ -71,7 +71,7 @@ The shell (#322) draws every staff route; ESLint refuses the old parts in every 
 <TextLink onClick={edit}>Edit</TextLink>
 ```
 
-One `go` button per screen (The One Invitation Rule), and it is the only filled one. `bad` is outlined red, for a step that removes, declines or clears; `warn` is outlined dark orange, for a step back that can be undone. Never fill a button red. `pending` keeps the button focusable, sets `aria-busy` and `aria-disabled`, drops the chevron and refuses clicks and form submits; change the label in the same render. A `RoundButton` hosts its icon's active state on hover: set 1 turns the main line indigo and the detail orange. That state, like a `ListRow`'s featured disc and the date field's calendar while it is open, shows only inside the new shell (`data-shell="new"`) or the kit page (`data-kit`); see `components/icons/icons.css`. Any element can host it with `data-icon-host=""`.
+One `go` button per screen (The One Invitation Rule), and it is the only filled one. `bad` is outlined red, for a step that removes, declines or clears; `warn` is outlined dark orange, for a step back that can be undone. Never fill a button red. `pending` keeps the button focusable, sets `aria-busy` and `aria-disabled`, drops the chevron and refuses clicks and form submits; change the label in the same render. A `RoundButton` hosts its icon's active state on hover: set 1, indigo at rest, turns its detail orange. So do a `ListRow`'s featured disc and the date field's calendar while it is open; see `components/icons/icons.css`. Any element can host it with `data-icon-host=""`. Icons are never grey: inside a button they take the button's colour, elsewhere they are indigo unless their part gives them a tone.
 
 ## Fields
 
@@ -81,6 +81,20 @@ One `go` button per screen (The One Invitation Rule), and it is the only filled 
 ```
 
 `size`: `full` (52px, 17px), `compact` (44px) or `search` (40px on Lavender Chrome, left-aligned). Compact and search text is 16px under 861px, so iOS does not zoom. `alignStart` for long free text. `FieldError` folds open when it has a message and is a `role="alert"`.
+
+```tsx
+<PasswordField aria-label="Password" name="password" showLabel="Show password" hideLabel="Hide password" invalid={!!error} aria-describedby="pw-error" />
+```
+
+`PasswordField` is the pill field with the lock and a round eye button that shows and hides the password (`eye`, `eye-off`). It takes a field's props except `type`, `icon` and `size`.
+
+```tsx
+<CodeBlock label="~/.codex/config.toml" copyValue={settings} copyLabel="Copy settings" copiedMessage="Copied" copyFailedMessage="Couldn’t copy. The text is selected: press Ctrl+C.">
+  {settingsShownWithTheSecretMasked}
+</CodeBlock>
+```
+
+`CodeBlock` shows a command or a few lines of settings with the code chip's copy button. What it shows and what it copies are separate, so a secret can show masked.
 
 ## Form parts
 

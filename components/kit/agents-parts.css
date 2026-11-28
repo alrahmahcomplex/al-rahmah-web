@@ -37,6 +37,9 @@
 .kit-code-chip b {
   font: 700 15px/1 ui-monospace, "Cascadia Code", Consolas, monospace; letter-spacing: 0.04em; color: var(--gf-indigo);
 }
+/* A long value, such as an address, ends in an ellipsis inside the pill (design site round). */
+.kit-code-chip { max-width: 100%; }
+.kit-code-chip b { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 2px 0; }
 .kit-code-copy {
   position: relative; width: 30px; height: 30px; flex: none; border: 0; border-radius: 50%; padding: 0;
   display: grid; place-items: center; background: transparent; color: var(--gf-indigo); cursor: pointer;
@@ -92,7 +95,6 @@
   display: block; font: 600 12.5px/1.3 ui-monospace, "Cascadia Code", Consolas, monospace;
   color: var(--gf-ink-soft); letter-spacing: 0.04em;
 }
-.kit-mprof > .gf-ic { color: var(--kit-quiet, var(--gf-quiet)); }
 .kit-mprof-head { display: flex; align-items: center; gap: 12px; }
 
 /* ---------- top bar logo-or-back swap ---------- */

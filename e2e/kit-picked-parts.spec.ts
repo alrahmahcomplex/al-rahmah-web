@@ -1,16 +1,14 @@
 import { type Page } from "@playwright/test"
 
-import { ADMISSIONS } from "../tests/support/fixtures"
 import { axeProblems } from "./axe"
-import { signInOnce } from "./log-in"
+import { openDesign } from "./design"
 import { expect, test } from "./staff-test"
 
 // The parts the owner picked on prototype v38 (#402), on the kit page, with a
 // real keyboard: the name boxes, the code box, the tabs and the pages.
 
 async function openKit(page: Page, card: string) {
-  await signInOnce(page, ADMISSIONS.email, ADMISSIONS.password)
-  await page.goto("/staff/kit")
+  await openDesign(page)
   await expect(page.getByRole("heading", { level: 1, name: "Design system" })).toBeVisible()
   await expect(page.locator('[data-shell="new"][data-live]')).toBeVisible()
   const region = page.getByRole("region", { name: card })

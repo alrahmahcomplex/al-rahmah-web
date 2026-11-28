@@ -80,8 +80,12 @@ export function navFor(
 
 // The entries by group, in NAV_GROUPS order and each group's entries in the
 // order given, leaving out every group with nothing in it.
-export function groupNav<T extends { group: StaffNavGroup }>(entries: readonly T[]): { name: StaffNavGroup; entries: T[] }[] {
-  return NAV_GROUPS.map((name) => ({ name, entries: entries.filter((entry) => entry.group === name) })).filter(
+// Another site in the shell (the design site) passes its own groups.
+export function groupNav<T extends { group: string }, G extends string = StaffNavGroup>(
+  entries: readonly T[],
+  groups: readonly G[] = NAV_GROUPS as unknown as readonly G[],
+): { name: G; entries: T[] }[] {
+  return groups.map((name) => ({ name, entries: entries.filter((entry) => entry.group === name) })).filter(
     (group) => group.entries.length > 0,
   )
 }

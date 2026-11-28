@@ -2,12 +2,13 @@
 
 import Image from "next/image"
 import Link from "next/link"
-import { Component, type ReactNode, type Ref } from "react"
+import { Component, Fragment, useState, type ReactNode, type Ref } from "react"
 
 import { Icon } from "@/components/icons"
 
 import { groupNav } from "../navigation"
-import type { ShellItem } from "../shell-types"
+import type { ShellItem, ShellSections } from "../shell-types"
+import { SidebarSections } from "./sidebar-sections"
 
 type SidebarProps = {
   items: ShellItem[]
@@ -21,6 +22,21 @@ type SidebarProps = {
   brandSubtitle?: string
   /** Accessible name of the navigation landmark. Defaults to "Staff". */
   navLabel?: string
+  /** The groups, in order, for a site other than staff. */
+  groups?: readonly string[]
+  /** A page's sections, listed under its row. */
+  sections?: ShellSections
+  /** Tells the sections apart when the sidebar and the drawer both hold them. */
+  sectionsId?: string
+}
+
+/** The chevron that folds a page's sections, beside its row. */
+function SectionsToggle({ id, open, label, onToggle }: { id: string; open: boolean; label: string; onToggle: () => void }) {
+  return (
+    <button type="button" className="ns-chev" aria-expanded={open} aria-controls={id} aria-label={`${label} sections`} onClick={onToggle}>
+      <Icon name="down" size={16} />
+    </button>
+  )
 }
 
 /**
@@ -36,7 +52,11 @@ export function SidebarContent({
   nameRef,
   brandSubtitle = "Admissions Portal",
   navLabel = "Staff",
+  groups,
+  sections,
+  sectionsId = "ns-sections",
 }: SidebarProps) {
+  const [sectionsOpen, setSectionsOpen] = useState(true)
   return (
     <>
       <div className="ns-head">
@@ -47,34 +67,48 @@ export function SidebarContent({
         </div>
       </div>
       <nav aria-label={navLabel} className="ns-nav">
-        {groupNav(items).map((group) => [
+        {groupNav(items, groups).map((group) => [
           group.name ? (
             <p key={group.name} className="ns-group">
               <span>{group.name}</span>
             </p>
           ) : null,
-          ...group.entries.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className="ns-link"
-              data-icon-host=""
-              aria-current={item.href === current ? "page" : undefined}
-              // Folded, the label is out of sight: the tooltip names the icon.
-              title={folded ? item.label : undefined}
-              onClick={onChoose}
-            >
-              <Icon name={item.iconName} size={16} />
-              <span className="ns-label" data-label={item.label}>
-                <span className="ns-roll">
-                  {item.label}
-                  <span className="ns-copy" aria-hidden="true">
+          ...group.entries.map((item) => {
+            const withSections = sections?.href === item.href && !folded
+            const link = (
+              <Link
+                key={item.href}
+                href={item.href}
+                className="ns-link"
+                data-icon-host=""
+                data-has-sections={withSections ? "" : undefined}
+                aria-current={item.href === current ? "page" : undefined}
+                // Folded, the label is out of sight: the tooltip names the icon.
+                title={folded ? item.label : undefined}
+                onClick={onChoose}
+              >
+                <Icon name={item.iconName} size={16} />
+                <span className="ns-label" data-label={item.label}>
+                  <span className="ns-roll">
                     {item.label}
+                    <span className="ns-copy" aria-hidden="true">
+                      {item.label}
+                    </span>
                   </span>
                 </span>
-              </span>
-            </Link>
-          )),
+              </Link>
+            )
+            if (!withSections || !sections) return link
+            return (
+              <Fragment key={item.href}>
+                <div className="ns-link-w">
+                  {link}
+                  <SectionsToggle id={sectionsId} open={sectionsOpen} label={item.label} onToggle={() => setSectionsOpen((now) => !now)} />
+                </div>
+                {sectionsOpen && <SidebarSections id={sectionsId} pageHref={sections.href} groups={sections.groups} onChoose={onChoose} />}
+              </Fragment>
+            )
+          }),
         ])}
       </nav>
     </>

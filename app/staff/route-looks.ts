@@ -29,7 +29,6 @@ export const ROUTE_LOOKS = {
   "/staff/follow-ups": "new",
   "/staff/group-links": "new",
   "/staff/interviews": "new",
-  "/staff/kit": "new",
   "/staff/promo-codes": "new",
   "/staff/re-applications": "new",
   "/staff/re-applications/[id]": "new",

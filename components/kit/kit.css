@@ -99,13 +99,32 @@ html .gf-row .gf-d { color: var(--kit-quiet, var(--gf-quiet)); }
   .kit-field[data-size="compact"], .kit-field[data-size="search"] { font-size: 15px; }
 }
 .kit-fieldwrap { position: relative; }
-.kit-fieldwrap > .gf-ic { position: absolute; left: 18px; top: 50%; transform: translateY(-50%); color: var(--kit-quiet, var(--gf-quiet)); pointer-events: none; }
+.kit-fieldwrap > .gf-ic { position: absolute; left: 18px; top: 50%; transform: translateY(-50%); pointer-events: none; }
 .kit-fieldwrap > .kit-field { padding-inline: 48px; }
 .kit-fieldwrap > .kit-field[data-size="search"] { padding: 0 20px 0 40px; }
 .kit-fieldwrap:has(> .kit-field[data-size="search"]) > .gf-ic { left: 14px; width: 17px; height: 17px; }
+/* The password field (design site round, 27 Nov 2026): the lock at the start, a 36px round eye button inside the right end. */
+.kit-pass-eye {
+  position: absolute; right: 8px; top: 50%; transform: translateY(-50%); width: 36px; height: 36px; padding: 0; border: 0; border-radius: 50%;
+  display: grid; place-items: center; background: transparent; cursor: pointer; transition: background var(--gf-t-med) var(--gf-ease-out);
+}
+.kit-pass-eye::after { content: ""; position: absolute; inset: -4px; border-radius: 50%; }
+.kit-pass-eye:hover { background: var(--gf-whisper); }
+.kit-pass-eye:focus-visible { outline: 3px solid var(--gf-focus-ring); outline-offset: 2px; }
+/* The code block (design site round, 27 Nov 2026): a command or a few lines of settings, with the code chip's copy button. */
+.kit-codeblock-wrap { min-width: 0; }
+.kit-codeblock-label { margin: 0 0 6px; font: 600 12px var(--font-sans), system-ui, sans-serif; color: var(--kit-quiet, var(--gf-quiet)); }
+.kit-codeblock { position: relative; min-width: 0; border-radius: 16px; background: var(--gf-chrome); box-shadow: inset 0 0 0 var(--gf-stroke) var(--gf-line); }
+.kit-codeblock pre {
+  margin: 0; padding: 14px 52px 14px 16px; overflow-x: auto; white-space: pre; border-radius: inherit; outline: none;
+  font: 400 13px/1.6 ui-monospace, "Cascadia Code", Consolas, monospace; color: var(--gf-indigo-night);
+}
+.kit-codeblock pre:focus-visible { outline: 3px solid var(--gf-focus-ring); outline-offset: 2px; }
+.kit-codeblock .kit-code-copy { position: absolute; top: 10px; right: 10px; background: var(--gf-paper); box-shadow: inset 0 0 0 var(--gf-stroke) var(--gf-line); }
+.kit-codeblock .kit-code-copy:hover { background: var(--gf-whisper); }
 /* The named field (owner 26 Nov 2026): icon and name inside the box on the left; the value stays centred. */
 .kit-named { position: relative; }
-.kit-named > .gf-ic { position: absolute; left: 20px; top: 50%; width: 18px; height: 18px; transform: translateY(-50%); color: var(--kit-quiet, var(--gf-quiet)); pointer-events: none; }
+.kit-named > .gf-ic { position: absolute; left: 20px; top: 50%; width: 18px; height: 18px; transform: translateY(-50%); pointer-events: none; }
 .kit-named > label { position: absolute; left: 46px; top: 50%; transform: translateY(-50%); font: 600 13.5px var(--font-sans), system-ui, sans-serif; color: var(--kit-quiet, var(--gf-quiet)); white-space: nowrap; pointer-events: none; }
 .kit-named > .kit-field { padding-inline: 100px; }
 
@@ -267,7 +286,6 @@ a.kit-row { border-radius: 14px; }
 .kit-row-text { flex: 1; min-width: 0; }
 .kit-row-title { display: block; font-weight: 600; font-size: 14.5px; overflow-wrap: anywhere; }
 .kit-row-cap { display: block; color: var(--kit-quiet, var(--gf-quiet)); font-size: 12.5px; }
-.kit-row-chev { color: var(--kit-quiet, var(--gf-quiet)); }
 
 /* ---------- tables ---------- */
 /* position: relative keeps an sr-only label in a cell inside the scroll box, so it never widens the page (#374). */

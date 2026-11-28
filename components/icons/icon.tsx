@@ -15,14 +15,15 @@ export type IconProps = {
 }
 
 /**
- * A set 1 line icon (DESIGN.md, Icons). At rest both lines take the text
- * colour. It turns active (the main line indigo, the detail orange) when it
- * is `featured`, or when a parent marked `data-icon-host` is hovered, current
- * (`aria-current`), pressed (`aria-pressed="true"`), open (`data-popup-open`)
+ * A set 1 line icon (DESIGN.md, Icons). At rest both lines are Rahmah Indigo,
+ * never grey; inside a button, a tick, a step dot or a part marked
+ * `data-icon-tone="inherit"` it takes the text colour instead (icons.css). It
+ * turns active, its detail orange, when it is `featured`, or when a parent
+ * marked `data-icon-host` is hovered, current (`aria-current`), pressed
+ * (`aria-pressed="true"`), open (`aria-expanded="true"`, `data-popup-open`)
  * or on (`data-on`). A host marked `data-icon-host="indigo"` sits on indigo:
- * a white main line and a light orange detail. The active look applies only
- * inside the new staff shell (`data-shell="new"`) or the kit page
- * (`data-kit`). Decorative: the parent carries the name.
+ * white, with a light orange detail in use. Decorative: the parent carries
+ * the name.
  */
 export function Icon({ name, size = 20, featured, className }: IconProps) {
   const { outline, detail } = ICONS[name]

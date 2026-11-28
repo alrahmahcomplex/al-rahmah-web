@@ -2,10 +2,10 @@ import type { ReactElement } from "react"
 
 /**
  * One icon of set 1, "Two lines" (DESIGN.md, Icons): a 24px grid drawn with a
- * 2px round stroke. `outline` is the main object, drawn indigo when the icon
- * is active; `detail` is the second one (the calendar's days, the bell's
- * clapper), drawn orange. A utility glyph (back, right, check, plus, x) is one
- * line with no detail.
+ * 2px round stroke. `outline` is the main object; `detail` is the second one
+ * (the calendar's days, the bell's clapper), which turns orange when the icon
+ * is active. Both are indigo at rest. A utility glyph (back, right, check,
+ * plus, x) is one line with no detail.
  */
 export type IconDef = {
   readonly outline: ReactElement
@@ -249,9 +249,10 @@ export const trash = icon({
   detail: <path d="M9 7V4h6v3" />,
 })
 
-// The form parts' glyphs (version 18, #358): the choice list's chevron and
-// the file area's upload arrow, one line each, and the date field's calendar,
-// which version 38 draws in two lines like the rest of set 1.
+// The form parts' glyphs (version 18, #358): the choice list's chevron, one
+// line; the date field's calendar, which version 38 draws in two lines like
+// the rest of set 1; and the file area's upload, two lines since the design
+// site round (owner, 27 Nov 2026): the tray, with the arrow as the detail.
 
 export const down = icon({ outline: <path d="m6 9 6 6 6-6" /> })
 
@@ -261,12 +262,21 @@ export const calendar = icon({
 })
 
 export const upload = icon({
-  outline: (
-    <>
-      <path d="M12 15.5V4.5M7.5 8.5 12 4l4.5 4.5" />
-      <path d="M4.5 14.5v3a2.5 2.5 0 0 0 2.5 2.5h10a2.5 2.5 0 0 0 2.5-2.5v-3" />
-    </>
-  ),
+  outline: <path d="M4.5 14.5v3a2.5 2.5 0 0 0 2.5 2.5h10a2.5 2.5 0 0 0 2.5-2.5v-3" />,
+  detail: <path d="M12 15.5V4.5M7.5 8.5 12 4l4.5 4.5" />,
+})
+
+// The password field's show and hide button (design site round, owner, 27 Nov
+// 2026): an open eye with its pupil as the detail, and the same eye struck
+// through, the slash as the detail.
+export const eye = icon({
+  outline: <path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z" />,
+  detail: <circle cx="12" cy="12" r="3" />,
+})
+
+export const eyeOff = icon({
+  outline: <path d="M9.9 5.8A9.6 9.6 0 0 1 12 5.5c6 0 9.5 6.5 9.5 6.5a17 17 0 0 1-2.4 3.2M6.6 7.1C3.9 8.9 2.5 12 2.5 12S6 18.5 12 18.5a9 9 0 0 0 4.8-1.4" />,
+  detail: <path d="M4 4l16 16M10 10a3 3 0 0 0 4.2 4.2" />,
 })
 
 // The agents app's glyphs (#539, prototype v5): copy, chat (WhatsApp share),
@@ -352,6 +362,8 @@ export const ICONS = {
   down,
   calendar,
   upload,
+  eye,
+  "eye-off": eyeOff,
   up,
   pen,
   pin,

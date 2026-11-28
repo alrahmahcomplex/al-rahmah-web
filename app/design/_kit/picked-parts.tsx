@@ -52,61 +52,83 @@ const TIPS = [
   ["panel", "Fold the sidebar"],
 ] as const
 
-export function PickedPartsCards() {
+export function TabsCard() {
+  return (
+    <Card id="tabs" title="Tabs: sliding track" data-bento="full">
+      <p className="kp-spec">Sections of one record. One indigo pill slides to the chosen tab; the arrow keys move along.</p>
+      <TabSwitch label="Record sections" tabs={RECORD_TABS.map((t) => ({ value: t, label: t, panel: <p className="kp-spec">Showing: {t}</p> }))} />
+    </Card>
+  )
+}
+
+export function PaginationCard() {
   const [page, setPage] = useState(3)
+  return (
+    <Card id="pagination" title="Pagination: numbered pills" data-bento="full">
+      <p className="kp-spec">For lists longer than 10 rows, such as Applicants and Audit.</p>
+      <Pagination label="Applicant pages" page={page} pageCount={12} onPage={setPage} previousLabel="Previous page" nextLabel="Next page" pageLabel={(n) => `Page ${n}`} />
+      <p className="kp-spec" aria-live="polite">
+        Page {page} of 12
+      </p>
+    </Card>
+  )
+}
+
+export function AvatarsCard() {
+  return (
+    <Card id="avatars" title="Avatars: soft tints">
+      <div className="kp-rowx" style={{ alignItems: "flex-end" }}>
+        {SIZES.map((size, i) => (
+          <Avatar key={size} initials={PEOPLE[i][0]} name={PEOPLE[i][1]} size={size} tone={TONES[i]} />
+        ))}
+      </div>
+      <AvatarGroup people={PEOPLE.map(([initials]) => ({ initials }))} label="Rehema M., Asha Saidi, Juma Khamis, Latifa Omari and 3 others" />
+      <p className="kp-spec">Initials stand in for photos. Sizes 24, 32, 40 and 56; a group stacks with a count.</p>
+    </Card>
+  )
+}
+
+export function TooltipsCard() {
+  return (
+    <Card id="tooltips" title="Tooltips: light">
+      <div className="kp-rowx" style={{ justifyContent: "center", paddingTop: 34 }}>
+        {TIPS.map(([icon, label]) => (
+          <Tooltip key={icon} label={label}>
+            <RoundButton icon={icon} label={label} />
+          </Tooltip>
+        ))}
+      </div>
+      <p className="kp-spec">A short name for an icon button, shown on hover and on keyboard focus. Escape hides it.</p>
+    </Card>
+  )
+}
+
+export function SliderCard() {
   const [discount, setDiscount] = useState(10)
   return (
-    <>
-      <Card title="Tabs: sliding track" data-bento="full">
-        <p className="kp-spec">Sections of one record. One indigo pill slides to the chosen tab; the arrow keys move along.</p>
-        <TabSwitch label="Record sections" tabs={RECORD_TABS.map((t) => ({ value: t, label: t, panel: <p className="kp-spec">Showing: {t}</p> }))} />
-      </Card>
+    <Card id="slider" title="Slider: steps with labels">
+      <StepSlider min={0} max={25} step={5} value={discount} onValueChange={setDiscount} unit="%" aria-label="Discount, percent" />
+      <p className="kp-spec">
+        Discount on the school fee: <b>{discount}%</b>
+      </p>
+    </Card>
+  )
+}
 
-      <Card title="Pagination: numbered pills" data-bento="full">
-        <p className="kp-spec">For lists longer than 10 rows, such as Applicants and Audit.</p>
-        <Pagination label="Applicant pages" page={page} pageCount={12} onPage={setPage} previousLabel="Previous page" nextLabel="Next page" pageLabel={(n) => `Page ${n}`} />
-        <p className="kp-spec" aria-live="polite">
-          Page {page} of 12
-        </p>
-      </Card>
+export function AccordionCard() {
+  return (
+    <Card id="accordion" title="Accordion: separate cards">
+      <Accordion items={QUESTIONS.map(([title, answer]) => ({ title, content: <p>{answer}</p> }))} />
+    </Card>
+  )
+}
 
-      <Card title="Avatars: soft tints">
-        <div className="kp-rowx" style={{ alignItems: "flex-end" }}>
-          {SIZES.map((size, i) => (
-            <Avatar key={size} initials={PEOPLE[i][0]} name={PEOPLE[i][1]} size={size} tone={TONES[i]} />
-          ))}
-        </div>
-        <AvatarGroup people={PEOPLE.map(([initials]) => ({ initials }))} label="Rehema M., Asha Saidi, Juma Khamis, Latifa Omari and 3 others" />
-        <p className="kp-spec">Initials stand in for photos. Sizes 24, 32, 40 and 56; a group stacks with a count.</p>
-      </Card>
-
-      <Card title="Tooltips: light">
-        <div className="kp-rowx" style={{ justifyContent: "center", paddingTop: 34 }}>
-          {TIPS.map(([icon, label]) => (
-            <Tooltip key={icon} label={label}>
-              <RoundButton icon={icon} label={label} />
-            </Tooltip>
-          ))}
-        </div>
-        <p className="kp-spec">A short name for an icon button, shown on hover and on keyboard focus. Escape hides it.</p>
-      </Card>
-
-      <Card title="Slider: steps with labels">
-        <StepSlider min={0} max={25} step={5} value={discount} onValueChange={setDiscount} unit="%" aria-label="Discount, percent" />
-        <p className="kp-spec">
-          Discount on the school fee: <b>{discount}%</b>
-        </p>
-      </Card>
-
-      <Card title="Accordion: separate cards">
-        <Accordion items={QUESTIONS.map(([title, answer]) => ({ title, content: <p>{answer}</p> }))} />
-      </Card>
-
-      <Card title="Timeline">
-        <Timeline label="History" items={HISTORY} />
-        <p className="kp-spec">What happened, newest first. A student’s history and the audit log use it.</p>
-      </Card>
-    </>
+export function TimelineCard() {
+  return (
+    <Card id="timeline" title="Timeline">
+      <Timeline label="History" items={HISTORY} />
+      <p className="kp-spec">What happened, newest first. A student’s history and the audit log use it.</p>
+    </Card>
   )
 }
 
@@ -120,7 +142,7 @@ export function NamesCard() {
     setWhoError(hasTwoNames(String(who ?? "")) ? "" : "Type their full name, at least two names.")
   }
   return (
-    <Card title="Names and codes" data-bento="full">
+    <Card id="names-codes" title="Names and codes" data-bento="full">
       <p className="kp-spec">Names are typed in capitals. Space moves to the next box, a pasted full name spreads across the boxes, and Backspace in an empty box goes back.</p>
       <form className="kp-fpg" data-kit-form="names" noValidate onSubmit={check}>
         <div className="kp-fpc">
@@ -170,7 +192,7 @@ export function ConfirmationNumberCard() {
     return code === RIGHT_DEMO_NUMBER ? "ok" : "bad"
   }
   return (
-    <Card title="Confirmation number">
+    <Card id="confirmation-number" title="Confirmation number">
       <p className="kp-spec">
         Six boxes for a number sent by SMS. They send themselves on the sixth digit or a paste; focus never skips ahead. Right closes into the outline circle with a green tick, anything else into the red circle with a cross, each circle drawn before its mark. Try <b>{RIGHT_DEMO_NUMBER}</b>, or any other number.
       </p>
@@ -195,7 +217,7 @@ export function ConfirmationNumberCard() {
  */
 export function SignUpPartsCard() {
   return (
-    <Card title="Sign-up steps" data-bento="full">
+    <Card id="sign-up-steps" title="Sign-up steps" data-bento="full">
       <p className="kp-spec">
         Above a step&apos;s title, its icon in a Lavender Whisper disc; at its foot, the office&apos;s number.
       </p>

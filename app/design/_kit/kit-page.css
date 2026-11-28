@@ -3,6 +3,14 @@
    draws the stage around it. */
 
 .kp-part + .kp-part { margin-top: 24px; }
+/* The cards in the catalogue's groups (design site, prototype v6), each group
+   under its name in the Section title style; the sidebar jumps to a card. */
+.kp-group { display: flex; flex-direction: column; gap: 12px; scroll-margin-top: 16px; }
+.kp-group + .kp-group { margin-top: 30px; }
+.kp-group-title { margin: 0; font: italic 800 15px/1.3 var(--font-exo), "Exo", system-ui, sans-serif; letter-spacing: 0.02em; color: var(--gf-indigo); }
+.kp-group .kit-card[id] { scroll-margin-top: 16px; }
+.kp-icsz > .kp-on-indigo { padding: 8px 12px; border-radius: 14px; background: var(--gf-indigo); color: var(--gf-paper); }
+.kp-icsz > .kp-on-indigo small { color: var(--gf-paper); }
 .kp-ds .kit-card { display: flex; flex-direction: column; gap: 12px; }
 .kp-ds .kit-ph { margin-bottom: 0; }
 

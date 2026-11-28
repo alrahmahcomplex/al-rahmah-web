@@ -3,9 +3,9 @@
 // staff app redesign (#316) cannot drift screen by screen:
 //
 // 1. Exo is always italic (The Lean Forward Rule), in app/ and components/.
-// 2. No hex colour in the kit, the icons, the staff shell or a staff route:
-//    those use the tokens of app/tokens.css, the one file where a hex may be
-//    written.
+// 2. No hex colour in the kit, the icons, the staff shell, a staff route or
+//    the design site's pages: those use the tokens of app/tokens.css, the one
+//    file where a hex may be written.
 // 3. No CountPill in a staff route: the bell is the only count (#316, lead's
 //    answer 2).
 //
@@ -24,7 +24,7 @@ import ts from "typescript"
 
 export const TOKEN_STYLESHEET = "app/tokens.css"
 export const EXO_ROOTS = ["app", "components"]
-export const HEX_ROOTS = ["components/kit", "components/icons", "app/staff/_new-shell"]
+export const HEX_ROOTS = ["components/kit", "components/icons", "app/staff/_new-shell", "app/design", "app/design-unlock"]
 export const ROUTE_LOOKS = "app/staff/route-looks.ts"
 
 const SOURCE = /\.(tsx?|css|mjs|jsx?)$/

@@ -37,7 +37,15 @@ describe.each(TEMPLATES)("the $name template", ({ name, path, signIn }) => {
   const html = read(path)
 
   it("carries a version marker on its second line", () => {
-    expect(html.split("\n")[1]).toMatch(new RegExp(`^<!-- al-rahmah-template: ${name} v7 \\(\\d{4}-\\d{2}-\\d{2}, #539\\)`))
+    expect(html.split("\n")[1]).toMatch(new RegExp(`^<!-- al-rahmah-template: ${name} v8 \\(\\d{4}-\\d{2}-\\d{2}, #\\d+\\)`))
+  })
+
+  // A fixed height let a wrapped label spill out of the button on a phone.
+  it("lets the button grow when its label wraps", () => {
+    const button = /<a class="cta"[^>]*style="([^"]*)"/.exec(html)?.[1] ?? ""
+    expect(button).toContain("padding:10px 20px;")
+    expect(button).not.toMatch(/(^|[;\s])height:/)
+    expect(button).not.toMatch(/line-height:44px/)
   })
 
   it("is configured locally from this file", () => {

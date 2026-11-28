@@ -112,7 +112,8 @@
 .hm-fab:is([data-folded], [data-narrow]) span { display: none; }
 .hm-fab:hover { background: var(--gf-ember); }
 .hm-fab:focus-visible { outline: 3px solid var(--gf-focus-ring); outline-offset: 2px; }
-.hm-fab .gf-ic { width: 22px; height: 22px; }
+/* White on orange, never indigo (owner rule, 28 Nov 2026). */
+.hm-fab .gf-ic { width: 22px; height: 22px; color: var(--gf-paper); }
 
 /* Below 820px of Home the bar, its label and Find the family no longer fit
    beside a 300px column: everything stacks, Register students full width. */

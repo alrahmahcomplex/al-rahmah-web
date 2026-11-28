@@ -44,9 +44,10 @@ html:has(.ns) body { background: var(--gf-paper); }
 .ns-name small { display: block; font-size: calc(var(--ns-title, 14px) * 0.8); line-height: 1.2; color: var(--gf-quiet); }
 .ns[data-folded] .ns-name { opacity: 0; transform: translateX(-10px); pointer-events: none; }
 
-/* The list always fits: rows shrink from 38px to 24px and group gaps from
-   31px to 15px on a short screen; past that it scrolls with no bar. Rows are
-   4px apart (owner, design site round, 27 Nov 2026: more room). */
+/* The list always fits: rows shrink from 34px to 24px and group gaps from
+   38px to 15px on a short screen; past that it scrolls with no bar. Rows are
+   full pills 2px apart and each group name has about 20px above it, so the
+   groups read apart (owner, 28 Nov 2026). */
 .ns-nav {
   flex: 1; min-height: 0; overflow: hidden auto; padding: 0 0 6px; display: flex; flex-direction: column;
   scrollbar-width: none;
@@ -54,7 +55,7 @@ html:has(.ns) body { background: var(--gf-paper); }
 .ns-nav::-webkit-scrollbar { display: none; }
 
 .ns-group {
-  flex: 0 1 31px; min-height: 15px; display: flex; align-items: flex-end; margin: 0; padding: 0 12px 6px;
+  flex: 0 1 38px; min-height: 15px; display: flex; align-items: flex-end; margin: 0; padding: 0 12px 8px;
   white-space: nowrap; overflow: hidden; letter-spacing: 0.06em; text-transform: uppercase;
   color: color-mix(in srgb, var(--gf-indigo) 62%, transparent);
   font: italic 700 10.5px/1 var(--font-exo), "Exo", system-ui, sans-serif;
@@ -63,13 +64,13 @@ html:has(.ns) body { background: var(--gf-paper); }
 .ns-group:first-child { flex-basis: 17px; }
 
 .ns-link {
-  position: relative; flex: 0 1 38px; min-height: 24px; display: flex; align-items: center; gap: 12px; padding: 0 12px;
-  border-radius: 16px; color: var(--gf-ink-soft); font-weight: 500; font-size: 13px; white-space: nowrap; text-decoration: none;
+  position: relative; flex: 0 1 34px; min-height: 24px; display: flex; align-items: center; gap: 12px; padding: 0 12px;
+  border-radius: 999px; color: var(--gf-ink-soft); font-weight: 500; font-size: 13px; white-space: nowrap; text-decoration: none;
   outline: none;
   transition: background var(--gf-t-med) var(--gf-ease-out), color var(--gf-t-med), padding var(--gf-side) var(--gf-ease-out),
     margin var(--gf-side) var(--gf-ease-out), border-radius var(--gf-side) var(--gf-ease-out);
 }
-.ns-link + .ns-link { margin-top: 4px; }
+.ns-link + .ns-link { margin-top: 2px; }
 .ns-link:hover { background: var(--gf-chrome); color: var(--gf-indigo); }
 /* Inside the ring, as the list clips anything past its edges. */
 .ns-link:focus-visible { outline: 3px solid var(--gf-focus-ring); outline-offset: -3px; }
@@ -84,8 +85,9 @@ html:has(.ns) body { background: var(--gf-paper); }
    Lavender Mist line; the section on screen is marked. A sidebar with
    sections keeps its rows' full height and scrolls instead. */
 .ns-link-w { position: relative; flex: none; display: flex; flex-direction: column; }
-.ns-link-w > .ns-link { flex: none; height: 38px; padding-right: 40px; }
-.ns-link-w + .ns-link, .ns-sub + .ns-link { margin-top: 4px; }
+.ns-link-w > .ns-link { flex: none; height: 34px; padding-right: 40px; }
+.ns-link-w + .ns-link { margin-top: 2px; }
+.ns-sub + .ns-link { margin-top: 4px; }
 .ns-nav:has(.ns-sub) :is(.ns-link, .ns-group) { flex-shrink: 0; }
 .ns-chev {
   position: absolute; right: 4px; top: 50%; width: 30px; height: 30px; margin-top: -15px; padding: 0; border: 0; border-radius: 50%;
@@ -136,15 +138,15 @@ html:has(.ns) body { background: var(--gf-paper); }
   .ns-link { flex: 0 0 44px; min-height: 44px; }
 }
 
-/* Folded: group names become lines, each row a circle up to 30px. */
-.ns[data-folded] .ns-group { flex: none; height: 1px; min-height: 1px; padding: 0; margin: 8px 14px 8px 12px; background: var(--gf-mist); }
-.ns[data-folded] .ns-link + .ns-link { margin-top: 4px; }
+/* Folded: group names become lines with 14px above and below; each row is a circle up to 34px, 2px apart. */
+.ns[data-folded] .ns-group { flex: none; height: 1px; min-height: 1px; padding: 0; margin: 14px 14px 14px 12px; background: var(--gf-mist); }
+.ns[data-folded] .ns-link + .ns-link { margin-top: 2px; }
 .ns[data-folded] .ns-group:first-child { margin-top: 0; background: transparent; }
 .ns[data-folded] .ns-group span {
   position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap;
 }
 .ns[data-folded] .ns-link {
-  flex: 0 1 38px; min-height: 24px; height: auto; width: auto; aspect-ratio: 1; align-self: center; margin: 0; padding: 0; gap: 0;
+  flex: 0 1 34px; min-height: 24px; height: auto; width: auto; aspect-ratio: 1; align-self: center; margin: 0; padding: 0; gap: 0;
   justify-content: center; border-radius: 50%; overflow: hidden;
 }
 .ns[data-folded] .ns-label { width: 0; flex: none; opacity: 0; }

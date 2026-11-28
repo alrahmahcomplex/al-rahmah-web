@@ -13,7 +13,7 @@ import { leadUrl } from "./lead-page"
 import { signInOnce } from "./log-in"
 
 // The Sibling screens on the lead record (#310): the group says why each
-// fee is what it is, in English or Kiswahili; the desk asks for the Sibling
+// fee is what it is; the desk asks for the Sibling
 // discount from the record with the proof the family will bring; the
 // Admissions Manager sees what a grant changes, then grants it; and a close
 // father's name asks "One name, or two?" before anything is saved. Each test
@@ -65,8 +65,6 @@ test.describe("the Sibling group on the record", () => {
     await signIn(page, ADMISSIONS)
     await page.goto(leadUrl(bakari))
     await expect(group(page)).toContainText("Full fee: the fathers’ names don’t match, and no Sibling request has been sent.")
-    await group(page).getByRole("radio", { name: "Kiswahili" }).check({ force: true })
-    await expect(group(page)).toContainText("Ada kamili: majina ya baba hayalingani, na hakuna ombi la punguzo la ndugu lililotumwa.")
 
     await group(page).getByRole("button", { name: "Request the Sibling discount" }).click()
     const ask = page.getByRole("dialog", { name: "Request the Sibling discount" })

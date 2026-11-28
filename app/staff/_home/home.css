@@ -18,7 +18,9 @@
 .hm-top { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 18px; align-items: start; margin-top: -4px; }
 .hm-find { display: flex; flex-direction: column; min-width: 0; }
 .hm-find-bar {
-  display: flex; align-items: center; gap: 10px; height: 56px; padding: 0 6px 0 16px; background: var(--gf-paper);
+  /* The right padding gives Find the family (36px) the same gap on its right as above and below it. */
+  display: flex; align-items: center; gap: 10px; height: 56px; padding: 0 calc((56px - 36px) / 2 - var(--gf-stroke)) 0 16px;
+  background: var(--gf-paper);
   border: var(--gf-stroke) solid var(--gf-line); border-radius: 999px; box-shadow: var(--gf-card-shadow);
   transition: border-color var(--gf-t-med), box-shadow var(--gf-t-med);
 }

@@ -84,14 +84,9 @@ a.lr-link:focus-visible { outline: 3px solid var(--gf-focus-ring); outline-offse
 .lr-tick-value { margin: 0; padding-left: 34px; font-size: 14.5px; line-height: 1.45; color: var(--gf-ink); }
 
 /* The Sibling group (#310): one row per member, its fee chip and why. */
-.sg-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
+/* 32px is the height the removed English/Kiswahili switch gave the title row; it keeps the room above the list (owner, 28 Nov 2026). */
+.sg-head { min-height: 32px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
 .sg-head h2, .sg-head h3 { margin: 0; }
-.sg-lang { display: inline-flex; margin: 0; padding: 3px; border: 0; border-radius: 999px; background: var(--gf-whisper); }
-.sg-lang label { position: relative; }
-.sg-lang input { position: absolute; inset: 0; margin: 0; opacity: 0; cursor: pointer; }
-.sg-lang span { display: inline-flex; align-items: center; height: 26px; padding: 0 11px; border-radius: 999px; font-size: 12px; font-weight: 600; color: var(--gf-indigo); }
-.sg-lang input:checked + span { background: var(--gf-indigo); color: var(--gf-paper); }
-.sg-lang input:focus-visible + span { outline: 3px solid rgb(9 0 187 / 0.45); outline-offset: 1px; }
 .sg-list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; border: 0.75px solid var(--gf-line); border-radius: 18px; overflow: hidden; }
 .sg-m { display: flex; flex-direction: column; gap: 3px; min-width: 0; padding: 11px 14px 12px; }
 .sg-m + .sg-m { border-top: 1px solid var(--gf-mist); }

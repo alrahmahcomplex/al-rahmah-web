@@ -15,7 +15,7 @@ import type { PendingSiblingView, SiblingGroupView, SiblingPerson } from "./sibl
 import "./lead.css"
 
 // The Sibling group on the lead record and in the Applicants side sheet
-// (#310): each member with its fee chip and why, in English or Kiswahili;
+// (#310): each member with its fee chip and why, in English;
 // the Sibling request waiting on the lead, or the button to send one; and
 // the Admissions Manager's review. The prototype is
 // https://claude.ai/artifact/P6NEbzyxA9JpdKjFzu6z6U.
@@ -38,25 +38,6 @@ export function Compare({ a, b }: { a: { label: string; name: string }; b: { lab
         </div>
       ))}
     </div>
-  )
-}
-
-function LanguageSwitch({ value, onChange }: { value: SentenceLanguage; onChange: (lang: SentenceLanguage) => void }) {
-  const name = useId()
-  return (
-    <fieldset className="sg-lang" aria-label="Language of the sentences">
-      {(
-        [
-          ["en", "English"],
-          ["sw", "Kiswahili"],
-        ] as const
-      ).map(([lang, label]) => (
-        <label key={lang}>
-          <input type="radio" name={name} value={lang} checked={value === lang} onChange={() => onChange(lang)} />
-          <span>{label}</span>
-        </label>
-      ))}
-    </fieldset>
   )
 }
 
@@ -129,7 +110,8 @@ export function SiblingGroupCard({
   onChanged?: () => void
   headingId?: string
 }) {
-  const [lang, setLang] = useState<SentenceLanguage>("en")
+  // Staff read the sentences in English; the views keep their Kiswahili for later use.
+  const lang: SentenceLanguage = "en"
   const [asking, setAsking] = useState(false)
   const [reviewing, setReviewing] = useState(false)
   const refreshed = useRefreshed(onChanged)
@@ -148,7 +130,6 @@ export function SiblingGroupCard({
             Sibling group
           </h2>
         )}
-        <LanguageSwitch value={lang} onChange={setLang} />
       </div>
       <ul className="sg-list">
         {view.members.map((member) => (

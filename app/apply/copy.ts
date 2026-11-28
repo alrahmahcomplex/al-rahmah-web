@@ -106,6 +106,12 @@ type Copy = {
   codeStatus: Record<CodeStatusWord, string>
   anchorWithout: string
   anchorWith: string
+  // Before a code is confirmed, when working codes give different amounts:
+  // the label over the range ("With a code, save") and the fee line under it.
+  anchorWithRange: string
+  anchorPay: (amounts: string) => string
+  // Once a code is confirmed: the label over that code's own saving.
+  anchorYours: string
   anchorSave: (amount: string) => string
   // `approved` takes the code's own discount per student as written
   // ("TZS 10,000"): the standard fee less the fee the code leaves.
@@ -206,7 +212,7 @@ export const COPY: Record<Language, Copy> = {
     fullNameLine: "Jina kamili la mwanafunzi:",
     lastName: { group: "Jina la mwisho la mwanafunzi", last: "Jina la mwisho la baba", middle: "Jina la kati la baba" },
     genderQ: (name) => (name ? `${name} ni mvulana au msichana?` : "Mvulana au msichana?"),
-    genderHint: "Madarasa ni ya wavulana, ya wasichana au ya wote, hivyo tunampangia kila mwanafunzi darasa linalomfaa.",
+    genderHint: "Katika madarasa ya juu, wavulana na wasichana husoma katika vyumba tofauti. Hii itatusaidia kumchagulia mtoto wako darasa sahihi.",
     genderName: "Mvulana au msichana",
     genders: { Boy: "Mvulana", Girl: "Msichana" },
     classQ: (name) => (name ? `${name} anaomba darasa gani?` : "Anaomba darasa gani?"),
@@ -256,7 +262,7 @@ export const COPY: Record<Language, Copy> = {
     optional: "si lazima",
     haveCode: "Una code ya punguzo?",
     codeLabel: "Code ya Punguzo",
-    codeHint: "Kama kuna mtu aliyekupa code, iandike hapa.",
+    codeHint: "Kama kuna mtu aliyekupa code, iandike hapa. Punguzo lako linategemea code yako.",
     codeCheck: "Hakiki Punguzo",
     codeSkip: "Ruka, sina code",
     codeNone: "Hakuna code",
@@ -264,6 +270,9 @@ export const COPY: Record<Language, Copy> = {
     codeStatus: { approved: "imethibitishwa", pending: "inasubiri", switched_off: "haitoi punguzo", unknown: "haitambuliki" },
     anchorWithout: "Bila code",
     anchorWith: "Ukiwa na code",
+    anchorWithRange: "Ukiwa na code, okoa",
+    anchorPay: (amounts) => `Lipa ${amounts}`,
+    anchorYours: "Ukiwa na code yako",
     anchorSave: (amount) => `Okoa ${amount}`,
     discountNotes: {
       approved: (discount) => `Hongera! Umeokoa ${discount} kwa kila mwanafunzi.`,
@@ -387,7 +396,7 @@ export const COPY: Record<Language, Copy> = {
     fullNameLine: "Student's full name:",
     lastName: { group: "Student's last name", last: "Father's last name", middle: "Father's middle name" },
     genderQ: (name) => (name ? `Is ${name} a boy or a girl?` : "Boy or girl?"),
-    genderHint: "Classes are for boys, for girls or for both, so we place each child in the right one.",
+    genderHint: "In upper classes, boys and girls study in different classrooms. This will help us select the correct class for your child.",
     genderName: "Boy or girl",
     genders: { Boy: "Boy", Girl: "Girl" },
     classQ: (name) => (name ? `Which class is ${name} applying for?` : "Which class are they applying for?"),
@@ -437,7 +446,7 @@ export const COPY: Record<Language, Copy> = {
     optional: "optional",
     haveCode: "Have a discount code?",
     codeLabel: "Discount code",
-    codeHint: "If someone gave you a code, enter it here.",
+    codeHint: "If someone gave you a code, enter it here. How much you save depends on your code.",
     codeCheck: "Check Discount",
     codeSkip: "Skip, no code",
     codeNone: "No code",
@@ -445,6 +454,9 @@ export const COPY: Record<Language, Copy> = {
     codeStatus: { approved: "confirmed", pending: "waiting", switched_off: "no discount", unknown: "not recognised" },
     anchorWithout: "Without a code",
     anchorWith: "With a code",
+    anchorWithRange: "With a code, save",
+    anchorPay: (amounts) => `Pay ${amounts}`,
+    anchorYours: "With your code",
     anchorSave: (amount) => `Save ${amount}`,
     discountNotes: {
       approved: (discount) => `Well done! You save ${discount} for each student.`,

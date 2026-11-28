@@ -409,6 +409,29 @@ export async function getInterviewDiscount(
   }
 }
 
+// The smallest and largest saving, in whole TZS, that the codes working
+// today give: active Promo codes and Approved, switched-on agents, as the
+// code check judges them. Both 0 when no code gives a saving. The public
+// Admission form states it before a code is checked. The secret key only,
+// and it gives up after 2 seconds like the standard amount.
+export async function getInterviewDiscountRange(
+  supabase: SupabaseClient,
+): Promise<Result<{ lowest: number; highest: number }, "unavailable">> {
+  const timeout = new AbortController()
+  const timer = setTimeout(() => timeout.abort(), DISCOUNT_WAIT_MS)
+  try {
+    const { data, error } = await supabase.rpc("interview_discount_range").abortSignal(timeout.signal).single<{ lowest: unknown; highest: unknown }>()
+    const whole = (n: unknown): n is number => typeof n === "number" && Number.isInteger(n) && n >= 0
+    if (error || !data || !whole(data.lowest) || !whole(data.highest) || data.lowest > data.highest) {
+      console.error("Could not read the interview discount range", error)
+      return { ok: false, error: "unavailable" }
+    }
+    return { ok: true, data: { lowest: data.lowest, highest: data.highest } }
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
 export type ApplyFormDiscountCodeError =
   // The value isn't a code, or the notice version isn't the Admission form's.
   | "invalid"

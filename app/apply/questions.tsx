@@ -39,6 +39,7 @@ import type { ChangeWord, FormCopy } from "./copy"
 import type { ChildDraft, Custodian, ParentDraft } from "./draft"
 import { custodianName, fatherIsCustodian, fatherName, firstName, parseKey, skipped, STUDENT_KINDS, studentKey, studentName, switchFather, yearOf, type StepKey } from "./flow"
 import type { DiscountCodeCheck } from "./outcome"
+import { anchorFigures, codeSaving } from "./price-anchor"
 
 // The Admission form's stack: group titles, one question open at a time, and
 // a folded line for every answered one. The form (./admission-form.tsx) owns
@@ -80,6 +81,8 @@ export type QuestionsProps = {
   feeEach: number
   discountEach: number
   liveDiscount: number | null
+  /** The smallest and largest saving a working code gives now, from the live route. */
+  liveRange: { lowest: number | null; highest: number | null } | null
   notice: string | null
   formProblem: { field: FormField; text: string } | null
   sending: boolean
@@ -371,7 +374,7 @@ function body(p: QuestionsProps, key: StepKey): ReactNode {
               legend={
                 <>
                   <QuestionTitle id={titleId}>{copy.genderQ(firstName(child))}</QuestionTitle>
-                  <Hint id={hintId} className="-mt-2 mb-4 text-center">
+                  <Hint id={hintId} className="mt-2 mb-4 text-center">
                     {copy.genderHint}
                   </Hint>
                 </>
@@ -481,16 +484,17 @@ function body(p: QuestionsProps, key: StepKey): ReactNode {
       const father = fatherName(children)
       return (
         <>
-          {/* Two buttons first (#513, prototype v55). The father moves on to the
-              phone; Someone else opens the three name boxes and Continue. */}
+          {/* Two wide rows, as Boy or girl, and Continue under them (prototype
+              WhJUMnd7XoaPF4XBmGcJja v3). The father moves on by himself;
+              Someone else opens the three name boxes above Continue. Continue
+              with nobody picked says to choose. */}
           <div onClick={p.on.custodianAgain} onKeyDown={p.on.custodianAgain}>
             <ChoiceTiles
               name="custodian"
-              layout="pair"
               legend={
                 <>
                   <QuestionTitle id={titleId}>{copy.custodianQ}</QuestionTitle>
-                  <Hint id="h-parent-name" className="-mt-2 mb-4 text-center">
+                  <Hint id="h-parent-name" className="mt-2 mb-4 text-center">
                     {copy.custodianHint(one)}
                   </Hint>
                 </>
@@ -519,9 +523,9 @@ function body(p: QuestionsProps, key: StepKey): ReactNode {
                 onChange={(name) => p.on.parent(name)}
               />
               <FieldError id="e-parent-name" message={other ? error : null} />
-              {next()}
             </div>
           </Reveal>
+          {next()}
         </>
       )
     }
@@ -712,7 +716,7 @@ function codeBody(p: QuestionsProps, next: (label?: string) => ReactElement, tit
       // The code's own amount, which a Promo code or an agent may set: the
       // standard fee less the fee this code leaves. A confirmed code set to
       // nothing off reads like one that gives no discount for now.
-      const saving = answer.status === "approved" ? STANDARD_INTERVIEW_FEE - answer.amount : 0
+      const saving = codeSaving(answer)
       const status =
         answer.status === "rate-limited" || answer.status === "unavailable"
           ? "unchecked"
@@ -734,16 +738,35 @@ function codeBody(p: QuestionsProps, next: (label?: string) => ReactElement, tit
       }
     }
   }
-  const saving = p.liveDiscount
+  const figures = anchorFigures({
+    answer: error ? null : answer,
+    checking: p.codeChecking,
+    standard: p.liveDiscount,
+    lowest: p.liveRange?.lowest ?? null,
+    highest: p.liveRange?.highest ?? null,
+  })
+  const amount = (n: number) => n.toLocaleString("en-US")
   return (
     <>
       <QuestionTitle id={titleId}>{copy.haveCode}</QuestionTitle>
       <PriceAnchor
         fullLabel={copy.anchorWithout}
         fullAmount={tzs(STANDARD_INTERVIEW_FEE)}
-        codeLabel={copy.anchorWith}
-        saving={saving ? copy.anchorSave(tzs(saving)) : undefined}
-        was={saving ? { from: STANDARD_INTERVIEW_FEE.toLocaleString("en-US"), to: (STANDARD_INTERVIEW_FEE - saving).toLocaleString("en-US") } : undefined}
+        codeLabel={figures?.kind === "code" ? copy.anchorYours : figures?.kind === "range" ? copy.anchorWithRange : copy.anchorWith}
+        saving={
+          figures === null
+            ? undefined
+            : figures.kind === "range"
+              ? `${amount(figures.lowest)}–${amount(figures.highest)}`
+              : copy.anchorSave(tzs(figures.saving))
+        }
+        was={
+          figures === null
+            ? undefined
+            : figures.kind === "range"
+              ? { to: copy.anchorPay(`${amount(STANDARD_INTERVIEW_FEE - figures.highest)}–${amount(STANDARD_INTERVIEW_FEE - figures.lowest)}`) }
+              : { from: amount(STANDARD_INTERVIEW_FEE), to: amount(STANDARD_INTERVIEW_FEE - figures.saving) }
+        }
       />
       <Hint className="-mt-1">{copy.codeHint}</Hint>
       <div className="flex flex-col gap-2 text-left">

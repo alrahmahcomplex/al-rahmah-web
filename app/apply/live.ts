@@ -9,13 +9,15 @@ import { LIVE_APPLY_PATH, LIVE_APPLY_POLL_MS, type LiveApply } from "@/lib/live-
 // into view reads at once. A failed read keeps the last good figures, and
 // nothing here throws: the form simply states less.
 
-const UNKNOWN: LiveApply = { applications: null, discount: null }
+const UNKNOWN: LiveApply = { applications: null, discount: null, lowest: null, highest: null }
 
 function parse(body: unknown): LiveApply | null {
   if (typeof body !== "object" || body === null) return null
-  const { applications, discount } = body as Record<string, unknown>
+  const { applications, discount, lowest, highest } = body as Record<string, unknown>
   const figure = (value: unknown) => (typeof value === "number" && Number.isFinite(value) ? value : null)
-  return { applications: figure(applications), discount: figure(discount) }
+  // The range is used whole or not at all.
+  const range = figure(lowest) !== null && figure(highest) !== null ? { lowest: figure(lowest), highest: figure(highest) } : { lowest: null, highest: null }
+  return { applications: figure(applications), discount: figure(discount), ...range }
 }
 
 export function useLiveApply(initial: LiveApply = UNKNOWN): LiveApply {
@@ -39,6 +41,9 @@ export function useLiveApply(initial: LiveApply = UNKNOWN): LiveApply {
           setLive((last) => ({
             applications: next.applications ?? last.applications,
             discount: next.discount ?? last.discount,
+            // A range read that failed keeps the last range. No working code
+            // at all comes back as 0 and 0, not null, so it replaces it.
+            ...(next.lowest !== null ? { lowest: next.lowest, highest: next.highest } : { lowest: last.lowest, highest: last.highest }),
           }))
         }
       } catch {

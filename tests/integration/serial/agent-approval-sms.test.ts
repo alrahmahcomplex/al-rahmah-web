@@ -83,7 +83,11 @@ describe("the approval SMS", () => {
   test("goes once to the mobile a new agent signs in with, after the Manager approves them", async () => {
     const agent = await newAgentByMobile()
     // A different mobile on the record: the SMS still goes to the login's.
-    await asSystem((sql) => sql.query("update public.marketing_agents set phone = $2 where id = $1", [agent.id, e164(mobile())]))
+    // A joined agent's mobile is locked, so the triggers are off for this.
+    await asSystem(async (sql) => {
+      await sql.query("set local session_replication_role = replica")
+      await sql.query("update public.marketing_agents set phone = $2 where id = $1", [agent.id, e164(mobile())])
+    })
     const sms = keptSender()
     // Still Pending: nothing to send.
     expect(await sendApprovalSms(secretClient(), sms.send, agent.id)).toEqual({ ok: true, data: { kind: "none" } })

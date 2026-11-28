@@ -678,16 +678,17 @@ export async function getStaffAdminHistory(
     return { ok: false, error: "unavailable" }
   }
 
-  // The oldest save in view may have rows past the limit: read the rest of
-  // its transaction, so its entry lists every change it made.
+  // When the limit cut the list, a save in view may have rows past it (two
+  // saves made at once interleave): read the rest of every transaction in
+  // view, so each entry lists every change its save made.
   let rows = (data ?? []) as AuditRow[]
-  const last = rows.at(-1)
-  if (rows.length === limit && last?.transaction_id != null) {
+  const transactions = [...new Set(rows.map((row) => row.transaction_id).filter((id) => id != null))]
+  if (rows.length === limit && transactions.length > 0) {
     const rest = await supabase
       .from("audit_log")
       .select(columns)
       .eq("scope", "staff_admin")
-      .eq("transaction_id", last.transaction_id)
+      .in("transaction_id", transactions)
       .order("created_at", { ascending: false })
       .order("id", { ascending: false })
     if (rest.error) {

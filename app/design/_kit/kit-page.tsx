@@ -25,6 +25,7 @@ import {
   KeyValueList,
   ListRow,
   LoadingState,
+  MessageBox,
   NamedField,
   Note,
   PageHeader,
@@ -794,6 +795,30 @@ function CodeBlockCard() {
   )
 }
 
+const SAMPLE_MESSAGE =
+  "Apply today using the link below to get 20,000/= off your child’s interview fee at Al-Rahmah Schools. Instead of paying 50,000/= you pay only 30,000/= if you use this link.\n\nRemember, this discount is for a limited time, so apply today before it ends: https://alrahmahcomplex.or.tz/apply?ref=AS-135"
+
+function MessageBoxCard() {
+  const [message, setMessage] = useState(SAMPLE_MESSAGE)
+  return (
+    <Card id="message-box" title="Message box">
+      <MessageBox
+        id="kp-message"
+        aria-label="Message to send"
+        value={message}
+        onChange={setMessage}
+        copyLabel="Copy message"
+        copiedMessage="Message copied"
+        copyFailedMessage="Couldn’t copy. The message is selected: press Ctrl+C."
+      />
+      <p className="kp-spec">
+        A ready message to send, which the person can change first. The text area grows with the text, and the code block’s copy button sits in its corner. When
+        the browser refuses the clipboard, the message is selected so it can be copied by hand.
+      </p>
+    </Card>
+  )
+}
+
 // ---------- Feedback ----------
 
 function ChipsCard() {
@@ -952,6 +977,7 @@ const CARDS: Record<string, () => ReactNode> = {
   accordion: AccordionCard,
   timeline: TimelineCard,
   "code-block": CodeBlockCard,
+  "message-box": MessageBoxCard,
   chips: ChipsCard,
   note: NoteCard,
   toast: ToastCard,

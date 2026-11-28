@@ -22,6 +22,7 @@ import {
   PROMO_NAME_MAX,
   PROMO_NOTE_MAX,
   promoStateChip,
+  shareStateNote,
   stateEffect,
   stateVerb,
   typedPromoCode,
@@ -29,17 +30,25 @@ import {
   type PromoField,
   type PromoOutcome,
 } from "./messages"
+import { SHARE_HINT, ShareBody, ShareButton, ShareFoot, useShare, type ShareState } from "./share-view"
 import "../agents/agents.css"
 
 const NEW_AMOUNT = 25_000
+
+// A name as the database stores it (promo_code_name): trimmed, runs of spaces
+// made one. Comparing the same way keeps a saved name from reading as changed.
+const savedName = (name: string) => name.trim().replace(/\s+/g, " ")
 const CHECK_DELAY_MS = 300
 
 // A new Promo code, or one from the list. Roles without discount_codes.manage,
-// and every Ended code, get the facts only.
+// and every Ended code, get the facts only. Every role that opens an Active
+// code can share it: Share promo code is the foot's orange button while
+// nothing is being edited.
 export function PromoSheet({
   open,
   onOpenChange,
   promo,
+  origin,
   highestAgentAmount,
   canManage,
   statePending,
@@ -51,6 +60,8 @@ export function PromoSheet({
   onOpenChange: (open: boolean) => void
   // Null: a new code.
   promo: PromoCode | null
+  // The request's origin, for the link parents open; null when it can't be read.
+  origin: string | null
   highestAgentAmount: number | null
   canManage: boolean
   statePending: boolean
@@ -61,7 +72,10 @@ export function PromoSheet({
   // While an End is being saved the code already shows as Ended; the form
   // stays, so a refusal still has its place.
   const editable = canManage && (promo === null || promo.state !== "ended" || statePending)
+  const share = useShare(promo, origin)
   if (!editable && promo) {
+    const stateNote = shareStateNote(promo)
+    if (share.open) return <Sheet open={open} onOpenChange={onOpenChange} {...sharingSheet(promo, share)} />
     return (
       <Sheet
         open={open}
@@ -71,9 +85,12 @@ export function PromoSheet({
         chips={<PromoMeta promo={promo} />}
         closeLabel="Close"
         foot={
-          <Button variant="ghost" size="wide" onClick={() => onOpenChange(false)}>
-            Close
-          </Button>
+          <>
+            {share.link && <ShareButton share={share} />}
+            <Button variant="ghost" size="wide" onClick={() => onOpenChange(false)}>
+              Close
+            </Button>
+          </>
         }
       >
         <Facts
@@ -84,7 +101,13 @@ export function PromoSheet({
             ["Note", promo.note || "—"],
           ]}
         />
-        {promo.state === "ended" ? <Note>{ENDED_NOTE}</Note> : <LockedNote>{LOCKED_NOTE}</LockedNote>}
+        {promo.state === "ended" ? (
+          <Note>{ENDED_NOTE}</Note>
+        ) : stateNote ? (
+          <Note tone="warn">{stateNote}</Note>
+        ) : (
+          <LockedNote>{LOCKED_NOTE}</LockedNote>
+        )}
       </Sheet>
     )
   }
@@ -93,6 +116,7 @@ export function PromoSheet({
       open={open}
       onOpenChange={onOpenChange}
       promo={promo}
+      share={share}
       highestAgentAmount={highestAgentAmount}
       statePending={statePending}
       stateRefusal={stateRefusal}
@@ -100,6 +124,19 @@ export function PromoSheet({
       onSaved={onSaved}
     />
   )
+}
+
+// The sheet's share view: its title, hint, body and foot, in the same
+// sheet as the code, so switching views keeps the sheet open.
+function sharingSheet(promo: PromoCode, share: ShareState) {
+  return {
+    placement: "side" as const,
+    title: `Share ${promo.code}`,
+    hint: SHARE_HINT,
+    closeLabel: "Close",
+    foot: <ShareFoot share={share} />,
+    children: <ShareBody share={share} promo={promo} />,
+  }
 }
 
 function PromoMeta({ promo }: { promo: PromoCode }) {
@@ -119,6 +156,7 @@ function EditablePromo({
   open,
   onOpenChange,
   promo,
+  share,
   highestAgentAmount,
   statePending,
   stateRefusal,
@@ -128,6 +166,7 @@ function EditablePromo({
   open: boolean
   onOpenChange: (open: boolean) => void
   promo: PromoCode | null
+  share: ShareState
   highestAgentAmount: number | null
   statePending: boolean
   stateRefusal: string | null
@@ -146,6 +185,7 @@ function EditablePromo({
   const [reason, setReason] = useState("")
   const [errors, setErrors] = useState<Errors>({})
   const [refusal, setRefusal] = useState<string | null>(null)
+  const [round, setRound] = useState(0)
   const [pending, startTransition] = useTransition()
   const amount = parseAmount(typed)
   const check = useCodeCheck(isNew ? code : "")
@@ -154,7 +194,7 @@ function EditablePromo({
   const amountMoved = !isNew && amount !== promo.amount
   const endsMoved = !isNew && (endsOn || null) !== promo.endsOn
   const changed =
-    isNew || amountMoved || endsMoved || name.trim() !== promo.name || (note.trim() || null) !== (promo.note ?? null)
+    isNew || amountMoved || endsMoved || savedName(name) !== promo.name || (note.trim() || null) !== (promo.note ?? null)
   // A new last day moves fees as an amount does: an expired code given a
   // later day gives its amount again. The preview takes both.
   const impact = useImpact(
@@ -166,6 +206,21 @@ function EditablePromo({
   function changeOpen(next: boolean) {
     if (busy) return
     onOpenChange(next)
+  }
+
+  // Cancel on a changed code puts its saved values back.
+  function revert() {
+    if (!promo) return
+    setName(promo.name)
+    setTyped(String(promo.amount))
+    setEndsOn(promo.endsOn ?? "")
+    setEndsUnreadable(false)
+    setNote(promo.note ?? "")
+    setReason("")
+    setErrors({})
+    setRefusal(null)
+    // A fresh form, so the date box drops text that was not a date.
+    setRound((current) => current + 1)
   }
 
   function clear(field: PromoField) {
@@ -204,14 +259,21 @@ function EditablePromo({
         else setRefusal(outcome.message)
         return
       }
-      onSaved()
+      // A new code closes the sheet. A changed code stays open on its saved
+      // values, which the page brings back with the answer, so Share returns.
+      if (isNew) onSaved()
+      else setReason("")
       toast(outcome.message)
     })
   }
 
   const codeLine = isNew ? codeCheckLine(check) : { text: CODE_FIXED, problem: false }
   const compare = amount !== null && highestAgentAmount !== null ? comparisonNote(amount, highestAgentAmount) : null
+  const stateNote = isNew ? null : shareStateNote(promo)
+  // One orange button: Share while nothing is being edited, Save once something is.
+  const offerShare = !isNew && share.link !== null && !changed && !endsUnreadable
 
+  if (share.open && !isNew) return <Sheet open={open} onOpenChange={changeOpen} {...sharingSheet(promo, share)} />
   return (
     <Sheet
       open={open}
@@ -222,17 +284,27 @@ function EditablePromo({
       chips={isNew ? undefined : <PromoMeta promo={promo} />}
       closeLabel="Close"
       foot={
-        <>
-          <Button type="submit" form={`${ids}-form`} size="wide" pending={pending} disabled={!changed || statePending}>
-            {pending ? (isNew ? "Creating…" : "Saving…") : isNew ? "Create code" : "Save"}
-          </Button>
-          <Button variant="ghost" size="wide" onClick={() => changeOpen(false)}>
-            Cancel
-          </Button>
-        </>
+        offerShare ? (
+          <>
+            <ShareButton share={share} />
+            <Button variant="ghost" size="wide" onClick={() => changeOpen(false)}>
+              Close
+            </Button>
+          </>
+        ) : (
+          <>
+            <Button type="submit" form={`${ids}-form`} size="wide" pending={pending} disabled={!changed || statePending}>
+              {pending ? (isNew ? "Creating…" : "Saving…") : isNew ? "Create code" : "Save"}
+            </Button>
+            <Button variant="ghost" size="wide" disabled={busy} onClick={() => (isNew || !changed ? changeOpen(false) : revert())}>
+              Cancel
+            </Button>
+          </>
+        )
       }
     >
-      <form id={`${ids}-form`} onSubmit={submit} noValidate className="ag-stack">
+      <form key={round} id={`${ids}-form`} onSubmit={submit} noValidate className="ag-stack">
+        {stateNote && <Note tone="warn">{stateNote}</Note>}
         <TextField
           id={`${ids}-name`}
           label="Name"

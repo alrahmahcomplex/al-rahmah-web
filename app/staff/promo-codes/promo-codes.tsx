@@ -20,12 +20,15 @@ export function PromoCodes({
   highestAgentAmount,
   canManage,
   today,
+  origin,
 }: {
   codes: PromoCode[]
   // The most an agent's code gives now, or null when it couldn't be read.
   highestAgentAmount: number | null
   canManage: boolean
   today: string
+  // The request's origin, for the link parents open; null when it can't be read.
+  origin: string | null
 }) {
   const [shown, setState] = useOptimistic(codes, (list, change: { id: string; state: PromoState }) =>
     list.map((promo) =>
@@ -128,6 +131,7 @@ export function PromoCodes({
         open={sheet.open}
         onOpenChange={changeOpen}
         promo={promo}
+        origin={origin}
         highestAgentAmount={highestAgentAmount}
         canManage={canManage}
         statePending={statePending}

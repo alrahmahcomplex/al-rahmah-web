@@ -1,6 +1,8 @@
 import type { Metadata } from "next"
+import { headers } from "next/headers"
 
 import { Note, PageHeader, pageTitle } from "@/components/kit"
+import { requestOrigin } from "@/lib/agent-registration"
 import { tanzaniaToday } from "@/lib/school-calendar"
 import { getHighestAgentDiscount } from "@/lib/services/discount-codes"
 import { listPromoCodes } from "@/lib/services/promo-codes"
@@ -25,9 +27,10 @@ export default async function PromoCodesPage() {
   const canManage = staff.permissions.includes("discount_codes.manage")
 
   const supabase = await createClient()
-  const [codes, highest] = await Promise.all([
+  const [codes, highest, requestHeaders] = await Promise.all([
     listPromoCodes(supabase),
     canManage ? getHighestAgentDiscount(supabase) : null,
+    headers(),
   ])
 
   if (!codes.ok) {
@@ -47,6 +50,7 @@ export default async function PromoCodesPage() {
       highestAgentAmount={highest?.ok ? highest.data : null}
       canManage={canManage}
       today={tanzaniaToday()}
+      origin={requestOrigin(requestHeaders)}
     />
   )
 }

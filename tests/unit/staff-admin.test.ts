@@ -10,6 +10,7 @@ import {
   deactivateStaff,
   describeAuditRow,
   describeHistory,
+  getStaffAdminHistory,
   reactivateStaff,
   renameRole,
   retireRole,
@@ -474,5 +475,71 @@ describe("describeHistory: one entry per Roles save", () => {
     })
     const invite = at({ table_name: null, row_id: null, action: "invite_sent", new_values: {}, transaction_id: 96 })
     expect(describeHistory([staffRow, invite], lookup)).toEqual([describeAuditRow(staffRow, lookup), describeAuditRow(invite, lookup)])
+  })
+})
+
+describe("getStaffAdminHistory", () => {
+  // A stand-in for the two audit reads: the newest rows up to the limit,
+  // then, when the limit cut a save, the rest of that save's transaction.
+  function fakeAudit(pages: AuditRow[][]) {
+    const calls: Record<string, unknown>[] = []
+    const from = vi.fn(() => {
+      const query: Record<string, unknown> = {}
+      calls.push(query)
+      const chain = {
+        select: () => chain,
+        eq: (column: string, value: unknown) => ((query[column] = value), chain),
+        order: () => chain,
+        limit: (n: number) => ((query.limit = n), Promise.resolve({ data: pages[calls.length - 1], error: null })),
+        then: (resolve: (v: unknown) => void) => resolve({ data: pages[calls.length - 1], error: null }),
+      }
+      return chain
+    })
+    const rpc = vi.fn().mockResolvedValue({ data: true, error: null })
+    return { client: { from, rpc } as unknown as SupabaseClient, calls }
+  }
+
+  const overview = {
+    permissions: [{ name: "leads.view" as const, label: "View applicants and their history" }],
+    roles: [
+      { id: "role-sec", name: "Primary Secretary", permissions: [], retired: false, activeHolders: 0, manages: [] },
+      { id: "role-acc", name: "Accountant", permissions: [], retired: false, activeHolders: 0, manages: [] },
+      { id: "role-adm", name: "Admissions Staff", permissions: [], retired: false, activeHolders: 0, manages: [] },
+    ],
+    staff: [{ id: "owner", name: "Salma Abdallah", email: "s@example.test", roleId: "role-sec", active: true, invited: false }],
+  }
+  const row = (over: Partial<AuditRow>): AuditRow => ({
+    id: 1,
+    table_name: "role_managed_roles",
+    row_id: "pair",
+    action: "insert",
+    old_values: null,
+    new_values: { role_id: "role-sec", managed_role_id: "role-acc", active: true },
+    actor_kind: "staff",
+    actor_staff_id: "owner",
+    created_at: "2026-11-28T10:00:00Z",
+    transaction_id: 7,
+    ...over,
+  })
+
+  it("reads the rest of a save the limit cut, so its entry lists every change", async () => {
+    const newest = row({ id: 3, transaction_id: 8, table_name: "staff_members", row_id: "owner", action: "update", new_values: { active: true }, old_values: { active: false } })
+    const cut = row({ id: 2 })
+    const rest = [cut, row({ id: 1, new_values: { role_id: "role-sec", managed_role_id: "role-adm", active: true } })]
+    const { client, calls } = fakeAudit([[newest, cut], rest])
+
+    const history = await getStaffAdminHistory(client, overview, 2)
+    expect(calls[1]).toMatchObject({ scope: "staff_admin", transaction_id: 7 })
+    expect(history.ok && history.data.map((entry) => entry.summary)).toEqual([
+      "changed Salma Abdallah",
+      "changed the role Primary Secretary",
+    ])
+    expect(history.ok && history.data[1].changes.map((change) => change.to)).toEqual(["added Accountant", "added Admissions Staff"])
+  })
+
+  it("reads once when the rows end before the limit", async () => {
+    const { client, calls } = fakeAudit([[row({ id: 2 })]])
+    await getStaffAdminHistory(client, overview, 2)
+    expect(calls).toHaveLength(1)
   })
 })

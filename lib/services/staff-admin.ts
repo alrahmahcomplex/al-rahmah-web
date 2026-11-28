@@ -665,9 +665,10 @@ export async function getStaffAdminHistory(
   }
   if (allowed.data !== true) return { ok: false, error: "forbidden" }
 
+  const columns = "id, table_name, row_id, action, old_values, new_values, actor_kind, actor_staff_id, created_at, transaction_id"
   const { data, error } = await supabase
     .from("audit_log")
-    .select("id, table_name, row_id, action, old_values, new_values, actor_kind, actor_staff_id, created_at, transaction_id")
+    .select(columns)
     .eq("scope", "staff_admin")
     .order("created_at", { ascending: false })
     .order("id", { ascending: false })
@@ -677,6 +678,26 @@ export async function getStaffAdminHistory(
     return { ok: false, error: "unavailable" }
   }
 
+  // The oldest save in view may have rows past the limit: read the rest of
+  // its transaction, so its entry lists every change it made.
+  let rows = (data ?? []) as AuditRow[]
+  const last = rows.at(-1)
+  if (rows.length === limit && last?.transaction_id != null) {
+    const rest = await supabase
+      .from("audit_log")
+      .select(columns)
+      .eq("scope", "staff_admin")
+      .eq("transaction_id", last.transaction_id)
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false })
+    if (rest.error) {
+      console.error("Could not read the staff and roles history", rest.error)
+      return { ok: false, error: "unavailable" }
+    }
+    const seen = new Set(rows.map((row) => row.id))
+    rows = [...rows, ...((rest.data ?? []) as AuditRow[]).filter((row) => !seen.has(row.id))]
+  }
+
   const lookup: HistoryLookup = {
     staffNames: staffAndRoles.actorNames ?? new Map(staffAndRoles.staff.map((s) => [s.id, s.name])),
     // The Super Admin role is left out of the roles; its own entries still name it.
@@ -684,7 +705,7 @@ export async function getStaffAdminHistory(
     permissionLabels: new Map(staffAndRoles.permissions.map((p) => [p.name, p.label])),
     managedPairs: staffAndRoles.managedPairs,
   }
-  return { ok: true, data: describeHistory((data ?? []) as AuditRow[], lookup) }
+  return { ok: true, data: describeHistory(rows, lookup) }
 }
 
 // ---------------------------------------------------------------------------

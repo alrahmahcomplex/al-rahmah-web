@@ -1,6 +1,6 @@
 import type { ReactNode } from "react"
 
-import { ButtonLink, StatusChip, Tag } from "@/components/kit"
+import { ButtonLink, StatusChip, Tag, TitleTrail, type TrailStep } from "@/components/kit"
 import { formatDate } from "@/lib/school-calendar"
 import type { Lead } from "@/lib/services/leads"
 import type { LeadImportMark } from "@/lib/services/student-import"
@@ -12,12 +12,15 @@ import "./lead.css"
 // with History for the Super Admin and the More menu on the right.
 export function LeadHeader({
   lead,
+  trail,
   statusSince,
   canViewHistory,
   importMark,
   more,
 }: {
   lead: Lead
+  // The list this record was opened from, such as Interviews, before the name.
+  trail?: readonly TrailStep[]
   // The day the status last changed (YYYY-MM-DD), which every lead reader
   // keeps once the history is the Super Admin's (#237).
   statusSince?: string
@@ -36,6 +39,7 @@ export function LeadHeader({
         </span>
         <div className="min-w-0">
           <div className="lr-head-title">
+            {trail && <TitleTrail steps={trail} />}
             <h1 className="kit-ph-title">{lead.studentName}</h1>
             <StatusChip status={lead.status} />
             {statusSince && <span className="lr-since">since {formatDate(statusSince)}</span>}

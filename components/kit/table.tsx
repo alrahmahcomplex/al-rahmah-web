@@ -15,6 +15,8 @@ export type TableColumn<Row> = {
   align?: "start" | "end"
   /** The cell names its row (a <th scope="row">), as the record's name does. */
   rowHeader?: boolean
+  /** The column the rows are sorted by, and which way (aria-sort). Pair it with a ColumnHeader. */
+  ariaSort?: "ascending" | "descending"
 }
 
 export type TableProps<Row> = {
@@ -52,7 +54,7 @@ export function Table<Row>({ label, columns, rows, rowKey, onOpen, rowLabel, tot
         <thead>
           <tr>
             {columns.map((column, i) => (
-              <th key={i} scope="col" data-align={column.align === "end" ? "end" : undefined}>
+              <th key={i} scope="col" aria-sort={column.ariaSort} data-align={column.align === "end" ? "end" : undefined}>
                 {column.header}
               </th>
             ))}

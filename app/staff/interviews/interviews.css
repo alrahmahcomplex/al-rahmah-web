@@ -1,25 +1,31 @@
-/* Interviews: the filter rows and the table's cells (DESIGN.md, Lists). Tokens only. */
+/* Interviews: the toolbar, the table's cells and the side sheet's details (DESIGN.md, Lists). Tokens only. */
 .iv-stack { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
-.iv-stack > .iv-stack { gap: 12px; }
 
-/* Each filter: its name on the left, the pills after it; stacked on a phone. */
-.iv-filters { display: flex; flex-direction: column; gap: 10px; }
-.iv-filter { display: flex; flex-direction: column; gap: 6px; }
-.iv-filter-label { margin: 0; color: var(--gf-quiet); font-size: 13px; font-weight: 500; }
-.iv-pills { margin: 0; }
-@media (min-width: 640px) {
-  .iv-filter { flex-direction: row; align-items: center; gap: 12px; }
-  .iv-filter-label { width: 128px; flex: none; }
+/* One row, edge to edge: the search takes what the year, the date and Filter leave. */
+.iv-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.iv-search { flex: 1 1 260px; }
+.iv-year { flex: none; width: 270px; }
+@media (max-width: 860px) {
+  .iv-search { flex-basis: 100%; }
+  .iv-year { width: auto; }
 }
 
-.iv-count { margin: 0; color: var(--gf-quiet); font-size: 14px; }
+.iv-fline { margin: -4px 0 0; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; font-size: 13.5px; color: var(--gf-ink-soft); }
+.iv-fline b { color: var(--gf-ink); font-weight: 600; }
+.iv-acts { display: inline-flex; flex-wrap: wrap; justify-content: center; gap: 8px 18px; }
 
 .iv-sn { font-weight: 700; }
 .iv-nowrap { white-space: nowrap; }
 .iv-quiet { color: var(--gf-quiet); }
-.iv-student { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-width: 160px; }
-.iv-name {
-  color: var(--gf-indigo); font-weight: 600; text-decoration: underline; text-underline-offset: 3px; overflow-wrap: anywhere;
-}
+.iv-student { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-width: 150px; }
+.iv-name { color: var(--gf-indigo); font-weight: 600; text-decoration: underline; text-underline-offset: 3px; overflow-wrap: anywhere; }
 .iv-name[data-closed] { color: var(--gf-ink-soft); }
-.iv-name:focus-visible { outline: 3px solid var(--gf-focus-ring); outline-offset: 2px; border-radius: 4px; }
+
+/* The side sheet. */
+.iv-chips { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+.iv-sheet-wait { display: flex; flex-direction: column; gap: 12px; }
+.iv-sn-big { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; margin-top: 8px; }
+.iv-sn-big b { font-size: 24px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.iv-sn-rule { margin: 4px 0 0; font-size: 13px; color: var(--gf-quiet); }
+.iv-text { margin: 8px 0 0; font-size: 14px; }
+.iv-others { margin: 8px 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; font-size: 14px; }

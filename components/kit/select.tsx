@@ -8,13 +8,16 @@ import { cn } from "@/lib/utils"
 
 import "./kit.css"
 
-export type SelectOption = { value: string; label: string; disabled?: boolean }
+/** `hint` is a quiet note after the label in the open list only, such as "· 142 interviews". */
+export type SelectOption = { value: string; label: string; hint?: string; disabled?: boolean }
 
 export type SelectProps = {
   /** The choices in order. `""` may be a real choice ("Anyone", "Blank role"). */
   options: SelectOption[]
   /** What the empty field says, and the quiet heading inside the open list ("Choose a type"). Never a choice. */
   placeholder?: string
+  /** A quiet name inside the pill, before the chosen value, such as "Enrollment year". */
+  prefix?: string
   /** Controlled: the chosen option's value. A value no option has shows the placeholder. */
   value?: string
   onValueChange?: (value: string) => void
@@ -51,6 +54,7 @@ export type SelectProps = {
 export function Select({
   options,
   placeholder,
+  prefix,
   value,
   onValueChange,
   name,
@@ -150,6 +154,7 @@ export function Select({
         }}
         className={cn("kit-field kit-sel", className)}
       >
+        {prefix && <span className="kit-sel-pre">{prefix}</span>}
         <span className="kit-sel-v">{chosen ? chosen.label : placeholder}</span>
         <Icon name="down" size={16} className="kit-sel-chev" />
       </BaseSelect.Trigger>
@@ -164,7 +169,10 @@ export function Select({
             <BaseSelect.List ref={listRef} className="kit-sel-list">
               {options.map((option) => (
                 <BaseSelect.Item key={option.value} value={option.value} label={option.label} disabled={option.disabled} className="kit-sel-o">
-                  <BaseSelect.ItemText>{option.label}</BaseSelect.ItemText>
+                  <span className="kit-sel-ot">
+                    <BaseSelect.ItemText>{option.label}</BaseSelect.ItemText>
+                    {option.hint && <small>{option.hint}</small>}
+                  </span>
                   <Icon name="check" size={18} />
                 </BaseSelect.Item>
               ))}

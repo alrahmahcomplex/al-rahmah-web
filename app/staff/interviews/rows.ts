@@ -1,10 +1,10 @@
-import { formatDate, tanzaniaToday } from "@/lib/school-calendar"
+import { tanzaniaToday } from "@/lib/school-calendar"
 import type { InterviewListItem } from "@/lib/services/interview-list"
 import type { ReleaseStatus } from "@/lib/services/result-release"
 
 export type InterviewRow = InterviewListItem & {
-  // When the result on show was last sent, as a date in Tanzania; null when
-  // never sent, or changed since, which counts as not sent.
+  // The day the result on show was last sent, in Tanzania ("YYYY-MM-DD");
+  // null when never sent, or changed since, which counts as not sent.
   sentOn: string | null
 }
 
@@ -24,7 +24,7 @@ export function interviewRows(
       ...interview,
       result: status.result,
       score: status.score,
-      sentOn: sent ? formatDate(tanzaniaToday(new Date(status.lastReleasedAt!))) : null,
+      sentOn: sent ? tanzaniaToday(new Date(status.lastReleasedAt!)) : null,
     }
   })
 }

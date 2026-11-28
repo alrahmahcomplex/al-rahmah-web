@@ -58,6 +58,8 @@ export const PARTS: readonly Part[] = [
   // Inputs
   { id: "fields", title: "Fields", group: "Inputs", summary: "The 52px pill field, with an icon, an error line, and the named field.", files: [KIT("field.tsx"), KIT("kit.css")], rules: ["Inputs"] },
   { id: "compact-fields", title: "Compact and search fields", group: "Inputs", summary: "The 44px compact field and the 40px top-bar search.", files: [KIT("field.tsx")], rules: ["Inputs"] },
+  { id: "search-field", title: "Search field with Clear", group: "Inputs", summary: "The compact field with the search icon and a round Clear; the list changes on every letter.", files: [KIT("list-tools.tsx"), KIT("list-tools.css")], rules: ["Inputs"] },
+  { id: "date-choice", title: "Date choice", group: "Inputs", summary: "A day to show, or any day: the Select's pill with the calendar icon and the month calendar.", files: [KIT("list-tools.tsx")], rules: ["Inputs"] },
   { id: "password-field", title: "Password field", group: "Inputs", summary: "The pill field with the lock icon and a round eye button that shows and hides the password.", files: [KIT("password-field.tsx"), KIT("kit.css")], rules: ["Inputs"] },
   { id: "selectors", title: "Selectors", group: "Inputs", summary: "The default tile, segmented choices and choice rows.", files: [KIT("choices.tsx")], rules: ["Choices"] },
   { id: "class-picker", title: "Class picker", group: "Inputs", summary: "The class sheet's body: the levels on the sliding track, then the level's classes.", files: [KIT("class-picker.tsx")], rules: ["Choices"] },
@@ -80,12 +82,16 @@ export const PARTS: readonly Part[] = [
   { id: "sign-up-steps", title: "Sign-up steps", group: "Forms and steps", summary: "The agent sign-up's step discs and words.", files: [FORM("controls.tsx")], rules: ["Guided form"] },
 
   // Layout and lists
-  { id: "page-header", title: "Page header", group: "Layout and lists", summary: "The page title, its subtitle and its actions.", files: [KIT("page-header.tsx"), KIT("page-title.ts")], rules: ["Cards"] },
+  { id: "page-header", title: "Page header", group: "Layout and lists", summary: "The page title, its subtitle and its actions; a count pill after the title, and the pages before it as links.", files: [KIT("page-header.tsx"), KIT("page-title.ts")], rules: ["Cards"] },
   { id: "filter-table", title: "Filter pills and table", group: "Layout and lists", summary: "Status filter pills over a table whose rows open a record.", files: [KIT("filter-pills.tsx"), KIT("table.tsx")], rules: ["Lists"] },
   { id: "table", title: "Table", group: "Layout and lists", summary: "14px rows, quiet headings, money right-aligned.", files: [KIT("table.tsx")], rules: ["Lists"] },
   { id: "list-row", title: "List row", group: "Layout and lists", summary: "A row with an optional disc icon, a title over a caption, and a trailing chip or button.", files: [KIT("list-row.tsx")], rules: ["Lists"] },
   { id: "stat-card", title: "Stat card", group: "Layout and lists", summary: "A number card: icon and title, the big number, its trend and the card's graph.", files: [KIT("stat-card.tsx")], rules: ["Cards"] },
   { id: "tabs", title: "Tabs: sliding track", group: "Layout and lists", summary: "Sections of one record, one indigo pill sliding to the chosen tab.", files: [KIT("tabs.tsx"), KIT("picked.css")], rules: ["Choices"] },
+  { id: "list-toolbar", title: "List toolbar", group: "Layout and lists", summary: "Search, a Select named inside its pill, a date choice and the Filter button, in one row edge to edge.", files: [KIT("list-tools.tsx"), KIT("select.tsx")], rules: ["Lists"] },
+  { id: "column-header", title: "Sortable column heading", group: "Layout and lists", summary: "Two small chevrons that sort a column, and a name that opens the column's filter.", files: [KIT("list-tools.tsx"), KIT("table.tsx")], rules: ["Lists"] },
+  { id: "filter-groups", title: "Filter button with groups", group: "Layout and lists", summary: "The Filter button opening groups of choices: rows with counts for one, chips for several.", files: [KIT("list-tools.tsx"), KIT("agents-parts.css")], rules: ["Menus and popovers"] },
+  { id: "list-foot", title: "List foot", group: "Layout and lists", summary: "How many a list shows, then the page numbers.", files: [KIT("list-tools.tsx"), KIT("pagination.tsx")], rules: ["Lists"] },
   { id: "pagination", title: "Pagination: numbered pills", group: "Layout and lists", summary: "Page links for lists longer than ten rows.", files: [KIT("pagination.tsx"), KIT("picked.css")], rules: ["Lists"] },
   { id: "scroll-bar", title: "Scrollbar", group: "Layout and lists", summary: "The app's thin, light scrollbar, outside the page or the card it scrolls; no arrows.", files: [KIT("scroll-bar.tsx")], rules: ["Cards"] },
   { id: "save-bar", title: "Save bar", group: "Layout and lists", summary: "A filling card whose content scrolls inside, with the save bar as its bottom edge while changes wait.", files: [KIT("save-bar.tsx")], rules: ["Cards"] },
@@ -99,6 +105,7 @@ export const PARTS: readonly Part[] = [
   { id: "message-box", title: "Message box", group: "Inputs", summary: "A ready message to send, which the person can change, with a copy button.", files: [KIT("message-box.tsx"), KIT("message-box.css")], rules: ["Inputs"] },
 
   // Feedback
+  { id: "search-match", title: "Search match", group: "Feedback", summary: "The letters a search matched, marked in light orange.", files: [KIT("list-tools.tsx")], rules: ["Lists"] },
   { id: "chips", title: "Chips", group: "Feedback", summary: "Status chips for a lead's lifecycle, and tags.", files: [KIT("chips.tsx")], rules: ["Chips"] },
   { id: "note", title: "Note", group: "Feedback", summary: "A tinted box that says one thing and what to do about it.", files: [KIT("details.tsx")], rules: ["Notes"] },
   { id: "toast", title: "Toast", group: "Feedback", summary: "One sentence at the bottom after a save or a failure.", files: [KIT("toast.tsx")], rules: ["Toasts"] },

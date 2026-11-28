@@ -1,8 +1,10 @@
 "use client"
 
-import { useSyncExternalStore, type ReactNode } from "react"
+import Link from "next/link"
+import { Fragment, useSyncExternalStore, type ReactNode } from "react"
 import { createPortal } from "react-dom"
 
+import { Icon } from "@/components/icons"
 import { cn } from "@/lib/utils"
 
 import "./kit.css"
@@ -20,12 +22,21 @@ export function PageHeader({
   title,
   subtitle,
   actions,
+  count,
+  countLabel,
+  trail,
   level = 1,
   className,
 }: {
   title: ReactNode
   subtitle?: ReactNode
   actions?: ReactNode
+  /** A total after the title, in a pill of the title's height, such as the year's interviews. */
+  count?: number
+  /** The count's name for a screen reader, such as "142 interviews". */
+  countLabel?: string
+  /** The pages before this one, each a link, as on a record reached from a list. */
+  trail?: readonly TrailStep[]
   /** 1 on a page. 2 only where the header is shown as an example, as on the kit page. */
   level?: 1 | 2
   className?: string
@@ -34,13 +45,44 @@ export function PageHeader({
   return (
     <header className={cn("kit-ph", className)}>
       <div>
-        <Heading className="kit-ph-title">{title}</Heading>
+        <div className="kit-ph-line">
+          {trail && <TitleTrail steps={trail} />}
+          <Heading className="kit-ph-title">{title}</Heading>
+          {count !== undefined && <TitleCount count={count} label={countLabel} />}
+        </div>
         {subtitle && <p className="kit-ph-sub">{subtitle}</p>}
       </div>
       <div id={level === 1 ? PAGE_ACTIONS_ID : undefined} className="kit-ph-act">
         {actions}
       </div>
     </header>
+  )
+}
+
+export type TrailStep = { label: string; href: string }
+
+/** The pages before the title, each a link in the title's size, then a chevron. */
+export function TitleTrail({ steps }: { steps: readonly TrailStep[] }) {
+  return (
+    <>
+      {steps.map((step) => (
+        <Fragment key={step.href}>
+          <Link href={step.href} className="kit-ph-trail">
+            {step.label}
+          </Link>
+          <Icon name="right" size={24} className="kit-ph-sep" />
+        </Fragment>
+      ))}
+    </>
+  )
+}
+
+/** A total in a pill of the title's height, after the title. */
+export function TitleCount({ count, label }: { count: number; label?: string }) {
+  return (
+    <span className="kit-ph-count" role="img" aria-label={label ?? String(count)}>
+      {count}
+    </span>
   )
 }
 

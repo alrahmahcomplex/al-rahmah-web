@@ -47,6 +47,7 @@ import { tanzaniaToday } from "@/lib/school-calendar"
 import type { LeadStatus } from "@/lib/services/leads"
 
 import { SaveBarCard, ScrollBarCard } from "./save-parts"
+import { ColumnHeaderCard, DateChoiceCard, FilterGroupsCard, ListFootCard, ListToolbarCard, SearchFieldCard, SearchMatchCard } from "./list-tools-parts"
 import { CodeChipCard, FilterMenuCard, LinkRowsCard, ProfileRowCard, StepTrackCard, TopBarSwapCard } from "./agent-parts"
 import { APPLICANTS, CAMPUS, DISCOUNT_REQUESTS, FEE_SCHEDULE, FILTERS, PAYMENT_KINDS, type Applicant } from "./fixtures"
 import { FormPartsCard, ListInPopoverCard } from "./form-parts"
@@ -535,6 +536,12 @@ function PageHeaderCard() {
           </Button>
         }
       />
+      <PageHeader level={2} title="Interviews" count={142} countLabel="142 interviews for 2027" />
+      <PageHeader level={2} title="Amina Juma Mrisho" trail={[{ label: "Interviews", href: "#page-header" }]} />
+      <p className="kp-spec">
+        The title can take a count, in a pill of its height (<code>count</code>), and the pages before it, each a link
+        (<code>trail</code>), as on a record opened from a list.
+      </p>
     </Card>
   )
 }
@@ -979,6 +986,13 @@ const CARDS: Record<string, () => ReactNode> = {
   timeline: TimelineCard,
   "code-block": CodeBlockCard,
   "message-box": MessageBoxCard,
+  "search-field": SearchFieldCard,
+  "search-match": SearchMatchCard,
+  "date-choice": DateChoiceCard,
+  "column-header": ColumnHeaderCard,
+  "filter-groups": FilterGroupsCard,
+  "list-foot": ListFootCard,
+  "list-toolbar": ListToolbarCard,
   chips: ChipsCard,
   note: NoteCard,
   toast: ToastCard,

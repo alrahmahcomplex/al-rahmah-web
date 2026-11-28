@@ -1039,6 +1039,7 @@ export function AdmissionFormSteps({
                   feeEach,
                   discountEach,
                   liveDiscount: live.discount,
+                  liveRange: { lowest: live.lowest, highest: live.highest },
                   notice: noticeText,
                   formProblem: unplaced ? { field: unplaced.field, text: copy.problems[unplaced.field] } : null,
                   sending,

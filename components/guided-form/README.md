@@ -90,7 +90,7 @@ Prototype CSS: `.stack`, `.item`, `.step`, `.sum-w`, `.fold`, `.settled`, `.head
 | `Hint` | Grey help line | `.hint` |
 | `FieldInput` | Pill input, 52px, centred text; `invalid`, `icon`, `alignStart` | `.input` |
 | `FieldError` | Red line that folds open under a field | `.err` |
-| `ChoiceTiles` | Radios; `layout="rows"` (Day/Boarding, tick on the right), `"two"` (year), `"four"` (relationship), `"pair"` (two big tiles with a line under each label: the custodian's The father / Someone else, #511) | `.choice`, `.seg`, `.cpk` |
+| `ChoiceTiles` | Radios; `layout="rows"` (Boy/Girl, Day/Boarding and the custodian's The father / Someone else: tick on the right, an optional line under each label), `"two"` (year), `"four"` (relationship), `"pair"` (two big tiles with a line under each label, #511; no screen uses it since the custodian moved to rows) | `.choice`, `.seg`, `.cpk` |
 | `DefaultTile` | One-tap answer with tagline, e.g. FORM 1 with "Wazazi wengi huchagua" | `.pop` |
 | `ContinuePill` | Orange "Endelea ›" (`variant="go"`, chevron always added) or outlined (`variant="ghost"`, `icon="plus"` for "Ndiyo, ongeza mwanafunzi"); `pending` shows a spinner | `.btn-go`, `.btn-ghost` |
 | `NoticeBox` | `tone` good, wait, bad or info; optional `role` | `.notice` |
@@ -99,7 +99,7 @@ Prototype CSS: `.stack`, `.item`, `.step`, `.sum-w`, `.fold`, `.settled`, `.head
 | `OfferNote` | Clock, title, body on orange tint; `pulse` for the entrance, `centred` on the success screen | `.offer` |
 | `OfferPill` | "OFA YA MUDA MAALUM" pill (CSS uppercases it) that opens the sheet | `.offerpill` |
 | `InfoButton` | ⓘ beside a discounted fee; `label` is its aria-label | `.ibtn` |
-| `PriceAnchor` | Full fee vs saving. Leave `saving` and `was` out until the live route answers | `.anchor` |
+| `PriceAnchor` | Full fee vs saving. `was` is the struck fee and the new one, or with no `from` a plain line, such as the fee range under a range of savings. Leave `saving` and `was` out until the live route answers | `.anchor` |
 | `BottomSheet` | Modal sheet: `open`, `onClose`, `title`, `closeLabel`. Focus trap, Escape, backdrop, scroll lock, focus return | `.sheet-wrap`, `.sheet` |
 | `Confetti` | Mount it on the success screen; `originRef` is the success tick. Skipped under reduced motion | `confetti()` |
 | `LiveCountPill` | The application count; change `bumpKey` when the number changes | `.live-n.blk` |

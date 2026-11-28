@@ -324,8 +324,12 @@ export type PriceAnchorProps = {
   codeLabel: ReactNode
   /** "Okoa TZS 10,000". Leave out until the live figure has arrived. */
   saving?: ReactNode
-  /** The struck line, e.g. { from: "50,000", to: "40,000" }. Leave out until known. */
-  was?: { from: ReactNode; to: ReactNode }
+  /**
+   * The line under the saving: the struck fee and the new one, e.g.
+   * { from: "50,000", to: "40,000" }, or without `from` a plain line, e.g.
+   * { to: "Pay 30,000–40,000" } under a range. Leave out until known.
+   */
+  was?: { from?: ReactNode; to: ReactNode }
 }
 
 /**
@@ -345,7 +349,13 @@ export function PriceAnchor({ fullLabel, fullAmount, codeLabel, saving, was }: P
         {saving && <b>{saving}</b>}
         {was && (
           <span className="gf-was">
-            <s>{was.from}</s> → {was.to}
+            {was.from === undefined ? (
+              was.to
+            ) : (
+              <>
+                <s>{was.from}</s> → {was.to}
+              </>
+            )}
           </span>
         )}
       </div>

@@ -1,5 +1,6 @@
 // What the public Admission form reads after it is up: this year's
-// application count and the interview discount, from /api/apply/live. Shared
+// application count, the standard interview discount and the range of
+// savings the codes that work today give, from /api/apply/live. Shared
 // by the route and the browser hook, so it imports nothing from the server.
 
 /**
@@ -10,8 +11,12 @@
  */
 export const MIN_SHOWN_APPLICATIONS = 100
 
-/** The route's answer. Either field is null when it could not be read. */
-export type LiveApply = { applications: number | null; discount: number | null }
+/**
+ * The route's answer. A field is null when it could not be read. `lowest`
+ * and `highest` are the smallest and largest saving a working code gives
+ * now: both 0 when no code gives one, and both null when the read failed.
+ */
+export type LiveApply = { applications: number | null; discount: number | null; lowest: number | null; highest: number | null }
 
 /** Where the form reads it. */
 export const LIVE_APPLY_PATH = "/api/apply/live"

@@ -780,7 +780,6 @@ export function CustodianQuestion({
       >
         <ChoiceTiles
           name={`${id}-who-kind`}
-          layout="pair"
           legend={<span className="sr-only">Who is the custodian</span>}
           value={who}
           onChange={pickWho}

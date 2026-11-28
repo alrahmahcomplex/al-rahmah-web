@@ -50,7 +50,7 @@ const DEFAULT_YEAR = years[1]
 type User = ReturnType<typeof userEvent.setup>
 
 // The live figures the form reads from /api/apply/live.
-let live: { applications: number | null; discount: number | null } = { applications: null, discount: null }
+let live: { applications: number | null; discount: number | null; lowest?: number | null; highest?: number | null } = { applications: null, discount: null }
 
 beforeEach(() => {
   document.cookie = "discount_code=; Max-Age=0; Path=/"
@@ -304,7 +304,7 @@ describe("the Admission form page", { timeout: 30_000 }, () => {
     expect(screen.getByText("Jina kamili la mwanafunzi")).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Badilisha Jina" })).toBeInTheDocument()
     // Boy or girl (v41): two rows, the hint, and nothing picked for the parent.
-    expect(open().getByText("Madarasa ni ya wavulana, ya wasichana au ya wote, hivyo tunampangia kila mwanafunzi darasa linalomfaa.")).toBeInTheDocument()
+    expect(open().getByText("Katika madarasa ya juu, wavulana na wasichana husoma katika vyumba tofauti. Hii itatusaidia kumchagulia mtoto wako darasa sahihi.")).toBeInTheDocument()
     expect(open().getAllByRole("radio").map((r) => r.closest("label")?.textContent)).toEqual(["Mvulana", "Msichana"])
     expect(open().getAllByRole("radio").some((r) => (r as HTMLInputElement).checked)).toBe(false)
     await user.click(open().getByRole("button", { name: "Endelea" }))
@@ -1269,9 +1269,34 @@ describe("the Discount code question", { timeout: 30_000 }, () => {
     render(form("en"))
     await toCode(user)
     expect(await screen.findByText("Well done! You save TZS 25,000 for each student.")).toBeInTheDocument()
+    // The price box states the same saving, under "With your code" (prototype WhJUMnd7XoaPF4XBmGcJja v3).
+    const box = open().getByText("With your code").closest(".gf-anchor") as HTMLElement
+    expect(box).toHaveTextContent("Save TZS 25,000")
+    expect(box).toHaveTextContent("50,000 → 25,000")
     await user.click(open().getByRole("button", { name: "Continue" }))
     await waitForQuestion("Interview fee")
     expect(open().getByText("You save TZS 25,000")).toBeInTheDocument()
+  })
+
+  it("before a code, states the range of savings working codes give, and what the parent pays", async () => {
+    live = { applications: null, discount: 10000, lowest: 10000, highest: 20000 }
+    const user = userEvent.setup()
+    render(form("sw"))
+    await toCode(user, "sw")
+    const box = (await open().findByText("Ukiwa na code, okoa")).closest(".gf-anchor") as HTMLElement
+    expect(box).toHaveTextContent("10,000–20,000")
+    expect(box).toHaveTextContent("Lipa 30,000–40,000")
+    expect(open().getByText("Kama kuna mtu aliyekupa code, iandike hapa. Punguzo lako linategemea code yako.")).toBeInTheDocument()
+  })
+
+  it("before a code, states one saving when every working code gives the same", async () => {
+    live = { applications: null, discount: 10000, lowest: 15000, highest: 15000 }
+    const user = userEvent.setup()
+    render(form("en"))
+    await toCode(user)
+    const box = (await open().findByText("With a code")).closest(".gf-anchor") as HTMLElement
+    expect(box).toHaveTextContent("Save TZS 15,000")
+    expect(box).toHaveTextContent("50,000 → 35,000")
   })
 
   it("promises no saving for a confirmed code set to nothing off", async () => {

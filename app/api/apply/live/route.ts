@@ -1,15 +1,16 @@
 import type { LiveApply } from "@/lib/live-apply"
 import { getAdmissionApplicationCount } from "@/lib/services/admission-applications"
-import { getInterviewDiscount } from "@/lib/services/referral"
+import { getInterviewDiscount, getInterviewDiscountRange } from "@/lib/services/referral"
 import { publicFormClient } from "@/utils/supabase/public-form"
 
-// The public Admission form's live figures: this year's application count and
-// the interview discount, as `{ applications, discount }`. The page renders
-// without Supabase and polls this every 30 seconds once it is up.
+// The public Admission form's live figures: this year's application count, the
+// standard interview discount, and the smallest and largest saving the codes
+// working today give, as `{ applications, discount, lowest, highest }`. The
+// page renders without Supabase and polls this every 30 seconds once it is up.
 //
-// It returns two aggregate numbers and nothing else, reads them with the
+// It returns four aggregate numbers and nothing else, reads them with the
 // secret key on the server, needs no session and writes nothing. It reads no
-// cookie or body and logs nothing about the visitor. Either field is null when
+// cookie or body and logs nothing about the visitor. A field is null when
 // Supabase is missing, down or slower than 2 seconds. The count is the raw
 // total; the form applies MIN_SHOWN_APPLICATIONS.
 //
@@ -34,15 +35,18 @@ function client() {
 
 export async function GET(): Promise<Response> {
   const supabase = client()
-  let body: LiveApply = { applications: null, discount: null }
+  let body: LiveApply = { applications: null, discount: null, lowest: null, highest: null }
   if (supabase) {
-    const [count, discount] = await Promise.all([
+    const [count, discount, range] = await Promise.all([
       getAdmissionApplicationCount(supabase).catch(() => null),
       getInterviewDiscount(supabase).catch(() => null),
+      getInterviewDiscountRange(supabase).catch(() => null),
     ])
     body = {
       applications: count?.ok ? count.data : null,
       discount: discount?.ok ? discount.data : null,
+      lowest: range?.ok ? range.data.lowest : null,
+      highest: range?.ok ? range.data.highest : null,
     }
   }
   return new Response(JSON.stringify(body), {

@@ -51,7 +51,7 @@ const BACK = "back"
 // A copy of this page's history entry, on top while there are unsaved
 // changes, so the browser's Back lands on this same page and asks.
 function guardHistory() {
-  window.history.pushState({ ...window.history.state, rolesGuard: true }, "", window.location.href)
+  window.history.pushState(window.history.state, "", window.location.href)
 }
 
 const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? "" : "s"}`
@@ -190,11 +190,15 @@ export function RolePane({
       event.preventDefault()
       event.returnValue = ""
     }
-    // Back left the copy: still on this page, so ask.
+    // Back left the copy, so this page is still showing: put the copy back
+    // at once, so a second Back while the question is open lands here too,
+    // and ask.
     const onBack = () => {
-      if (!window.history.state?.rolesGuard) setLeaving(BACK)
+      guardHistory()
+      setLeaving(BACK)
     }
     leavingOnPurpose.current = false
+    const here = window.location.href
     guardHistory()
     document.addEventListener("click", onClick, true)
     window.addEventListener("beforeunload", onUnload)
@@ -206,7 +210,10 @@ export function RolePane({
       window.removeEventListener("popstate", onBack)
       setLeaveGuard(null)
       // Nothing waits any more (saved or undone): take the copy back off.
-      if (!leavingOnPurpose.current && window.history.state?.rolesGuard) window.history.back()
+      // The copy is always on top while changes wait; leaving replaces it
+      // or steps past it itself, and a move elsewhere (the top bar's search)
+      // has already changed the address, so it is left alone.
+      if (!leavingOnPurpose.current && window.location.href === here) window.history.back()
     }
   }, [dirty])
 
@@ -214,15 +221,13 @@ export function RolePane({
     leavingOnPurpose.current = true
     setLeaving(null)
     setDraft(EMPTY_DRAFT)
-    if (to === BACK) window.history.back()
-    else router.push(to)
+    // Past the copy and this page's own entry.
+    if (to === BACK) window.history.go(-2)
+    // The destination takes the copy's place, so Back from it lands here once.
+    else router.replace(to)
   }
 
-  // Staying: after Back, the copy goes back on top for the next Back.
-  const keepEditing = () => {
-    if (leaving === BACK) guardHistory()
-    setLeaving(null)
-  }
+  const keepEditing = () => setLeaving(null)
 
   return (
     <Card

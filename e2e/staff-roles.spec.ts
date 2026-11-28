@@ -338,8 +338,26 @@ test.describe("shaping roles, the Super Admin's alone", () => {
     await expect(sheet).toBeHidden()
     await expect(decline).toBeChecked()
 
+    // Back twice while asking still keeps the changes on screen.
+    await page.goBack()
+    await expect(sheet).toBeVisible()
+    await page.goBack()
+    await expect(sheet).toBeVisible()
+    await expect(page).toHaveURL(new RegExp(role.id))
+    await sheet.getByRole("button", { name: "Keep editing" }).click()
+    await expect(decline).toBeChecked()
+
     await page.goBack()
     await sheet.getByRole("button", { name: "Leave without saving" }).click()
+    await expect(page).toHaveURL(/\/staff$/)
+
+    // After a save, one Back is enough to leave: no copies are left behind.
+    await page.goForward()
+    await expect(page).toHaveURL(new RegExp(role.id))
+    await decline.click()
+    await page.getByRole("region", { name: "Unsaved changes" }).getByRole("button", { name: "Save changes" }).click()
+    await expect(callout(page)).toContainText(`Saved 1 change to ${role.name}.`)
+    await page.goBack()
     await expect(page).toHaveURL(/\/staff$/)
   })
 

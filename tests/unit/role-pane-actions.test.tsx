@@ -19,7 +19,8 @@ const actions = vi.hoisted(() => ({
 }))
 vi.mock("@/app/staff/roles/actions", () => actions)
 const push = vi.hoisted(() => vi.fn())
-vi.mock("next/navigation", () => ({ useRouter: () => ({ push }) }))
+// Leaving with unsaved changes replaces the page's history copy; both count as going there.
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push, replace: push }) }))
 
 import { NewRoleForm } from "@/app/staff/roles/new-role-form"
 import { RolePane } from "@/app/staff/roles/role-pane"
@@ -203,22 +204,46 @@ describe("Staff and roles controls", () => {
     expect(actions.saveRole).not.toHaveBeenCalled()
   })
 
-  it("asks when the browser's Back would leave unsaved changes, and takes its history copy off once they're undone", async () => {
+  it("asks on Back, keeps asking on a second Back, and takes its history copy off once undone", async () => {
     const user = userEvent.setup()
-    window.history.replaceState(null, "", "/staff/roles?role=r-man")
-    const before = window.history.length
-    renderPane()
+    const pushState = vi.spyOn(window.history, "pushState")
+    const back = vi.spyOn(window.history, "back").mockImplementation(() => {})
+    const go = vi.spyOn(window.history, "go").mockImplementation(() => {})
+    const question = { name: "Save your changes to Admissions Manager?" }
+    try {
+      renderPane()
+      const payments = screen.getByRole("checkbox", { name: "Record payments and maintain fees" })
+      await user.click(payments)
+      expect(pushState).toHaveBeenCalledTimes(1)
 
-    await user.click(screen.getByRole("checkbox", { name: "Record payments and maintain fees" }))
-    expect(window.history.length).toBe(before + 1)
-    window.history.back()
-    const sheet = await screen.findByRole("dialog", { name: "Save your changes to Admissions Manager?" })
-    await user.click(within(sheet).getByRole("button", { name: "Keep editing" }))
-    expect(screen.getByRole("checkbox", { name: "Record payments and maintain fees" })).toBeChecked()
-    expect(window.history.state?.rolesGuard).toBe(true)
+      // Back: the page puts its copy straight back on top and asks.
+      window.dispatchEvent(new PopStateEvent("popstate"))
+      const sheet = await screen.findByRole("dialog", question)
+      expect(pushState).toHaveBeenCalledTimes(2)
+      // A second Back while asking lands here again.
+      window.dispatchEvent(new PopStateEvent("popstate"))
+      expect(pushState).toHaveBeenCalledTimes(3)
+      expect(screen.getByRole("dialog", question)).toBeInTheDocument()
 
-    await user.click(within(saveBar()!).getByRole("button", { name: "Undo changes" }))
-    await waitFor(() => expect(window.history.state?.rolesGuard).toBeFalsy())
+      await user.click(within(sheet).getByRole("button", { name: "Keep editing" }))
+      expect(payments).toBeChecked()
+      expect(back).not.toHaveBeenCalled()
+
+      // Undone: the copy comes off.
+      await user.click(within(saveBar()!).getByRole("button", { name: "Undo changes" }))
+      await waitFor(() => expect(back).toHaveBeenCalledTimes(1))
+
+      // Leaving from Back steps past the copy and this page's entry.
+      await user.click(payments)
+      window.dispatchEvent(new PopStateEvent("popstate"))
+      await user.click(within(await screen.findByRole("dialog", question)).getByRole("button", { name: "Leave without saving" }))
+      expect(go).toHaveBeenCalledWith(-2)
+      expect(back).toHaveBeenCalledTimes(1)
+    } finally {
+      pushState.mockRestore()
+      back.mockRestore()
+      go.mockRestore()
+    }
   })
 
   it("asks before New role opens the role it made", async () => {

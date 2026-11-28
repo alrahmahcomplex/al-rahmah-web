@@ -19,7 +19,7 @@ import {
   type RecreatePreview,
 } from "@/lib/services/marketing-agents"
 import { sendApprovalSms } from "@/lib/services/agent-approval-sms"
-import { sendAgentInvite } from "@/lib/services/agent-invites"
+import { getAgentInvites, sendAgentInvite } from "@/lib/services/agent-invites"
 import { smsSender } from "@/lib/services/sms"
 import { requirePermission } from "@/lib/services/staff-auth"
 import { agentInviteSender } from "@/utils/supabase/admin"
@@ -73,12 +73,16 @@ export async function approveMarketingAgent(
     return approvedWithInvite(agent, invite)
   }
 
-  // No email: a new agent who signed up by mobile gets the approval SMS.
-  // The database decides whether this agent signs in by mobile; without the
-  // secret key it can't be asked, so the answer stays as for no email.
+  // No email: a new agent who signed up by mobile gets the approval SMS; the
+  // database decides whether they did.
   const secret = smsClient()
-  if (!secret) return approvedWithInvite(agent, { ok: false, error: { kind: "no-email" } })
-  return approvedWithSms(agent, await sendApprovalSms(secret, smsSender(), agentId))
+  if (secret) return approvedWithSms(agent, await sendApprovalSms(secret, smsSender(), agentId))
+  // Without the secret key no SMS can go. The Manager's own read says whether
+  // the agent signs in by mobile (joined, no email), so they hear it didn't.
+  const notes = await getAgentInvites(supabase, [agentId])
+  const note = notes.ok ? notes.data.get(agentId) : undefined
+  if (note?.joined && !note.email) return approvedWithSms(agent, { ok: false, error: "unavailable" })
+  return approvedWithInvite(agent, { ok: false, error: { kind: "no-email" } })
 }
 
 function isAction(action: unknown): action is AgentStatusAction {

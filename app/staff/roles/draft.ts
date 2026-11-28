@@ -1,4 +1,4 @@
-import { impliedChanges, type Permission } from "@/lib/permissions"
+import { impliedChanges, PERMISSION_NEEDS, type Permission } from "@/lib/permissions"
 import type { RoleChanges } from "@/lib/services/staff-admin"
 
 // The Roles page's unsaved changes: each box that differs from what's
@@ -18,7 +18,21 @@ function shown<T>(saved: readonly T[], draft: ReadonlyMap<T, boolean>): T[] {
   return [...kept, ...added]
 }
 
-export const shownPermissions = (saved: readonly Permission[], draft: Draft) => shown(saved, draft.permissions)
+// The permissions the boxes show, with the pairs kept together the way the
+// database will on save. Usually selecting already did it; this matters
+// when someone else's save changed what's saved underneath the draft: a
+// shown permission whose needed one is no longer saved shows it selected,
+// unless the draft clears the needed one, which then clears it too.
+export function shownPermissions(saved: readonly Permission[], draft: Draft): Permission[] {
+  const result = shown(saved, draft.permissions)
+  for (const [dependent, needed] of Object.entries(PERMISSION_NEEDS) as [Permission, Permission][]) {
+    if (!result.includes(dependent) || result.includes(needed)) continue
+    if (draft.permissions.get(needed) === false) result.splice(result.indexOf(dependent), 1)
+    else result.push(needed)
+  }
+  return result
+}
+
 export const shownManaged = (saved: readonly string[], draft: Draft) => shown(saved, draft.managed)
 
 function set<T>(saved: readonly T[], draft: ReadonlyMap<T, boolean>, items: readonly T[], on: boolean): Map<T, boolean> {
@@ -51,13 +65,17 @@ export function draftChanges(
   managedOrder: readonly string[],
   draft: Draft,
 ): RoleChanges {
-  const wanted = <T,>(order: readonly T[], saved: readonly T[], map: ReadonlyMap<T, boolean>, on: boolean) =>
-    order.filter((item) => map.get(item) === on && saved.includes(item) !== on)
+  // What the boxes show against what's saved, so Save sends exactly what the
+  // screen shows.
+  const differ = <T,>(order: readonly T[], saved: readonly T[], showing: readonly T[], on: boolean) =>
+    order.filter((item) => showing.includes(item) === on && saved.includes(item) !== on)
+  const permissions = shownPermissions(savedPermissions, draft)
+  const managed = shownManaged(savedManaged, draft)
   return {
-    addPermissions: wanted(permissionOrder, savedPermissions, draft.permissions, true),
-    removePermissions: wanted(permissionOrder, savedPermissions, draft.permissions, false),
-    addManaged: wanted(managedOrder, savedManaged, draft.managed, true),
-    removeManaged: wanted(managedOrder, savedManaged, draft.managed, false),
+    addPermissions: differ(permissionOrder, savedPermissions, permissions, true),
+    removePermissions: differ(permissionOrder, savedPermissions, permissions, false),
+    addManaged: differ(managedOrder, savedManaged, managed, true),
+    removeManaged: differ(managedOrder, savedManaged, managed, false),
   }
 }
 

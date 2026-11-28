@@ -53,6 +53,21 @@ describe("the Roles draft", () => {
     expect(changeCount(changes(["leads.decline"], draft))).toBe(0)
   })
 
+  it("keeps a pair together when someone else's save changes what's saved underneath", () => {
+    // Reports selected while applicant access was saved; then another Super
+    // Admin's save takes applicant access away. The boxes and Save both keep
+    // the pair, as the database would.
+    const draft = selectPermission(["leads.view"], EMPTY_DRAFT, "reports.view", true)
+    expect(shownPermissions([], draft)).toEqual(["reports.view", "leads.view"])
+    expect(changes([], draft).addPermissions).toEqual(["leads.view", "reports.view"])
+
+    // Applicant access cleared here; meanwhile their save added Reports. Clearing
+    // what Reports needs clears Reports too, on screen and in what's sent.
+    const cleared = selectPermission(["leads.view"], EMPTY_DRAFT, "leads.view", false)
+    expect(shownPermissions(["leads.view", "reports.view"], cleared)).toEqual([])
+    expect(changes(["leads.view", "reports.view"], cleared).removePermissions).toEqual(["leads.view", "reports.view"])
+  })
+
   it("adds and takes away managed roles the same way", () => {
     let draft = selectManaged(["r-a"], EMPTY_DRAFT, "r-a", false)
     draft = selectManaged(["r-a"], draft, "r-b", true)

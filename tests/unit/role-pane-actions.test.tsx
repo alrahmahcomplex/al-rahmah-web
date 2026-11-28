@@ -203,6 +203,44 @@ describe("Staff and roles controls", () => {
     expect(actions.saveRole).not.toHaveBeenCalled()
   })
 
+  it("asks when the browser's Back would leave unsaved changes, and takes its history copy off once they're undone", async () => {
+    const user = userEvent.setup()
+    window.history.replaceState(null, "", "/staff/roles?role=r-man")
+    const before = window.history.length
+    renderPane()
+
+    await user.click(screen.getByRole("checkbox", { name: "Record payments and maintain fees" }))
+    expect(window.history.length).toBe(before + 1)
+    window.history.back()
+    const sheet = await screen.findByRole("dialog", { name: "Save your changes to Admissions Manager?" })
+    await user.click(within(sheet).getByRole("button", { name: "Keep editing" }))
+    expect(screen.getByRole("checkbox", { name: "Record payments and maintain fees" })).toBeChecked()
+    expect(window.history.state?.rolesGuard).toBe(true)
+
+    await user.click(within(saveBar()!).getByRole("button", { name: "Undo changes" }))
+    await waitFor(() => expect(window.history.state?.rolesGuard).toBeFalsy())
+  })
+
+  it("asks before New role opens the role it made", async () => {
+    const user = userEvent.setup()
+    actions.addRole.mockResolvedValue({ ok: true, message: "Added.", roleId: "r-new" })
+    render(
+      <>
+        <RolePane role={ROLE} permissions={PERMISSIONS}>
+          {null}
+        </RolePane>
+        <NewRoleForm />
+      </>,
+    )
+    await user.click(screen.getByRole("checkbox", { name: "Record payments and maintain fees" }))
+    await user.type(screen.getByLabelText("Role name"), "Gatekeepers")
+    await user.click(screen.getByRole("button", { name: "Add" }))
+    const sheet = await screen.findByRole("dialog", { name: "Save your changes to Admissions Manager?" })
+    expect(push).not.toHaveBeenCalled()
+    await user.click(within(sheet).getByRole("button", { name: "Leave without saving" }))
+    expect(push).toHaveBeenCalledWith("/staff/roles?role=r-new")
+  })
+
   it("saves, then leaves, from the question", async () => {
     const user = userEvent.setup()
     actions.saveRole.mockResolvedValue({ ok: true, message: "Saved 1 change to Admissions Manager." })

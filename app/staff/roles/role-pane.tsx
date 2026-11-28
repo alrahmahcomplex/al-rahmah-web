@@ -32,6 +32,7 @@ import {
   shownPermissions,
   type Draft,
 } from "./draft"
+import { setLeaveGuard } from "./leave-guard"
 import type { PersonView, RoleOption, RoleView } from "./view"
 
 type Run = (change: () => Promise<ChangeOutcome>) => void
@@ -43,6 +44,15 @@ type Outcome = ChangeOutcome & { lines?: string[] }
 // A change that stops someone managing staff, or retires a role, waits here
 // until the person confirms it.
 type PendingConfirmation = { title: string; description: string; action: string; change: () => Promise<ChangeOutcome> }
+
+// Where Back goes: one step back in the browser's history.
+const BACK = "back"
+
+// A copy of this page's history entry, on top while there are unsaved
+// changes, so the browser's Back lands on this same page and asks.
+function guardHistory() {
+  window.history.pushState({ ...window.history.state, rolesGuard: true }, "", window.location.href)
+}
 
 const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? "" : "s"}`
 
@@ -72,6 +82,8 @@ export function RolePane({
   const permissionIdPrefix = useId()
   const managedIdPrefix = useId()
   const bodyTop = useRef<HTMLDivElement>(null)
+  // Set when the person chose to leave, so the history copy stays put.
+  const leavingOnPurpose = useRef(false)
 
   const labelOf = (name: string) => permissions.find((p) => p.name === name)?.label ?? name
   const nameOf = (id: string) => role.managedOptions.find((option) => option.id === id)?.name ?? "a role"
@@ -85,6 +97,7 @@ export function RolePane({
     draft,
   )
   const count = changeCount(changes)
+  const dirty = count > 0
   const shown = shownPermissions(role.permissions, draft)
   const shownManagedIds = shownManaged(savedManaged, draft)
   const busy = pending || saving
@@ -140,7 +153,7 @@ export function RolePane({
           then?.()
         } else {
           // Leaving waits: the person reads why first.
-          setLeaving(null)
+          keepEditing()
           setOutcome({
             ok: false,
             message: "Nothing was saved.",
@@ -157,10 +170,11 @@ export function RolePane({
   }
 
   // Leaving with unsaved changes asks first: a link in the page or the
-  // sidebar, another role in the rail. Closing or reloading the tab gets the
-  // browser's own question.
+  // sidebar, another role in the rail, the browser's Back, New role opening
+  // the role it made. Closing or reloading the tab gets the browser's own
+  // question.
   useEffect(() => {
-    if (count === 0) return
+    if (!dirty) return
     const onClick = (event: MouseEvent) => {
       if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
       const link = event.target instanceof Element ? event.target.closest("a[href]") : null
@@ -176,18 +190,38 @@ export function RolePane({
       event.preventDefault()
       event.returnValue = ""
     }
+    // Back left the copy: still on this page, so ask.
+    const onBack = () => {
+      if (!window.history.state?.rolesGuard) setLeaving(BACK)
+    }
+    leavingOnPurpose.current = false
+    guardHistory()
     document.addEventListener("click", onClick, true)
     window.addEventListener("beforeunload", onUnload)
+    window.addEventListener("popstate", onBack)
+    setLeaveGuard(setLeaving)
     return () => {
       document.removeEventListener("click", onClick, true)
       window.removeEventListener("beforeunload", onUnload)
+      window.removeEventListener("popstate", onBack)
+      setLeaveGuard(null)
+      // Nothing waits any more (saved or undone): take the copy back off.
+      if (!leavingOnPurpose.current && window.history.state?.rolesGuard) window.history.back()
     }
-  }, [count])
+  }, [dirty])
 
   const leave = (to: string) => {
+    leavingOnPurpose.current = true
     setLeaving(null)
     setDraft(EMPTY_DRAFT)
-    router.push(to)
+    if (to === BACK) window.history.back()
+    else router.push(to)
+  }
+
+  // Staying: after Back, the copy goes back on top for the next Back.
+  const keepEditing = () => {
+    if (leaving === BACK) guardHistory()
+    setLeaving(null)
   }
 
   return (
@@ -451,7 +485,7 @@ export function RolePane({
 
       <Sheet
         open={leaving !== null && count > 0}
-        onOpenChange={(open) => !open && setLeaving(null)}
+        onOpenChange={(open) => !open && keepEditing()}
         placement="centre"
         title={`Save your changes to ${role.name}?`}
         hint={`You made ${plural(count, "change")} and haven't saved ${count === 1 ? "it" : "them"}. If you leave without saving, ${count === 1 ? "it goes" : "they go"} back to how ${count === 1 ? "it was" : "they were"}.`}
@@ -464,7 +498,7 @@ export function RolePane({
             <Button variant="bad" size="wide" disabled={saving} onClick={() => leaving && leave(leaving)}>
               Leave without saving
             </Button>
-            <Button variant="ghost" size="wide" disabled={saving} onClick={() => setLeaving(null)}>
+            <Button variant="ghost" size="wide" disabled={saving} onClick={keepEditing}>
               Keep editing
             </Button>
           </>

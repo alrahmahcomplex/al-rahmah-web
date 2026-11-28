@@ -322,6 +322,27 @@ test.describe("shaping roles, the Super Admin's alone", () => {
     await expect(page.getByRole("region", { name: "Unsaved changes" })).toHaveCount(0)
   })
 
+  test("the browser's Back asks too, and goes back on Leave without saving", async ({ page }) => {
+    const role = await systemRole()
+    await signIn(page, SUPER_ADMIN)
+    await page.goto(`/staff/roles?role=${role.id}`)
+    await page.getByRole("navigation", { name: "Staff" }).getByRole("link", { name: "Home" }).click()
+    await expect(page).toHaveURL(/\/staff$/)
+    await page.goBack()
+    const decline = page.getByRole("checkbox", { name: "Decline applicants" })
+    await decline.click()
+
+    await page.goBack()
+    const sheet = page.getByRole("dialog", { name: `Save your changes to ${role.name}?` })
+    await sheet.getByRole("button", { name: "Keep editing" }).click()
+    await expect(sheet).toBeHidden()
+    await expect(decline).toBeChecked()
+
+    await page.goBack()
+    await sheet.getByRole("button", { name: "Leave without saving" }).click()
+    await expect(page).toHaveURL(/\/staff$/)
+  })
+
   test("retiring a role active staff hold is refused, naming them", async ({ page }) => {
     const holder = await createThrowawayStaff(["leads.view"])
     await signIn(page, SUPER_ADMIN)

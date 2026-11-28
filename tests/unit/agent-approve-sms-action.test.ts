@@ -54,6 +54,13 @@ describe("approving an agent with no email", () => {
     expect(sendApprovalSms).not.toHaveBeenCalled()
   })
 
+  it("keeps the warning when the server can't send SMS and the agent can't be read either", async () => {
+    vi.mocked(smsClient).mockReturnValue(null)
+    vi.mocked(getAgentInvites).mockResolvedValue({ ok: false, error: "unavailable" })
+
+    expect(await approveMarketingAgent(ID, AGENT, null)).toMatchObject({ status: "approved", smsMissed: true })
+  })
+
   it("words an agent with no login as before when the server can't send SMS", async () => {
     vi.mocked(smsClient).mockReturnValue(null)
     vi.mocked(getAgentInvites).mockResolvedValue(note(false))

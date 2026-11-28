@@ -79,9 +79,11 @@ export async function approveMarketingAgent(
   if (secret) return approvedWithSms(agent, await sendApprovalSms(secret, smsSender(), agentId))
   // Without the secret key no SMS can go. The Manager's own read says whether
   // the agent signs in by mobile (joined, no email), so they hear it didn't.
+  // When that read fails too, the warning stays: telling the agent directly
+  // is the safe answer either way.
   const notes = await getAgentInvites(supabase, [agentId])
   const note = notes.ok ? notes.data.get(agentId) : undefined
-  if (note?.joined && !note.email) return approvedWithSms(agent, { ok: false, error: "unavailable" })
+  if (!notes.ok || (note?.joined && !note.email)) return approvedWithSms(agent, { ok: false, error: "unavailable" })
   return approvedWithInvite(agent, { ok: false, error: { kind: "no-email" } })
 }
 

@@ -14,8 +14,12 @@ export async function unlockDesign(page: Page, port: number = E2E_PORT) {
   await page.context().addCookies([{ name: DESIGN_COOKIE, value: designToken(DESIGN_PASSWORD), url: `http://localhost:${port}` }])
 }
 
-/** Opens a design page (/design locally) in an unlocked browser. */
+/**
+ * Opens a design page (/design locally) in an unlocked browser, and waits until
+ * the shell is live (hydrated), so a click on a card's control is never lost.
+ */
 export async function openDesign(page: Page, path = "/design") {
   await unlockDesign(page)
   await page.goto(path)
+  await page.locator('[data-shell="new"][data-live]').waitFor()
 }

@@ -2,9 +2,9 @@
 
 import { Dialog } from "@base-ui/react/dialog"
 import { usePathname } from "next/navigation"
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type CSSProperties, type KeyboardEvent, type PointerEvent, type ReactNode, type RefObject } from "react"
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type CSSProperties, type KeyboardEvent, type PointerEvent, type ReactNode } from "react"
 
-import { RoundButton, Toaster } from "@/components/kit"
+import { RoundButton, ScrollBar, Toaster } from "@/components/kit"
 
 import { currentNavHref } from "../navigation"
 import { SIDEBAR_RAIL_COOKIE, SIDEBAR_WIDTH_COOKIE, clearedSidebarCookie, sidebarCookie } from "../shell-cookies"
@@ -75,92 +75,6 @@ function measure(parts: Parts): { limits: SidebarLimits; titleLeft: number; titl
     openMin: OPEN_MIN,
   })
   return { limits, titleLeft: name.offsetLeft || TITLE_LEFT, titleWidth }
-}
-
-/**
- * The stage's scrollbar, drawn in the white gutter right of the stage: the
- * stage's own bar is hidden. It shows only when the page can scroll, follows
- * the scroll once per frame, and takes presses and drags. Not on a touch
- * screen, where the stage scrolls natively.
- */
-function OutsideScrollbar({ scrollRef, pageRef }: { scrollRef: RefObject<HTMLDivElement | null>; pageRef: RefObject<HTMLElement | null> }) {
-  const barRef = useRef<HTMLDivElement>(null)
-  const thumbRef = useRef<HTMLElement>(null)
-
-  useEffect(() => {
-    const scroll = scrollRef.current
-    const page = pageRef.current
-    const bar = barRef.current
-    const thumb = thumbRef.current
-    if (!scroll || !page || !bar || !thumb || matchMedia("(pointer: coarse)").matches) return
-    let frame = 0
-    const sync = () => {
-      frame = 0
-      const height = bar.clientHeight
-      const range = scroll.scrollHeight - scroll.clientHeight
-      if (range < 2 || height < 40) {
-        bar.removeAttribute("data-on")
-        return
-      }
-      bar.setAttribute("data-on", "")
-      const size = Math.max(36, (height * scroll.clientHeight) / scroll.scrollHeight)
-      thumb.style.height = `${size}px`
-      thumb.style.transform = `translateY(${((height - size) * scroll.scrollTop) / range}px)`
-    }
-    const schedule = () => {
-      if (!frame) frame = requestAnimationFrame(sync)
-    }
-    scroll.addEventListener("scroll", schedule, { passive: true })
-    window.addEventListener("resize", schedule)
-    const observer = new ResizeObserver(schedule)
-    observer.observe(scroll)
-    observer.observe(page)
-    sync()
-    return () => {
-      cancelAnimationFrame(frame)
-      scroll.removeEventListener("scroll", schedule)
-      window.removeEventListener("resize", schedule)
-      observer.disconnect()
-    }
-  }, [scrollRef, pageRef])
-
-  function press(event: PointerEvent<HTMLDivElement>) {
-    const scroll = scrollRef.current
-    const bar = barRef.current
-    const thumb = thumbRef.current
-    if (!scroll || !bar || !thumb) return
-    const travel = bar.clientHeight - thumb.offsetHeight
-    const range = scroll.scrollHeight - scroll.clientHeight
-    if (travel <= 0) return
-    // A press on the track jumps there, then the drag carries on from that spot.
-    if (event.target !== thumb) {
-      const at = (event.clientY - bar.getBoundingClientRect().top - thumb.offsetHeight / 2) / travel
-      scroll.scrollTop = range * Math.min(1, Math.max(0, at))
-    }
-    const start = event.clientY
-    const from = scroll.scrollTop
-    bar.setPointerCapture(event.pointerId)
-    bar.setAttribute("data-drag", "")
-    event.preventDefault()
-    const move = (e: globalThis.PointerEvent) => {
-      scroll.scrollTop = from + ((e.clientY - start) * range) / travel
-    }
-    const up = () => {
-      bar.removeAttribute("data-drag")
-      bar.removeEventListener("pointermove", move)
-      bar.removeEventListener("pointerup", up)
-      bar.removeEventListener("pointercancel", up)
-    }
-    bar.addEventListener("pointermove", move)
-    bar.addEventListener("pointerup", up)
-    bar.addEventListener("pointercancel", up)
-  }
-
-  return (
-    <div ref={barRef} className="ns-vbar" aria-hidden="true" onPointerDown={press}>
-      <i ref={thumbRef} />
-    </div>
-  )
 }
 
 export type NewShellProps = Omit<ShellProps, "person"> & {
@@ -495,7 +409,8 @@ export function NewShell({
               </main>
             </div>
           </div>
-          <OutsideScrollbar scrollRef={scrollRef} pageRef={pageRef} />
+          {/* The stage's scrollbar, in the white gutter right of the stage. */}
+          <ScrollBar target={scrollRef} className="ns-vbar" />
         </div>
       </div>
       {/* Outside the grid: the toaster renders a section of its own. */}

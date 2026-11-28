@@ -5,11 +5,10 @@
 .ro-grid { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); gap: 16px; }
 @media (min-width: 768px) {
   .ro-grid { grid-template-columns: 272px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); }
-  .ro-rail { min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
 }
 
-/* The rail. */
-.ro-rail { padding: 12px; }
+/* The rail: a filling card, so its list scrolls inside with the app's scrollbar. */
+.ro-rail > .kit-card-body { padding: 12px; }
 .ro-rail .kit-sec-title { padding: 4px 8px 6px; }
 /* The roles stay a list, as before; the line between rows moves to the items. */
 .ro-roles { margin: 0; padding: 0; list-style: none; }

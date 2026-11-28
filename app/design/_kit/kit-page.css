@@ -109,6 +109,12 @@
 
 /* Save bar: a filling card in a box of fixed height, so its content scrolls above the bar. */
 .kp-savebar-demo { height: 300px; display: flex; flex-direction: column; }
-.kp-savebar-demo > .kit-card { flex: 1; }
+.kp-savebar-demo > .kit-card-wrap { flex: 1; }
 .kp-savebar-list { margin: 10px 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 4px; }
 .kp-savebar-list > li { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+/* Scrollbar: a filling card of fixed height, its bar just outside its right edge. */
+.kp-scroll-demo { height: 240px; display: flex; flex-direction: column; padding-right: 18px; }
+.kp-scroll-demo > .kit-card-wrap { flex: 1; }
+.kp-scroll-list { margin: 0; padding: 0; list-style: none; }
+.kp-scroll-list > li { padding: 9px 0; font-weight: 600; font-size: 14.5px; }
+.kp-scroll-list > li + li { border-top: 1px solid var(--gf-mist); }

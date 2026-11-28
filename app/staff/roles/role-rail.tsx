@@ -19,7 +19,7 @@ export function RoleRail({
   viewer: Viewer
 }) {
   return (
-    <Card className="ro-rail">
+    <Card fill className="ro-rail">
       <nav aria-label="Roles">
         <h2 className="kit-sec-title">Roles</h2>
         <ul className="ro-roles">

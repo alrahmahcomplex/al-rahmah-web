@@ -1,9 +1,10 @@
 "use client"
 
-import { useId, type HTMLAttributes, type ReactNode, type Ref } from "react"
+import { useId, useRef, type HTMLAttributes, type ReactNode, type Ref } from "react"
 
 import { cn } from "@/lib/utils"
 
+import { ScrollBar } from "./scroll-bar"
 import "./kit.css"
 
 export type CardProps = Omit<HTMLAttributes<HTMLElement>, "title"> & {
@@ -15,7 +16,9 @@ export type CardProps = Omit<HTMLAttributes<HTMLElement>, "title"> & {
   titleId?: string
   /**
    * Takes the height it is given and scrolls its content inside, above
-   * `foot`. For a card that fills the stage (`data-stage-fill` in the shell).
+   * `foot`, with the app's scrollbar just outside its right edge. For a
+   * card that fills the stage (`data-stage-fill` in the shell). A filling
+   * card comes in a wrapper that holds the bar; lay out the wrapper.
    */
   fill?: boolean
   /** The bottom edge of a filling card, such as a `SaveBar`. */
@@ -26,6 +29,7 @@ export type CardProps = Omit<HTMLAttributes<HTMLElement>, "title"> & {
 export function Card({ title, caption, titleId, fill, foot, className, children, ...props }: CardProps) {
   const madeId = useId()
   const headingId = titleId ?? madeId
+  const bodyRef = useRef<HTMLDivElement>(null)
   const content = (
     <>
       {title && (
@@ -37,22 +41,23 @@ export function Card({ title, caption, titleId, fill, foot, className, children,
       {children}
     </>
   )
+  if (!fill) {
+    return (
+      <section aria-labelledby={title ? headingId : undefined} className={cn("kit-card", className)} {...props}>
+        {content}
+      </section>
+    )
+  }
   return (
-    <section
-      aria-labelledby={title ? headingId : undefined}
-      className={cn("kit-card", className)}
-      data-fill={fill || undefined}
-      {...props}
-    >
-      {fill ? (
-        <>
-          <div className="kit-card-body">{content}</div>
-          {foot}
-        </>
-      ) : (
-        content
-      )}
-    </section>
+    <div className="kit-card-wrap">
+      <section aria-labelledby={title ? headingId : undefined} className={cn("kit-card", className)} data-fill {...props}>
+        <div ref={bodyRef} className="kit-card-body">
+          {content}
+        </div>
+        {foot}
+      </section>
+      <ScrollBar target={bodyRef} />
+    </div>
   )
 }
 

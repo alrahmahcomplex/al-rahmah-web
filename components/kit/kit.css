@@ -198,9 +198,31 @@ a.kit-fpill { display: inline-flex; align-items: center; text-decoration: none; 
   .kit-card { padding: 18px; }
   .kit-task { border-radius: 32px; padding: 24px 18px; }
 }
-/* A filling card: its content scrolls inside, above its foot. */
+/* A filling card: its content scrolls inside, above its foot, with the
+   app's scrollbar just outside its right edge instead of the browser's. */
+.kit-card-wrap { position: relative; display: flex; min-width: 0; min-height: 0; flex-direction: column; }
+.kit-card-wrap > .kit-card { flex: 1 1 auto; }
 .kit-card[data-fill] { display: flex; flex-direction: column; min-height: 0; padding: 0; overflow: hidden; }
-.kit-card[data-fill] > .kit-card-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 22px 24px; }
+.kit-card[data-fill] > .kit-card-body {
+  flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 22px 24px; scrollbar-width: none;
+}
+.kit-card[data-fill] > .kit-card-body::-webkit-scrollbar { display: none; }
+.kit-card-wrap > .kit-vbar { right: -10px; top: 18px; bottom: 18px; }
+
+/* ---------- scrollbar: thin, light, round, no arrows, outside what it scrolls ---------- */
+.kit-vbar {
+  position: absolute; z-index: 2; width: 4.5px; border-radius: 999px; opacity: 0; pointer-events: none; touch-action: none;
+  transition: opacity var(--gf-t-med) var(--gf-ease-out);
+}
+.kit-vbar[data-on] { opacity: 1; pointer-events: auto; }
+/* A wider target than the bar, for the pointer. */
+.kit-vbar::before { content: ""; position: absolute; inset: 0 -5px; }
+.kit-vbar i {
+  position: absolute; left: 0; top: 0; width: 100%; height: 36px; border-radius: 999px; background: var(--gf-scroll-thumb);
+  transition: background var(--gf-t-med) var(--gf-ease-out);
+}
+.kit-vbar:hover i, .kit-vbar[data-drag] i { background: var(--gf-line-strong); }
+@media (pointer: coarse) { .kit-vbar { display: none; } }
 @media (max-width: 860px) { .kit-card[data-fill] > .kit-card-body { padding: 18px; } }
 
 /* ---------- save bar: a filling card's foot while changes wait ---------- */

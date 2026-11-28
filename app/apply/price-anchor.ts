@@ -11,7 +11,8 @@ import type { DiscountCodeCheck } from "./outcome"
 //   amounts: the lowest and highest saving.
 // - `one`: one saving, when every working code gives the same amount, or the
 //   range could not be read and the standard amount could.
-// - null: nothing known yet. The box shows the full fee alone.
+// - null: no code gives a saving today, or nothing is known yet. The box
+//   shows the full fee alone.
 
 export type AnchorFigures =
   | { kind: "code"; saving: number }
@@ -44,9 +45,12 @@ export function anchorFigures({
 }): AnchorFigures {
   const saving = checking ? 0 : codeSaving(answer)
   if (saving > 0) return { kind: "code", saving }
-  if (lowest !== null && highest !== null && lowest > 0 && highest >= lowest) {
+  if (lowest !== null && highest !== null) {
+    // Read, and no code gives a saving today: promise none.
+    if (highest <= 0 || lowest > highest) return null
     return lowest === highest ? { kind: "one", saving: lowest } : { kind: "range", lowest, highest }
   }
+  // The range could not be read: the standard amount, as before the range.
   if (standard !== null && standard > 0) return { kind: "one", saving: standard }
   return null
 }

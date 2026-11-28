@@ -26,9 +26,12 @@ describe("the price box figures", () => {
     expect(anchorFigures({ ...base, lowest: 15000, highest: 15000 })).toEqual({ kind: "one", saving: 15000 })
   })
 
-  it("falls back to the standard amount when the range is unknown or no code gives a saving", () => {
+  it("falls back to the standard amount only when the range could not be read", () => {
     expect(anchorFigures({ ...base, lowest: null, highest: null })).toEqual({ kind: "one", saving: 10000 })
-    expect(anchorFigures({ ...base, lowest: 0, highest: 0 })).toEqual({ kind: "one", saving: 10000 })
+  })
+
+  it("promises no saving when no code gives one today, whatever the standard amount", () => {
+    expect(anchorFigures({ ...base, lowest: 0, highest: 0 })).toBeNull()
   })
 
   it("states nothing when no figure is known", () => {

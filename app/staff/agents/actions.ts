@@ -18,13 +18,16 @@ import {
   type FeeImpact,
   type RecreatePreview,
 } from "@/lib/services/marketing-agents"
+import { sendApprovalSms } from "@/lib/services/agent-approval-sms"
 import { sendAgentInvite } from "@/lib/services/agent-invites"
+import { smsSender } from "@/lib/services/sms"
 import { requirePermission } from "@/lib/services/staff-auth"
 import { agentInviteSender } from "@/utils/supabase/admin"
 import { createClient } from "@/utils/supabase/server"
+import { smsClient } from "@/utils/supabase/sms"
 
 import { agentSetPasswordUrl } from "./invite-link"
-import { approvedWithInvite, type ApprovedOutcome } from "./invite-outcome"
+import { approvedWithInvite, approvedWithSms, type ApprovedOutcome } from "./invite-outcome"
 
 import {
   approveOutcome,
@@ -65,11 +68,17 @@ export async function approveMarketingAgent(
   if (result.ok || result.error === "no-change") revalidatePath("/staff", "layout")
   if (!result.ok) return approveOutcome(result, agent)
 
-  const invite =
-    typeof email === "string" && email.trim() !== ""
-      ? await sendAgentInvite(supabase, agentInviteSender(), agentId, await agentSetPasswordUrl(), { expectedEmail: email })
-      : ({ ok: false, error: { kind: "no-email" } } as const)
-  return approvedWithInvite(agent, invite)
+  if (typeof email === "string" && email.trim() !== "") {
+    const invite = await sendAgentInvite(supabase, agentInviteSender(), agentId, await agentSetPasswordUrl(), { expectedEmail: email })
+    return approvedWithInvite(agent, invite)
+  }
+
+  // No email: a new agent who signed up by mobile gets the approval SMS.
+  // The database decides whether this agent signs in by mobile; without the
+  // secret key it can't be asked, so the answer stays as for no email.
+  const secret = smsClient()
+  if (!secret) return approvedWithInvite(agent, { ok: false, error: { kind: "no-email" } })
+  return approvedWithSms(agent, await sendApprovalSms(secret, smsSender(), agentId))
 }
 
 function isAction(action: unknown): action is AgentStatusAction {

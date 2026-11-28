@@ -11,13 +11,17 @@ import "./agents.css"
 // the agent's name, code and email first, since approval can't be undone and
 // the invite goes to that email. With `emailUnknown` (the emails couldn't be
 // read) it can't be pressed, so no agent is approved without their invite.
+// `mobile`: a new agent who signed up by mobile, whose login is that number;
+// approval texts it that they can sign in.
 export function ApproveAgent({
   agent,
   email,
+  mobile = null,
   emailUnknown = false,
 }: {
   agent: { id: string; fullName: string; code: string }
   email: string | null
+  mobile?: string | null
   emailUnknown?: boolean
 }) {
   const [open, setOpen] = useState(false)
@@ -32,8 +36,10 @@ export function ApproveAgent({
       if (outcome.status !== "approved") return setRefusal(outcome.message)
       // Approved, but the invite email did not go: a warning, so the Manager sends it again.
       const inviteMissed = "inviteSent" in outcome && !outcome.inviteSent && Boolean(email)
+      // Approved, but the approval SMS did not go: a warning, so the Manager tells them.
+      const smsMissed = "smsMissed" in outcome && outcome.smsMissed === true
       // Approved with its invite is news, as the prototype's toast example shows it.
-      toast(outcome.message, { tone: inviteMissed ? "wait" : "info" })
+      toast(outcome.message, { tone: inviteMissed || smsMissed ? "wait" : "info" })
     })
   }
 
@@ -61,6 +67,11 @@ export function ApproveAgent({
             {email ? (
               <>
                 An invite to set a password goes to <span className="ag-strong">{email}</span>. Check it is theirs.
+              </>
+            ) : mobile ? (
+              <>
+                They signed up with their mobile, so an SMS goes to <span className="ag-strong">{mobile}</span> telling them they can sign
+                in.
               </>
             ) : (
               "They have no email, so no invite goes out. Tell them yourself, by WhatsApp or a call."

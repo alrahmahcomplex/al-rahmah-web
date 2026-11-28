@@ -6,12 +6,13 @@ import { normalizeTanzanianMobile, withoutPlus } from "@/lib/phone"
 import type { Result } from "@/lib/services/result"
 
 // Every SMS the app sends (#503): confirmation numbers for self-confirm and
-// resets, and the courtesy SMS to the mobile on record. The database takes a
+// resets, the courtesy SMS to the mobile on record, and the approval SMS to a
+// new agent who signed up by mobile. The database takes a
 // place in the day's budget and checks the mobile's limits first
 // (reserve_sms), the sender delivers it, then the result is recorded
 // (record_sms), so the log holds every send whatever happened to it.
 
-export type SmsKind = "self_confirm" | "reset" | "courtesy"
+export type SmsKind = "self_confirm" | "reset" | "courtesy" | "approved"
 
 // Delivers one message to a mobile written as 255 and nine digits, answering
 // with the provider's request id or a short error code for the log.

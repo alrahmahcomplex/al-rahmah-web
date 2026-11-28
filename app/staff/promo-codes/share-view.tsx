@@ -14,7 +14,7 @@ export const SHARE_HINT = "Send parents the link. The code fills itself in."
 const COPY_FAILED = "Couldn’t copy. The text is selected: press Ctrl+C."
 
 // The share view of a code's sheet: whether it is open, the message chosen,
-// and staff's edits to each message (by kind and language). Edits last until
+// and staff's edits to each message (by kind, language, amount and last day). Edits last until
 // the sheet closes; the sheet starts afresh each time it opens.
 export function useShare(promo: PromoCode | null, origin: string | null) {
   const [open, setOpen] = useState(false)
@@ -23,7 +23,9 @@ export function useShare(promo: PromoCode | null, origin: string | null) {
   const [edits, setEdits] = useState<Partial<Record<string, string>>>({})
   // Only an Active code gives its amount, so only an Active code is shared.
   const link = promo && origin && promo.effectiveState === "active" ? referralLink(origin, promo.code) : null
-  const key = `${kind}|${language}`
+  // An edit belongs to the amount and last day it was written for: a saved
+  // change to either starts that message afresh, so it never offers an old fee.
+  const key = `${kind}|${language}|${promo?.amount}|${promo?.endsOn}`
   const suggested = promo && link ? shareMessage({ kind, language, code: promo.code, link, amount: promo.amount, endsOn: promo.endsOn }) : ""
   const message = edits[key] ?? suggested
   return {

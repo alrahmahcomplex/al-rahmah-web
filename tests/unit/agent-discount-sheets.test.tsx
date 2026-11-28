@@ -316,6 +316,25 @@ describe("sharing a Promo code", () => {
     expect(await screen.findByRole("dialog", { name: PROMO.code })).toBeInTheDocument()
   })
 
+  it("drops an edited message once a new amount is saved, so it never offers the old fee", async () => {
+    const user = userEvent.setup()
+    const { rerender } = render(promoSheet(PROMO))
+    await user.click(within(await screen.findByRole("dialog", { name: PROMO.code })).getByRole("button", { name: "Share promo code" }))
+    let sheet = await screen.findByRole("dialog", { name: `Share ${PROMO.code}` })
+    await user.type(within(sheet).getByLabelText("Message to send"), " See you soon.")
+    await user.click(within(sheet).getByRole("button", { name: "Back" }))
+
+    // Staff type the new amount and save; the page brings the saved code back with it.
+    await replace(user, within(await screen.findByRole("dialog", { name: PROMO.code })).getByLabelText("Amount off the TZS 50,000 fee"), "25000")
+    rerender(promoSheet({ ...PROMO, amount: 25_000 }))
+    await user.click(within(await screen.findByRole("dialog", { name: PROMO.code })).getByRole("button", { name: "Share promo code" }))
+    sheet = await screen.findByRole("dialog", { name: `Share ${PROMO.code}` })
+    const message = (within(sheet).getByLabelText("Message to send") as HTMLTextAreaElement).value
+    expect(message).toContain("25,000/= off")
+    expect(message).toContain("only 25,000/=")
+    expect(message).not.toContain("See you soon.")
+  })
+
   it("warns when the link is taken out of the message, and puts it back", async () => {
     const user = userEvent.setup()
     render(promoSheet(PROMO, false))

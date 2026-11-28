@@ -4,13 +4,14 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 import { afterAll, beforeAll, describe, expect, test } from "vitest"
 
 import { tanzaniaToday } from "@/lib/school-calendar"
-import { listInterviews, type InterviewListItem, type InterviewListSearch } from "@/lib/services/interview-list"
+import { interviewRows } from "@/app/staff/interviews/rows"
+import { listYearInterviews } from "@/lib/services/interview-list"
 import { recordInterviewResult, registerForInterview, setInterviewFeeStatus } from "@/lib/services/interviews"
 import { createLead } from "@/lib/services/leads"
 import { getResultRelease, getResultReleases, listReleaseStatus, releaseResult } from "@/lib/services/result-release"
 
 import { anonClient, asSystem, createThrowawayStaff, signedIn } from "../support/db"
-import { ACCOUNTANT, ADMISSIONS, DEACTIVATED, MANAGER, SUPER_ADMIN } from "../support/fixtures"
+import { ACCOUNTANT, ADMISSIONS, DEACTIVATED, SUPER_ADMIN } from "../support/fixtures"
 import { claimInterviewYear, type InterviewYearClaim } from "../support/interview-years"
 
 // Release status for many interviews at once (#89): listReleaseStatus and the
@@ -190,55 +191,34 @@ describe("who may read release status", () => {
   })
 })
 
-describe("the Ready to send filter", () => {
-  async function everyRow(client: SupabaseClient, search: Omit<InterviewListSearch, "page">) {
-    const rows: InterviewListItem[] = []
-    for (let page = 1; ; page++) {
-      const listed = await listInterviews(client, { ...search, page })
-      if (!listed.ok) throw new Error(`listing failed: ${listed.error}`)
-      rows.push(...listed.data.interviews)
-      if (page >= listed.data.pageCount) return rows
-    }
+describe("the Result sent column", () => {
+  async function sentOn(client: SupabaseClient) {
+    const listed = await listYearInterviews(client, year)
+    if (!listed.ok) throw new Error(`listing failed: ${listed.error}`)
+    const statuses = await listReleaseStatus(client, listed.data.map((row) => row.id))
+    if (!statuses.ok) throw new Error(`status failed: ${statuses.error}`)
+    return new Map(interviewRows(listed.data, statuses.data).map((row) => [row.id, row.sentOn]))
   }
 
-  test("lists open, paid, current results not yet sent or changed since, and leaves out the rest", async () => {
-    const ready = await interviewedLead()
+  test("shows the day a result was sent, and a result corrected since as not sent", async () => {
+    const sent = await interviewedLead()
+    await send(sent.interviewId)
     const changed = await interviewedLead({ score: 60 })
     await send(changed.interviewId)
     await correct(changed.interviewId, "Passed", 66)
-    const sent = await interviewedLead()
-    await send(sent.interviewId)
-    const notPaid = await interviewedLead({ paid: false })
-    const noResult = await interviewedLead({ result: null })
-    const closed = await interviewedLead()
-    await asSystem((sql) =>
-      sql.query("update public.leads set status = 'Declined', declined_reason = 'School decision' where id = $1", [closed.leadId]),
-    )
-    const names = new Map(
-      Object.entries({ ready, changed, sent, notPaid, noResult, closed }).map(([name, lead]) => [lead.interviewId, name]),
-    )
-    const ours = (rows: InterviewListItem[]) => rows.filter((row) => names.has(row.id)).map((row) => names.get(row.id))
+    const never = await interviewedLead()
 
-    const staff = await signedIn(ADMISSIONS)
-    expect(ours(await everyRow(staff, { enrollmentYear: year, readyToSend: true }))).toEqual(["ready", "changed"])
-    expect(ours(await everyRow(staff, { enrollmentYear: year }))).toEqual(["ready", "changed", "sent", "notPaid", "noResult", "closed"])
-    // It combines with the other filters.
-    expect(ours(await everyRow(staff, { enrollmentYear: year, readyToSend: true, result: "Failed" }))).toEqual([])
-    // The Accountant sees the same list.
-    expect(ours(await everyRow(await signedIn(ACCOUNTANT), { enrollmentYear: year, readyToSend: true }))).toEqual([
-      "ready",
-      "changed",
-    ])
-
-    // Sending one takes it off the list.
-    await send(ready.interviewId)
-    expect(ours(await everyRow(await signedIn(MANAGER), { enrollmentYear: year, readyToSend: true }))).toEqual(["changed"])
+    for (const staff of [await signedIn(ADMISSIONS), await signedIn(ACCOUNTANT)]) {
+      const days = await sentOn(staff)
+      expect(days.get(sent.interviewId)).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+      expect(days.get(changed.interviewId)).toBeNull()
+      expect(days.get(never.interviewId)).toBeNull()
+    }
   })
 
-  test("staff without leads.view list nothing, filtered or not", async () => {
+  test("staff without leads.view list nothing", async () => {
     await interviewedLead()
     const noView = await createThrowawayStaff(["payments.view"])
-    const listed = await listInterviews(await signedIn(noView), { enrollmentYear: year, readyToSend: true, page: 1 })
-    expect(listed).toMatchObject({ ok: true, data: { total: 0, interviews: [] } })
+    expect(await listYearInterviews(await signedIn(noView), year)).toEqual({ ok: true, data: [] })
   })
 })

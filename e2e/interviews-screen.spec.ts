@@ -4,7 +4,6 @@ import { type Page } from "@playwright/test"
 import { expect, test } from "./staff-test"
 
 import { formatDate, tanzaniaToday } from "@/lib/school-calendar"
-import { listInterviews } from "@/lib/services/interview-list"
 import { recordInterviewResult, registerForInterview, setInterviewFeeStatus } from "@/lib/services/interviews"
 import { createLead } from "@/lib/services/leads"
 
@@ -14,11 +13,9 @@ import { claimInterviewYear, type InterviewYearClaim } from "../tests/support/in
 import { axeProblems } from "./axe"
 import { signInOnce } from "./log-in"
 
-// The Interviews screen. Slice 5's seeded registrations hold S/N 1 to 3 for
-// 2027, so they head the 2027 list whatever the other tests register after
-// them: ADMSN-90501 with no result yet and Not Paid, ADMSN-90503 Passed and
-// Paid (the seed marks it Paid as the Accountant), and ADMSN-90504 Failed and
-// Not Paid. Tests only read these three.
+// The Interviews screen (prototype 1MpUKuX27V6pc1CS1z1URz v5): the whole year
+// searched, sorted and filtered as staff type, and the interview in a side
+// sheet. Each test registers leads of its own in a year the file claims.
 
 // 2001 is before any intake the tests or seeds register interviews for.
 const EMPTY_YEAR = 2001
@@ -28,27 +25,16 @@ async function signIn(page: Page, person: FixtureStaff) {
   await expect(page).toHaveURL(/\/staff$/)
 }
 
-const list = (page: Page) => page.getByRole("table", { name: "Interviews for 2027" })
-// The data rows, without the header.
-const rows = (page: Page) => list(page).getByRole("row").filter({ has: page.getByRole("cell") })
-const filter = (page: Page, group: string, option: string) =>
-  page.getByRole("navigation", { name: group }).getByRole("link", { name: option, exact: true })
-
-// A lead of the test's own, registered in the year, Passed and Paid: ready
-// to send.
-async function readyLead(year: number) {
+// A lead of the test's own in `year`, registered for interview with no result
+// and its fee Not Paid; `passed` records Passed and marks the fee Paid.
+async function ownLead(year: number, { passed = false, className = "STD 4" }: { passed?: boolean; className?: "STD 4" | "KG 1" } = {}) {
   const today = tanzaniaToday()
-  const studentName = `Ready ${randomUUID().slice(0, 6)}`
+  const studentName = `Listed ${randomUUID().slice(0, 6)} Pupil`
   const created = await createLead(await signedIn(ADMISSIONS), {
     guardian: {
-      contact: { fullName: "Ready Parent", relationship: "Mother", phone: `06${String(randomInt(0, 100_000_000)).padStart(8, "0")}` },
+      contact: { fullName: "List Parent", relationship: "Mother", phone: `06${String(randomInt(0, 100_000_000)).padStart(8, "0")}` },
     },
-    student: {
-      fullName: studentName,
-      className: "STD 4",
-      enrollmentYear: Number(today.slice(0, 4)) + 1,
-      dayOrBoarding: "Day",
-    },
+    student: { fullName: studentName, className, enrollmentYear: Number(today.slice(0, 4)) + 1, dayOrBoarding: "Day" },
     start: { kind: "walk-in", visitDate: today },
   })
   if (!created.ok) throw new Error(`setup failed: ${JSON.stringify(created.error)}`)
@@ -57,94 +43,23 @@ async function readyLead(year: number) {
   const registered = await registerForInterview(await signedIn(ADMISSIONS), leadId)
   if (!registered.ok) throw new Error(`registration failed: ${registered.error}`)
   const interviewId = registered.data.interviewId
-  const recorded = await recordInterviewResult(await signedIn(ADMISSIONS), interviewId, { interviewDate: today, result: "Passed", score: 70 })
-  if (!recorded.ok) throw new Error(`result failed: ${recorded.error}`)
-  const paid = await setInterviewFeeStatus(await signedIn(ACCOUNTANT), interviewId, "paid")
-  if (!paid.ok) throw new Error(`fee failed: ${paid.error}`)
-  return { studentName, admissionNumber: created.data.admissionNumber }
+  if (passed) {
+    const recorded = await recordInterviewResult(await signedIn(ADMISSIONS), interviewId, { interviewDate: today, result: "Passed", score: 70 })
+    if (!recorded.ok) throw new Error(`result failed: ${recorded.error}`)
+    const paid = await setInterviewFeeStatus(await signedIn(ACCOUNTANT), interviewId, "paid")
+    if (!paid.ok) throw new Error(`fee failed: ${paid.error}`)
+  }
+  return { leadId, studentName, admissionNumber: created.data.admissionNumber, serialNumber: registered.data.serialNumber }
 }
 
-// The Interview fee and Result sent columns' cells, by the column they're in
-// rather than their position.
+const search = (page: Page) => page.getByRole("searchbox", { name: /Search the \d{4} interviews/ })
+const yearList = (page: Page, year: number) => page.getByRole("table", { name: `Interviews for ${year}` })
+const listRows = (page: Page, year: number) => yearList(page, year).getByRole("row").filter({ has: page.getByRole("cell") })
+const sheet = (page: Page) => page.getByRole("dialog")
 const FEE_CELL = '[data-column="fee"]'
 const SENT_CELL = '[data-column="sent"]'
 
 test.describe("the Interviews screen", () => {
-  test("Admissions Staff open it from the navigation, walk the result filters and open a lead", async ({ page }) => {
-    await signIn(page, ADMISSIONS)
-    await page.getByRole("navigation", { name: "Staff" }).getByRole("link", { name: "Interviews" }).click()
-    await expect(page.getByRole("heading", { name: "Interviews", exact: true })).toBeVisible()
-    await expect(page).toHaveURL(/\/staff\/interviews$/)
-
-    await filter(page, "Enrollment year", "2027").click()
-    await expect(page).toHaveURL(/\/staff\/interviews\?year=2027$/)
-    await expect(filter(page, "Enrollment year", "2027")).toHaveAttribute("aria-current", "page")
-    // In S/N order, each with its details.
-    await expect(rows(page).nth(0)).toContainText("1ADMSN-90501Amani InterviewSTD 5DayNo result yet–Not Paid")
-    await expect(rows(page).nth(1)).toContainText("2ADMSN-90503Neema InterviewSTD 1DayPassed78.5%Paid")
-    await expect(rows(page).nth(2)).toContainText("3ADMSN-90504Baraka InterviewFORM 1BoardingFailed41%Not Paid")
-
-    await filter(page, "Result", "No result yet").click()
-    await expect(page).toHaveURL(/year=2027&result=none$/)
-    await expect(rows(page).nth(0)).toContainText("ADMSN-90501")
-    await expect(list(page)).not.toContainText("ADMSN-90503")
-    await expect(list(page)).not.toContainText("ADMSN-90504")
-
-    await filter(page, "Result", "Passed").click()
-    await expect(page).toHaveURL(/year=2027&result=passed$/)
-    await expect(rows(page).nth(0)).toContainText("ADMSN-90503")
-    await expect(list(page)).not.toContainText("ADMSN-90501")
-    await expect(list(page)).not.toContainText("ADMSN-90504")
-
-    await filter(page, "Result", "Failed").click()
-    await expect(page).toHaveURL(/year=2027&result=failed$/)
-    await expect(rows(page).nth(0)).toContainText("ADMSN-90504")
-    await expect(list(page)).not.toContainText("ADMSN-90503")
-
-    await filter(page, "Result", "Any result").click()
-    await expect(page).toHaveURL(/\/staff\/interviews\?year=2027$/)
-    await list(page).getByRole("link", { name: "Amani Interview" }).click()
-    // The lead opens on its Interview tab.
-    await expect(page).toHaveURL(/\/staff\/applicants\/1ead0000-0000-4000-8000-000000000501\?tab=interview#lead-interview$/)
-    await expect(page.getByRole("region", { name: "Interview", exact: true })).toBeVisible()
-  })
-
-  test("the Accountant filters to Not Paid to see who still owes, at phone width", async ({ page }) => {
-    await page.setViewportSize({ width: 375, height: 812 })
-    await signIn(page, ACCOUNTANT)
-    await page.goto("/staff/interviews?year=2027")
-
-    await filter(page, "Interview fee", "Not Paid").click()
-    await expect(page).toHaveURL(/year=2027&fee=not-paid$/)
-    await expect(rows(page).nth(0)).toContainText("ADMSN-90501")
-    await expect(list(page)).toContainText("ADMSN-90504")
-    await expect(list(page).getByText("ADMSN-90503")).toHaveCount(0)
-    for (const fee of await rows(page).locator(FEE_CELL).allTextContents()) expect(fee).toBe("Not Paid")
-
-    // Paid lists the seeded Paid lead first, by S/N, and only Paid rows.
-    await filter(page, "Interview fee", "Paid").click()
-    await expect(page).toHaveURL(/year=2027&fee=paid$/)
-    await expect(rows(page).nth(0)).toContainText("2ADMSN-90503Neema Interview")
-    await expect(rows(page).nth(0).locator(FEE_CELL)).toHaveText("Paid")
-    for (const fee of await rows(page).locator(FEE_CELL).allTextContents()) expect(fee).toBe("Paid")
-    await expect(list(page).getByText("ADMSN-90501")).toHaveCount(0)
-    await expect(list(page).getByText("ADMSN-90504")).toHaveCount(0)
-  })
-
-  test("says plainly when a year has no registrations, and when nothing matches the filters", async ({ page }) => {
-    await signIn(page, ADMISSIONS)
-    await page.goto(`/staff/interviews?year=${EMPTY_YEAR}`)
-    await expect(page.getByText(`No one is registered for interview for ${EMPTY_YEAR} yet.`)).toBeVisible()
-    await expect(page.getByRole("table")).toHaveCount(0)
-
-    await filter(page, "Result", "Passed").click()
-    await expect(page.getByText("No interviews match these filters.")).toBeVisible()
-    await page.getByRole("link", { name: `Show every interview for ${EMPTY_YEAR}` }).click()
-    await expect(page).toHaveURL(new RegExp(`/staff/interviews\\?year=${EMPTY_YEAR}$`))
-  })
-})
-
-test.describe("the Result sent column and the Ready to send filter", () => {
   let claim: InterviewYearClaim
   test.beforeAll(async () => {
     claim = await claimInterviewYear()
@@ -153,48 +68,127 @@ test.describe("the Result sent column and the Ready to send filter", () => {
     await claim?.release()
   })
 
-  test("Ready to send lists a paid result; once it is sent it leaves the list and shows when it went", async ({ page }) => {
+  test("opens newest first, searches as staff type, and sorts and filters by column", async ({ page }) => {
     const year = claim.year
-    const lead = await readyLead(year)
-    // The new lead has the year's newest S/N, so it is on the last page.
-    const lastPage = async (search: { readyToSend?: true }) => {
-      const listed = await listInterviews(await signedIn(ADMISSIONS), { enrollmentYear: year, ...search, page: 1 })
-      if (!listed.ok) throw new Error(listed.error)
-      return listed.data.pageCount
-    }
-    const yearList = (page: Page) => page.getByRole("table", { name: `Interviews for ${year}` })
-    const row = (page: Page) => yearList(page).getByRole("row").filter({ hasText: lead.admissionNumber })
+    const older = await ownLead(year, { className: "KG 1" })
+    const newer = await ownLead(year, { passed: true })
+    await signIn(page, ADMISSIONS)
+    await page.getByRole("navigation").getByRole("link", { name: "Interviews" }).first().click()
+    await expect(page.getByRole("heading", { level: 1, name: "Interviews" })).toBeVisible()
+    await page.goto(`/staff/interviews?year=${year}`)
 
+    // Newest registration first: the higher S/N heads the list.
+    const sns = async () => (await listRows(page, year).locator("td:first-child").allTextContents()).map(Number)
+    const first = await sns()
+    expect(first).toEqual([...first].sort((a, b) => b - a))
+
+    // The list narrows on every letter, with no Search button; the URL keeps the search.
+    await search(page).pressSequentially(newer.studentName.split(" ")[1].slice(0, 4))
+    await expect(listRows(page, year)).toHaveCount(1)
+    await expect(listRows(page, year)).toContainText(newer.admissionNumber)
+    await expect(page.getByText("Showing 1–1 of 1 matching interview")).toBeVisible()
+    await expect(page).toHaveURL(/q=/)
+    await page.getByRole("button", { name: "Clear the search" }).click()
+    await search(page).fill(older.admissionNumber.replace("ADMSN-", ""))
+    await expect(listRows(page, year)).toHaveCount(1)
+    await expect(listRows(page, year)).toContainText(older.studentName)
+    await search(page).press("Escape")
+    await expect(search(page)).toHaveValue("")
+
+    // S/N lowest first, then highest first, then back to newest first.
+    await page.getByRole("button", { name: "Sort by S/N, lowest first" }).click()
+    const ascending = await sns()
+    expect(ascending).toEqual([...ascending].sort((a, b) => a - b))
+    await expect(yearList(page, year).getByRole("columnheader", { name: /S\/N/ })).toHaveAttribute("aria-sort", "ascending")
+
+    // The Class heading filters, several classes at once; the Filter button agrees.
+    await yearList(page, year).getByRole("button", { name: "Filter by Class" }).click()
+    await page.getByRole("button", { name: "KG 1" }).click()
+    await page.keyboard.press("Escape")
+    await expect(page.getByText("Filtered by KG 1")).toBeVisible()
+    for (const cell of await listRows(page, year).locator("td:nth-child(5)").allTextContents()) expect(cell).toBe("KG 1")
+    await page.getByRole("button", { name: /^Filter: Class on/ }).click()
+    await expect(page.getByRole("group", { name: "Class" }).getByRole("button", { name: "KG 1" })).toHaveAttribute("aria-pressed", "true")
+    await page.getByRole("group", { name: "Interview fee" }).getByRole("button", { name: /Not Paid/ }).click()
+    await page.getByRole("button", { name: "Done" }).click()
+    await expect(page.getByText("Filtered by KG 1 · Not Paid")).toBeVisible()
+    for (const fee of await listRows(page, year).locator(FEE_CELL).allTextContents()) expect(fee).toBe("Not Paid")
+    await page.getByRole("button", { name: "Clear filters" }).first().click()
+    await expect(page.getByText(/Filtered by/)).toHaveCount(0)
+  })
+
+  test("Admissions Staff record a result in the side sheet, then open the full record and come back", async ({ page }) => {
+    const year = claim.year
+    const lead = await ownLead(year)
     await signIn(page, ADMISSIONS)
     await page.goto(`/staff/interviews?year=${year}`)
-    await filter(page, "Result release", "Ready to send").click()
-    await expect(page).toHaveURL(new RegExp(`year=${year}&release=ready$`))
-    await expect(filter(page, "Result release", "Ready to send")).toHaveAttribute("aria-current", "page")
-    const pages = await lastPage({ readyToSend: true })
-    if (pages > 1) await page.goto(`/staff/interviews?year=${year}&release=ready&page=${pages}`)
-    await expect(row(page)).toContainText("Paid")
-    await expect(row(page).locator(SENT_CELL)).toHaveText("")
+    await search(page).fill(lead.admissionNumber)
+    await listRows(page, year).filter({ hasText: lead.admissionNumber }).click()
 
-    // Released from the lead's screen, by SMS.
-    await row(page).getByRole("link", { name: lead.studentName }).click()
-    const release = page.getByRole("region", { name: "Result release" })
-    await release.getByRole("button", { name: "Send SMS instead" }).click()
-    await expect(release.getByRole("status")).toHaveText("Recorded as sent. Send this text from the office phone.", {
-      timeout: 15_000,
-    })
+    // The interview opens beside the list, which stays where it was.
+    await expect(sheet(page).getByRole("heading", { name: lead.studentName })).toBeVisible()
+    await expect(sheet(page)).toContainText(`Number ${lead.serialNumber} on the ${year} interview list. Each year's list starts again at 1.`)
+    await sheet(page).getByRole("button", { name: "Record result" }).click()
+    const form = sheet(page).getByRole("form", { name: "Record result" })
+    await form.locator("label").filter({ hasText: "Passed" }).click()
+    await form.getByLabel("Score (%)").fill("77")
+    await form.getByRole("button", { name: "Save result" }).click()
+    await expect(sheet(page).getByRole("status")).toHaveText("Result recorded. The applicant is Interviewed.")
+    // The list behind it follows. The sheet is modal, so it closes first.
+    await sheet(page).getByRole("button", { name: "Close" }).click()
+    await expect(sheet(page)).toHaveCount(0)
+    await expect(listRows(page, year).filter({ hasText: lead.admissionNumber })).toContainText("Passed")
+    await expect(listRows(page, year).filter({ hasText: lead.admissionNumber })).toContainText("77%")
 
-    for (let n = 1; n <= (await lastPage({ readyToSend: true })); n++) {
-      await page.goto(`/staff/interviews?year=${year}&release=ready&page=${n}`)
-      await expect(yearList(page).or(page.getByText(`No results for ${year} are waiting to be sent.`))).toBeVisible()
-      await expect(row(page)).toHaveCount(0)
-    }
+    await listRows(page, year).filter({ hasText: lead.admissionNumber }).click()
+    await sheet(page).getByRole("link", { name: "View full record" }).click()
+    await expect(page).toHaveURL(/\/staff\/applicants\/[^?]+\?tab=interview/)
+    await expect(page.getByRole("heading", { level: 1, name: lead.studentName })).toBeVisible()
+    await page.getByRole("link", { name: "Interviews", exact: true }).last().click()
+    await expect(page).toHaveURL(new RegExp(`/staff/interviews\\?year=${year}&q=`))
+    await expect(search(page)).toHaveValue(lead.admissionNumber)
+    await expect(sheet(page)).toHaveCount(0)
+  })
 
-    // The Accountant, at phone width, sees that the family has heard.
-    await page.context().clearCookies()
+  test("the Accountant marks the fee paid in the side sheet, at phone width", async ({ page }) => {
+    const year = claim.year
+    const lead = await ownLead(year)
     await page.setViewportSize({ width: 375, height: 812 })
     await signIn(page, ACCOUNTANT)
-    await page.goto(`/staff/interviews?year=${year}&page=${await lastPage({})}`)
-    await expect(row(page).locator(SENT_CELL)).toHaveText(formatDate(tanzaniaToday()))
+    await page.goto(`/staff/interviews?year=${year}&q=${lead.admissionNumber}`)
+    await listRows(page, year).filter({ hasText: lead.admissionNumber }).click()
+    await expect(sheet(page).getByRole("button", { name: "Record result" })).toHaveCount(0)
+    await sheet(page).getByRole("button", { name: "Mark paid" }).click()
+    await expect(sheet(page).getByRole("status")).toHaveText(/^Marked Paid\./)
+    await page.keyboard.press("Escape")
+    await expect(sheet(page)).toHaveCount(0)
+    await expect(listRows(page, year).filter({ hasText: lead.admissionNumber }).locator(FEE_CELL)).toHaveText("Paid")
+  })
+
+  test("Result sent shows the day a result went, and filters sent and not sent", async ({ page }) => {
+    const year = claim.year
+    const lead = await ownLead(year, { passed: true })
+    await signIn(page, ADMISSIONS)
+    await page.goto(`/staff/interviews?year=${year}&q=${lead.admissionNumber}&sent=not-sent`)
+    await expect(listRows(page, year)).toHaveCount(1)
+    await expect(listRows(page, year).locator(SENT_CELL)).toHaveText("")
+
+    // Released from the record, by SMS.
+    await page.goto(`/staff/applicants/${lead.leadId}?tab=interview`)
+    const release = page.getByRole("region", { name: "Result release" })
+    await release.getByRole("button", { name: "Send SMS instead" }).click()
+    await expect(release.getByRole("status")).toHaveText("Recorded as sent. Send this text from the office phone.", { timeout: 15_000 })
+
+    await page.goto(`/staff/interviews?year=${year}&q=${lead.admissionNumber}&sent=not-sent`)
+    await expect(page.getByText(`No one matching “${lead.admissionNumber}” is on the ${year} list with these filters.`)).toBeVisible()
+    await page.goto(`/staff/interviews?year=${year}&q=${lead.admissionNumber}&sent=sent`)
+    await expect(listRows(page, year).locator(SENT_CELL)).toHaveText(formatDate(tanzaniaToday()))
+  })
+
+  test("says plainly when a year has no registrations", async ({ page }) => {
+    await signIn(page, ADMISSIONS)
+    await page.goto(`/staff/interviews?year=${EMPTY_YEAR}`)
+    await expect(page.getByText(`No one is registered for interview for ${EMPTY_YEAR} yet.`)).toBeVisible()
   })
 })
 
@@ -205,7 +199,7 @@ for (const width of [1280, 390]) {
     await page.setViewportSize({ width, height: 900 })
     await signIn(page, ADMISSIONS)
     await page.goto("/staff/interviews?year=2027")
-    await expect(rows(page).first()).toBeVisible()
+    await expect(listRows(page, 2027).first()).toBeVisible()
     expect(await axeProblems(page)).toEqual([])
   })
 }

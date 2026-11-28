@@ -76,6 +76,8 @@ export async function recordResult(
   })
   if (!recorded.ok) return recordOutcome(recorded.error)
   revalidatePath(`/staff/applicants/${leadId}`)
+  // The Interviews list shows the result and the fee too, and its side sheet records them.
+  revalidatePath("/staff/interviews")
   return recordedOutcome(recorded.data)
 }
 
@@ -92,6 +94,8 @@ export async function setFeeStatus(leadId: string, interviewId: string, status: 
   const changed = await setInterviewFeeStatus(supabase, interviewId, status)
   if (!changed.ok) return feeOutcome(changed.error)
   revalidatePath(`/staff/applicants/${leadId}`)
+  // The Interviews list shows the result and the fee too, and its side sheet records them.
+  revalidatePath("/staff/interviews")
   return feeChangedOutcome(changed.data)
 }
 
@@ -107,5 +111,7 @@ export async function markAgreement(leadId: string, interviewId: string): Promis
   const marked = await markAgreementSigned(supabase, interviewId)
   if (!marked.ok) return agreementOutcome(marked.error)
   revalidatePath(`/staff/applicants/${leadId}`)
+  // The Interviews list shows the result and the fee too, and its side sheet records them.
+  revalidatePath("/staff/interviews")
   return agreementMarkedOutcome(marked.data)
 }

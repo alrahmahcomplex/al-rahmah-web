@@ -1,54 +1,30 @@
 import type { Metadata } from "next"
 
-import { ButtonLink, Card, EmptyState, FilterPills, Note, PageHeader, pageTitle, Pagination } from "@/components/kit"
-import { currentAdmissionYear } from "@/lib/school-calendar"
-import type { InterviewFeeStatus } from "@/lib/services/interviews"
-import {
-  listInterviews,
-  listInterviewYears,
-  type InterviewList,
-  type InterviewListSearch,
-  type InterviewResultFilter,
-} from "@/lib/services/interview-list"
+import { Note, PageHeader, pageTitle } from "@/components/kit"
+import { currentAdmissionYear, tanzaniaToday } from "@/lib/school-calendar"
+import { countYearInterviews, listInterviewYears, listYearInterviews } from "@/lib/services/interview-list"
 import { listReleaseStatus, type ReleaseStatus } from "@/lib/services/result-release"
 import { createClient } from "@/utils/supabase/server"
 
-import { leadTabHref } from "../applicants/[id]/tabs"
 import { closedState } from "../applicants/[id]/closed-state"
 import StaffForbidden from "../forbidden"
 import { requireStaff } from "../session"
-import { InterviewsTable, type InterviewTableRow } from "./interviews-table"
+import { defaultInterviewYear, parseYear, type BoardRow } from "./board"
+import { InterviewsBoard } from "./interviews-board"
 import { interviewRows } from "./rows"
-import { defaultInterviewYear, interviewsHref, parseInterviewSearch } from "./search-params"
 import "./interviews.css"
 
 export const metadata: Metadata = {
   title: pageTitle("Interviews"),
 }
 
-// Each filter group is a row of link pills, so a filter is a URL.
-const RESULT_FILTERS: { value: InterviewResultFilter | undefined; label: string }[] = [
-  { value: undefined, label: "Any result" },
-  { value: "none", label: "No result yet" },
-  { value: "Passed", label: "Passed" },
-  { value: "Conditional", label: "Conditional" },
-  { value: "Failed", label: "Failed" },
-]
+// The release status is read for this many interviews at a time: the API
+// returns at most 1,000 rows a request.
+const STATUS_CHUNK = 500
 
-const FEE_FILTERS: { value: InterviewFeeStatus | undefined; label: string }[] = [
-  { value: undefined, label: "Paid or not" },
-  { value: "Paid", label: "Paid" },
-  { value: "Not Paid", label: "Not Paid" },
-]
-
-// Slice 6's group: the families still waiting for their result.
-const RELEASE_FILTERS: { value: true | undefined; label: string }[] = [
-  { value: undefined, label: "Sent or not" },
-  { value: true, label: "Ready to send" },
-]
-
-// Every interview registration for an Enrollment year, by S/N, with the
-// filters as links. Drawn in the new shell (#328).
+// Every interview registration of an enrollment year, newest first, searched,
+// filtered and sorted in the browser (prototype 1MpUKuX27V6pc1CS1z1URz v5).
+// The server reads the year; the rest of the address is the list's.
 export default async function InterviewsPage({
   searchParams,
 }: {
@@ -58,180 +34,63 @@ export default async function InterviewsPage({
   if (!staff.permissions.includes("leads.view")) return <StaffForbidden />
 
   const supabase = await createClient()
-  const asked = parseInterviewSearch(await searchParams)
+  const asked = parseYear((await searchParams).year)
   const years = await listInterviewYears(supabase)
-  if (!years.ok) {
-    return (
-      <>
-        <PageHeader title="Interviews" />
-        <Unavailable />
-      </>
-    )
+  if (!years.ok) return <Unavailable />
+
+  const year = asked ?? defaultInterviewYear(years.data, currentAdmissionYear())
+  const list = await listYearInterviews(supabase, year)
+  if (!list.ok) return <Unavailable />
+
+  // The Result sent column: the release status of every interview on the list.
+  const ids = list.data.map((interview) => interview.id)
+  const statuses = new Map<string, ReleaseStatus>()
+  for (let at = 0; at < ids.length; at += STATUS_CHUNK) {
+    const read = await listReleaseStatus(supabase, ids.slice(at, at + STATUS_CHUNK))
+    if (!read.ok) return <Unavailable />
+    for (const [id, status] of read.data) statuses.set(id, status)
   }
 
-  const admissionYear = currentAdmissionYear()
-  const search: InterviewListSearch = {
-    ...asked,
-    enrollmentYear: asked.enrollmentYear ?? defaultInterviewYear(years.data, admissionYear),
-  }
-  const results = await listInterviews(supabase, search)
-  // The Result sent column, for the interviews on this page.
-  const statuses = results.ok
-    ? await listReleaseStatus(
-        supabase,
-        results.data.interviews.map((interview) => interview.id),
-      )
-    : null
+  const rows: BoardRow[] = interviewRows(list.data, statuses).map((interview) => ({
+    id: interview.id,
+    leadId: interview.lead.id,
+    serialNumber: interview.serialNumber,
+    admissionNumber: interview.lead.admissionNumber,
+    studentName: interview.lead.studentName,
+    className: interview.lead.className,
+    dayOrBoarding: interview.lead.dayOrBoarding,
+    registeredOn: tanzaniaToday(new Date(interview.registeredAt)),
+    result: interview.result,
+    score: interview.score,
+    feeStatus: interview.feeStatus,
+    sentOn: interview.sentOn,
+    closed: interview.lead.closed ? { text: closedState(interview.lead), declined: interview.lead.status === "Declined" } : null,
+  }))
+
   // The year on show is offered even when it has no registrations, so the
-  // year links always say which one is open.
-  const offered = [...new Set([...years.data, search.enrollmentYear])].sort((a, b) => a - b)
-
-  const groups = [
-    {
-      label: "Enrollment year",
-      options: offered.map((year) => ({
-        label: String(year),
-        // The filters carry over, so Not Paid stays Not Paid in another year.
-        href: interviewsHref(search, { enrollmentYear: year, page: 1 }),
-        current: year === search.enrollmentYear,
-      })),
-    },
-    {
-      label: "Result",
-      options: RESULT_FILTERS.map((filter) => ({
-        label: filter.label,
-        href: interviewsHref(search, { result: filter.value, page: 1 }),
-        current: filter.value === search.result,
-      })),
-    },
-    {
-      label: "Interview fee",
-      options: FEE_FILTERS.map((filter) => ({
-        label: filter.label,
-        href: interviewsHref(search, { feeStatus: filter.value, page: 1 }),
-        current: filter.value === search.feeStatus,
-      })),
-    },
-    {
-      label: "Result release",
-      options: RELEASE_FILTERS.map((filter) => ({
-        label: filter.label,
-        href: interviewsHref(search, { readyToSend: filter.value, page: 1 }),
-        current: filter.value === search.readyToSend,
-      })),
-    },
-  ]
+  // year list always says which one is open.
+  const offered = [...new Set([...years.data, year])].sort((a, b) => a - b)
+  const counts = await Promise.all(offered.map((each) => (each === year ? null : countYearInterviews(supabase, each))))
 
   return (
-    <>
-      <PageHeader title="Interviews" />
-      <div className="iv-stack">
-        <div className="iv-filters">
-          {groups.map((group) => (
-            <div key={group.label} className="iv-filter">
-              <p className="iv-filter-label" aria-hidden="true">
-                {group.label}
-              </p>
-              <FilterPills
-                label={group.label}
-                options={group.options.map(({ label, href }) => ({ label, href }))}
-                current={group.options.find((option) => option.current)?.href ?? null}
-                className="iv-pills"
-              />
-            </div>
-          ))}
-        </div>
-
-        {!results.ok || !statuses?.ok ? (
-          <Unavailable />
-        ) : (
-          <Results results={results.data} statuses={statuses.data} search={search} />
-        )}
-      </div>
-    </>
+    <InterviewsBoard
+      year={year}
+      years={offered.map((each, i) => ({ year: each, count: each === year ? rows.length : counts[i]?.ok ? counts[i].data : 0 }))}
+      rows={rows}
+      today={tanzaniaToday()}
+      canRecord={staff.permissions.includes("interviews.record")}
+      canMarkFee={staff.permissions.includes("interview_payments.record")}
+    />
   )
 }
 
 function Unavailable() {
   return (
-    <Note tone="bad" role="alert">
-      Interviews could not be loaded. Try again in a moment.
-    </Note>
-  )
-}
-
-function Results({
-  results,
-  statuses,
-  search,
-}: {
-  results: InterviewList
-  statuses: Map<string, ReleaseStatus>
-  search: InterviewListSearch
-}) {
-  const { total, page, pageCount } = results
-  // Result, score and Result sent from the one status read (see rows.ts).
-  const interviews = interviewRows(results.interviews, statuses)
-  const filtered = search.result !== undefined || search.feeStatus !== undefined || search.readyToSend !== undefined
-  const onlyReady = search.readyToSend && search.result === undefined && search.feeStatus === undefined
-  const empty = onlyReady
-    ? `No results for ${search.enrollmentYear} are waiting to be sent.`
-    : filtered
-      ? "No interviews match these filters."
-      : `No one is registered for interview for ${search.enrollmentYear} yet.`
-
-  const rows: InterviewTableRow[] = interviews.map((interview) => ({
-    id: interview.id,
-    serialNumber: interview.serialNumber,
-    admissionNumber: interview.lead.admissionNumber,
-    studentName: interview.lead.studentName,
-    leadHref: leadTabHref(interview.lead.id, "interview", "lead-interview"),
-    closed: interview.lead.closed ? { text: closedState(interview.lead), declined: interview.lead.status === "Declined" } : null,
-    className: interview.lead.className,
-    dayOrBoarding: interview.lead.dayOrBoarding,
-    result: interview.result,
-    score: interview.score,
-    feeStatus: interview.feeStatus,
-    sentOn: interview.sentOn,
-  }))
-
-  return (
-    <section aria-label="Results" className="iv-stack">
-      {total === 0 ? (
-        <Card role="status">
-          <EmptyState
-            illustration={onlyReady ? "done" : "search"}
-            title={empty}
-            action={
-              filtered && (
-                <ButtonLink href={interviewsHref({ enrollmentYear: search.enrollmentYear, page: 1 })} variant="ghost">
-                  Show every interview for {search.enrollmentYear}
-                </ButtonLink>
-              )
-            }
-          />
-        </Card>
-      ) : (
-        <p className="iv-count" aria-live="polite">
-          {`${total} ${total === 1 ? "interview" : "interviews"}`}
-        </p>
-      )}
-
-      {rows.length > 0 && (
-        <Card>
-          <InterviewsTable label={`Interviews for ${search.enrollmentYear}`} rows={rows} />
-        </Card>
-      )}
-
-      <Pagination
-        label="Interview pages"
-        page={page}
-        pageCount={pageCount}
-        href={(each) => interviewsHref(search, { page: each })}
-        previousLabel="Previous page"
-        nextLabel="Next page"
-        pageLabel={(each) => `Page ${each}`}
-      />
-    </section>
+    <>
+      <PageHeader title="Interviews" />
+      <Note tone="bad" role="alert">
+        Interviews could not be loaded. Try again in a moment.
+      </Note>
+    </>
   )
 }

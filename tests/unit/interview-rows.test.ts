@@ -13,6 +13,7 @@ function listed(score: number): InterviewListItem {
   return {
     id: "interview-1",
     serialNumber: 1,
+    registeredAt: "2026-11-01T07:00:00+00:00",
     lead: {
       id: "lead-1",
       admissionNumber: "ADMSN-00601",
@@ -57,7 +58,7 @@ describe("the Interviews screen's rows", () => {
     if (!statuses.ok) throw new Error(statuses.error)
 
     const [row] = interviewRows([listed(78)], statuses.data)
-    expect(row).toMatchObject({ result: "Passed", score: 90, sentOn: "5 Nov 2026" })
+    expect(row).toMatchObject({ result: "Passed", score: 90, sentOn: "2026-11-05" })
   })
 
   it("show a result corrected after its release as not sent, with the corrected score", async () => {
@@ -82,6 +83,6 @@ describe("the Interviews screen's rows", () => {
       ["interview-1"],
     )
     if (!statuses.ok) throw new Error(statuses.error)
-    expect(interviewRows([listed(78)], statuses.data)[0].sentOn).toBe("5 Nov 2026")
+    expect(interviewRows([listed(78)], statuses.data)[0].sentOn).toBe("2026-11-05")
   })
 })

@@ -118,3 +118,13 @@
 .kp-scroll-list { margin: 0; padding: 0; list-style: none; }
 .kp-scroll-list > li { padding: 9px 0; font-weight: 600; font-size: 14.5px; }
 .kp-scroll-list > li + li { border-top: 1px solid var(--gf-mist); }
+
+/* The list tools' cards (list-tools-parts.tsx). */
+.kp-name { color: var(--gf-indigo); font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
+.kp-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.kp-grow { flex: 1 1 240px; }
+.kp-year { flex: none; width: 270px; }
+@media (max-width: 860px) {
+  .kp-grow { flex-basis: 100%; }
+  .kp-year { width: auto; }
+}

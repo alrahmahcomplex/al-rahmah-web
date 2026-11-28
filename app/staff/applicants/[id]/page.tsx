@@ -8,6 +8,7 @@ import { getLeadStatusSince } from "@/lib/services/system-audit"
 import { createClient } from "@/utils/supabase/server"
 
 import StaffForbidden from "../../forbidden"
+import { interviewsBackHref } from "../../interviews/record-link"
 import StaffNotFound from "../../not-found"
 import { requireStaff } from "../../session"
 import { ClosedLeadBanner } from "./closed-lead-banner"
@@ -30,12 +31,14 @@ export default async function LeadPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>
-  searchParams: Promise<{ tab?: string | string[] }>
+  searchParams: Promise<{ tab?: string | string[]; from?: string | string[] }>
 }) {
   const staff = await requireStaff()
   if (!staff.permissions.includes("leads.view")) return <StaffForbidden />
 
-  const [{ id }, { tab: tabParam }] = await Promise.all([params, searchParams])
+  const [{ id }, { tab: tabParam, from }] = await Promise.all([params, searchParams])
+  // Opened from the Interviews list's side sheet: the title leads back to that list.
+  const backToInterviews = interviewsBackHref(from)
   const tab = leadTab(tabParam)
   const supabase = await createClient()
   const [lead, statusSince, importMark] = await Promise.all([
@@ -60,6 +63,7 @@ export default async function LeadPage({
     <div className="lr-page">
       <LeadHeader
         lead={lead.data}
+        trail={backToInterviews ? [{ label: "Interviews", href: backToInterviews }] : undefined}
         statusSince={statusSince.ok ? statusSince.data : undefined}
         canViewHistory={staff.permissions.includes("audit.view")}
         importMark={importMark.ok ? importMark.data : undefined}
@@ -84,7 +88,7 @@ export default async function LeadPage({
         <ClosedLeadBanner lead={lead.data} canRequestReopening={canRequestReopening} />
       )}
 
-      <LeadTabs leadId={lead.data.id} tab={tab} />
+      <LeadTabs leadId={lead.data.id} tab={tab} from={backToInterviews ? (Array.isArray(from) ? from[0] : from) : undefined} />
 
       <Bento columns={2}>
         {LEAD_PANELS.filter((panel) => panel.tab === tab && (open || panel.readOnlyWhenClosed)).map(

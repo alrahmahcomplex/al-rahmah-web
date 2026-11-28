@@ -4,7 +4,7 @@ import { describe, expect, onTestFinished, test } from "vitest"
 
 import { tanzaniaToday } from "@/lib/school-calendar"
 import { getLeadHistory } from "@/lib/services/audit"
-import { getMetricCount } from "@/lib/services/dashboard"
+import { getMetricCount, type DashboardMetric } from "@/lib/services/dashboard"
 import { saveFeeAmounts, type FeeAmounts } from "@/lib/services/fees"
 import {
   getInterviewAgreement,
@@ -25,7 +25,7 @@ import { ACCOUNTANT, ADMISSIONS, MANAGER, SUPER_ADMIN } from "../support/fixture
 
 // The Conditional interview result and its agreement (owner decisions of
 // 2026-11-27), against local Supabase. Each test makes leads of its own in a
-// fee year it claims, so their counts and payments are its own.
+// fee year it claims, so no other test writes to the year while it runs.
 
 const DAY = 24 * 60 * 60 * 1000
 const today = tanzaniaToday()
@@ -134,14 +134,35 @@ describe("recording a Conditional result", () => {
 
   test("counts on Reports by itself, never as Passed or Failed", async () => {
     const year = await claimedYear()
+    const manager = await signedIn(MANAGER)
+    const filters = { period: { kind: "all" } as const, enrollmentYear: year }
+    const count = async (metric: DashboardMetric) => {
+      const result = await getMetricCount(manager, metric, filters)
+      if (!result.ok) throw new Error(`count refused (${metric}): ${result.error}`)
+      return result.data
+    }
+    const counts = async () => {
+      const [leads, passed, conditional, failed] = await Promise.all([
+        count("interviewed_leads"),
+        count("passed_interviews"),
+        count("conditional_interviews"),
+        count("failed_interviews"),
+      ])
+      return { interviewed: leads, passed, conditional, failed }
+    }
+
+    // Claimed years keep earlier tests' leads, so compare counts before and
+    // after while this test holds the year.
+    const before = await counts()
     await interviewed(year, "Conditional")
     await interviewed(year, "Conditional")
     await interviewed(year, "Passed")
-    const manager = await signedIn(MANAGER)
-    const filters = { period: { kind: "all" } as const, enrollmentYear: year }
-    expect(await getMetricCount(manager, "conditional_interviews", filters)).toEqual({ ok: true, data: 2 })
-    // Other files' Passed and Failed leads may share a claimed year, so only
-    // the Conditional count is this test's alone.
+    expect(await counts()).toEqual({
+      interviewed: before.interviewed + 3,
+      passed: before.passed + 1,
+      conditional: before.conditional + 2,
+      failed: before.failed,
+    })
   })
 
   test("goes out with the Conditional message, and a Failed result with version 2", async () => {

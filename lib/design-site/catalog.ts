@@ -58,8 +58,6 @@ export const PARTS: readonly Part[] = [
   // Inputs
   { id: "fields", title: "Fields", group: "Inputs", summary: "The 52px pill field, with an icon, an error line, and the named field.", files: [KIT("field.tsx"), KIT("kit.css")], rules: ["Inputs"] },
   { id: "compact-fields", title: "Compact and search fields", group: "Inputs", summary: "The 44px compact field and the 40px top-bar search.", files: [KIT("field.tsx")], rules: ["Inputs"] },
-  { id: "search-field", title: "Search field with Clear", group: "Inputs", summary: "The compact field with the search icon and a round Clear; the list changes on every letter.", files: [KIT("list-tools.tsx"), KIT("list-tools.css")], rules: ["Inputs"] },
-  { id: "date-choice", title: "Date choice", group: "Inputs", summary: "A day to show, or any day: the Select's pill with the calendar icon and the month calendar.", files: [KIT("list-tools.tsx")], rules: ["Inputs"] },
   { id: "password-field", title: "Password field", group: "Inputs", summary: "The pill field with the lock icon and a round eye button that shows and hides the password.", files: [KIT("password-field.tsx"), KIT("kit.css")], rules: ["Inputs"] },
   { id: "selectors", title: "Selectors", group: "Inputs", summary: "The default tile, segmented choices and choice rows.", files: [KIT("choices.tsx")], rules: ["Choices"] },
   { id: "class-picker", title: "Class picker", group: "Inputs", summary: "The class sheet's body: the levels on the sliding track, then the level's classes.", files: [KIT("class-picker.tsx")], rules: ["Choices"] },
@@ -70,6 +68,8 @@ export const PARTS: readonly Part[] = [
   { id: "popover-list", title: "Choice list in a popover", group: "Inputs", summary: "A choice list inside a popover, and a plain filter form.", files: [KIT("popover.tsx"), KIT("select.tsx")], rules: ["Menus and popovers"] },
   { id: "names-codes", title: "Names and codes", group: "Inputs", summary: "Name boxes for a person, a student and a full name, and the code box with its hyphen.", files: [FORM("names.tsx")], rules: ["Inputs", "Guided form"] },
   { id: "form-parts", title: "Form parts on the student’s record", group: "Inputs", summary: "Tabs as links, the choice list, date and time fields, the calendar, checkboxes, switches, the text area, the file picker and fold-open sections.", files: [KIT("select.tsx"), KIT("date-field.tsx"), KIT("calendar.tsx"), KIT("dates.ts"), KIT("tick.tsx"), KIT("text-area.tsx"), KIT("file-picker.tsx"), KIT("disclosure.tsx"), KIT("tabs.tsx")], rules: ["Inputs", "Choices"] },
+  { id: "search-field", title: "Search field with Clear", group: "Inputs", summary: "The compact field with the search icon and a round Clear; the list changes on every letter.", files: [KIT("list-tools.tsx"), KIT("list-tools.css")], rules: ["Inputs"] },
+  { id: "date-choice", title: "Date choice", group: "Inputs", summary: "A day to show, or any day: the Select's pill with the calendar icon and the month calendar.", files: [KIT("list-tools.tsx")], rules: ["Inputs"] },
 
   // Forms and steps
   { id: "guided-form", title: "Guided form", group: "Forms and steps", summary: "One question at a time, answers folding into summary rows, ending on the finish mark.", files: [KIT("guided-task.tsx"), FORM("stack.tsx"), FORM("controls.tsx"), FORM("guided-form.css"), FORM("README.md")], rules: ["Guided form"] },
